@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, Canvas World!</title>
+<!--[if IE]><script src="excanvas.js"></script><![endif]-->
+<script type="text/javascript">
+var X_MAX = 640;
+var Y_MAX = 480;
+var R = 100;
+var N_POINT1 = 60;
+var N_POINT2 = 60;
+var RADIAN = Math.PI / 180; 
+var FOCUS = 280;
+var CENTER_X = X_MAX / 2;
+var CENTER_Y = Y_MAX / 2;
+
+var canvas;
+var ctx;
+var points = [];
+var theta = 0;
+var scale;
+
+function init()
+{
+    canvas = document.getElementById('canvas');
+    ctx = canvas.getContext('2d');
+
+    var theta1;
+    var theta2;
+    var x, y, z;
+    var r, g, b;
+    var style;
+    var i, j;
+    for(i = 0; i < N_POINT1; i++)
+    {
+        theta1 = (360 / N_POINT1) * i * RADIAN;
+        for(j = 0; j < N_POINT2; j++)
+        {
+            theta2 = (360 / N_POINT2) * j * RADIAN;
+            x = R * Math.cos(theta2) * Math.sin(theta1);
+            y = R * Math.sin(theta2);
+            z = R * Math.cos(theta2) * Math.cos(theta1);
+            r = parseInt(Math.random() * 255);
+            g = parseInt(Math.random() * 255);
+            b = parseInt(Math.random() * 255);
+            style = "rgb(" + r + "," + g + "," + b + ")";
+            points[i * N_POINT2 + j] = { x:x, y:y, z:z, style:style };
+        }
+    }
+
+    setInterval(draw, 50);
+}
+
+function draw()
+{
+    drawScreen( ctx );
+    var p;
+    var x, y, z;
+    var i;
+    for(i = 0 ; i < points.length; i++)
+    {
+        p = points[i];
+        x = p.x * Math.cos(theta * RADIAN) + p.y * Math.sin(theta * RADIAN) * Math.sin(theta * RADIAN) - p.z * Math.sin(theta * RADIAN) * Math.cos(theta * RADIAN);
+        y = p.y * Math.cos(theta * RADIAN) + p.z * Math.sin(theta * RADIAN);
+        z = p.x * Math.sin(theta * RADIAN) - p.y * Math.sin(theta * RADIAN) * Math.cos(theta * RADIAN) + p.z * Math.cos(theta * RADIAN) * Math.cos(theta * RADIAN);
+        
+        scale = FOCUS * 1.5 / (FOCUS - z);
+        x = parseInt( x * scale) + CENTER_X;
+        y = parseInt(-y * scale) + CENTER_Y;
+        ctx.fillStyle = p.style;
+        ctx.fillRect( x, y, 1, 1 );
+    }
+    theta++;
+}
+
+function drawScreen( ctx ) {
+    ctx.fillStyle = "rgb( 0, 0, 0 )";
+    ctx.fillRect( 0, 0, X_MAX, Y_MAX );
+}
+</script>
+
+</head>
+<body onLoad=init()>
+<canvas id="canvas" width="640" height="480"></canvas>
+</body>
+</html>
