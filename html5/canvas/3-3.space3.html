@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, Canvas World!</title>
+<!--[if IE]><script src="excanvas.js"></script><![endif]-->
+<script type="text/javascript">
+var fov = 250;
+var SCREEN_WIDTH = 640; 
+var SCREEN_HEIGHT = 480; 
+var HALF_WIDTH = SCREEN_WIDTH/2; 
+var HALF_HEIGHT = SCREEN_HEIGHT/2; 
+var numPoints = 200; 
+var points = [];
+var canvas;
+var ctx;
+
+function draw()
+{
+    canvas = document.getElementById("canvas2d");
+    ctx = canvas.getContext("2d");
+    initPoints();
+    setInterval(render, 50);
+}
+
+function draw3Din2D(point3d)
+{  
+    x3d = point3d[0];
+    y3d = point3d[1]; 
+    z3d = point3d[2]; 
+    var scale = fov / (fov + z3d); 
+    var x2d = (x3d * scale) + HALF_WIDTH;
+    var y2d = (y3d * scale) + HALF_HEIGHT;
+    
+    ctx.lineWidth = scale; 
+    ctx.strokeStyle = "rgb(255, 255, 255)";
+    ctx.beginPath();
+    ctx.moveTo(x2d, y2d); 
+    ctx.lineTo(x2d + scale, y2d); 
+    ctx.stroke(); 
+}
+
+function initPoints()
+{
+    for (i = 0; i < numPoints; i++)
+    {
+        point = [(Math.random()*400)-200, (Math.random()*400)-200 , (Math.random()*400)-200 ];
+        points.push(point); 
+    }
+
+}
+
+function clear()
+{
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+}
+
+function render()
+{
+    clear();
+     
+    for (i = 0; i < numPoints; i++)
+    {
+        point3d = points[i]; 
+        rotatePointAroundY(point3d, 0.04);     
+        draw3Din2D(point3d); 
+    }
+}
+
+function rotatePointAroundY(point3d, angle)
+{
+    x = point3d[0]; 
+    z = point3d[2]; 
+    
+    cosRY = Math.cos(angle);
+    sinRY = Math.sin(angle);
+    tempz = z; 
+    tempx = x; 
+
+    x = (tempx * cosRY) + (tempz * sinRY);
+    z = (tempx * -sinRY) + (tempz * cosRY);
+    point3d[0] = x; 
+    point3d[2] = z; 
+}
+</script>
+</head>
+<body onload="draw()">
+<canvas id="canvas2d" width="640" height="480"></canvas>
+</body>
+</html>

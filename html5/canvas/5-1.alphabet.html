@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, Canvas World!</title>
+<!--[if IE]><script src="excanvas.js"></script><![endif]-->
+<script type="text/javascript">
+var X_MAX = 640;
+var Y_MAX = 480;
+var r, g, b;
+var letters = Array(256).join(1).split("");
+var canvas;
+var ctx;
+
+function init() {
+    canvas = document.getElementById("Canvas");
+    ctx = canvas.getContext("2d");
+    setInterval( draw, 50 );
+}
+
+function draw() {
+    drawScreen( ctx );
+    letters.map( drawAlphabet );
+}
+
+function drawScreen( ctx ) {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+    ctx.fillRect( 0, 0, X_MAX, Y_MAX );
+}
+
+function drawAlphabet( value, index, array )
+{
+    var text = String.fromCharCode(0x41 + Math.random() * 26);
+    var x_pos = index * 5;
+    var y_pos = value;
+    randomColor();
+    ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
+    ctx.fillText(text, x_pos, y_pos);
+    array[index] = Math.random() * 480;
+}
+
+function randomColor() {
+    r = Math.floor(Math.random() * 256);
+    g = Math.floor(Math.random() * 256);
+    b = Math.floor(Math.random() * 256);
+}
+</script>
+</head>
+<body onload="init()">
+<canvas id="Canvas" width="640" height="480"></canvas>
+</body>
+</html>

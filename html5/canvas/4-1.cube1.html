@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, Canvas World!</title>
+<!--[if IE]><script src="excanvas.js"></script><![endif]-->
+<script type="text/javascript">
+var canvas;
+var ctx;
+var g_fps;
+var g_pos_x;
+var g_pos_y;
+var g_zoom;
+var g_poly;
+var g_theta;
+var g_phi;
+
+function init() {
+    canvas = document.getElementById("canvas");
+    ctx = canvas.getContext("2d")
+    var x = 320;
+    var y = 240;
+    var zoom = 1000;
+    initialize(50, x, y, zoom);
+    draw();
+}
+
+function initialize(fps, x, y, zoom) {
+    g_fps = fps;
+    g_pos_x = x;
+    g_pos_y = y;
+    g_zoom = zoom;
+    g_poly = [[], [], [], [], [], []]; // polygon data
+    g_theta = 0.5; // vertical
+    g_phi = 0.5; // horizontal
+    // create polygon data
+    var i;
+    var v1, v2;
+    for (i = 0; i < 5; i++) {
+        v1 = (!i) ? 0 : Math.SQRT2 * Math.cos((0.5 * i - 0.25) * Math.PI);
+        v2 = (!i) ? 0 : Math.SQRT2 * Math.sin((0.5 * i - 0.25) * Math.PI);
+        g_poly[0].push([v1, v2, 1]);
+        g_poly[1].push([1, v1, v2]);
+        g_poly[2].push([v2, 1, v1]);
+        g_poly[3].push([-v1, -v2, -1]);
+        g_poly[4].push([-1, -v1, -v2]);
+        g_poly[5].push([-v2, -1, -v1]);
+    }
+}
+
+function draw() {
+    var phi = Math.PI / 100; // 0.03141592653589793
+    var theta = Math.PI / 80;
+    window.setInterval(
+        function () {
+            g_theta += theta;
+            g_phi += phi;
+            drawPolygon(g_theta, g_phi);
+        }, 1000 / g_fps
+    );
+}
+
+function drawPolygon(theta, phi) {
+    var sinP = Math.sin(phi);
+    var cosP = Math.cos(phi);
+    var sinT = Math.sin(theta);
+    var cosT = Math.cos(theta);
+    // vector data
+    var vX = [-sinP, cosP, 0];
+    var vY = [-cosT * cosP, -cosT * sinP, sinT];
+    var vZ = [-sinT * cosP, -sinT * sinP, -cosT];
+    var info = [];
+    var x, y, z;
+    var i, j;
+    var surface; // 2D bitmap surface
+    for (i = 0; i < g_poly.length; i++) {
+        surface = [0, -(vZ[0] * g_poly[i][0][0] +
+                        vZ[1] * g_poly[i][0][1] +
+                        vZ[2] * g_poly[i][0][2])];
+        for (j = 1; j < g_poly[i].length; ++j) {
+            z = vZ[0] * g_poly[i][j][0] +
+            vZ[1] * g_poly[i][j][1] +
+            vZ[2] * g_poly[i][j][2];
+            surface.push([vX[0] * g_poly[i][j][0] +
+                        vX[1] * g_poly[i][j][1] +
+                        vX[2] * g_poly[i][j][2],
+                        vY[0] * g_poly[i][j][0] +
+                        vY[1] * g_poly[i][j][1] +
+                        vY[2] * g_poly[i][j][2], z]);
+            surface[0] += z;
+        }
+        info.push(surface);
+    }
+    info.sort(function (a, b) {
+        if (a[0] === b[0]) {
+            return 0;
+        }
+        return a[0] < b[0] ? 1 : -1;
+    });
+    // canvas clear
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    var light;
+    for (i = 0; i < info.length; i++) {
+        info[i].shift();
+        light = info[i].shift();
+        //    if (light >= 0) {
+        for (j = 0; j < info[i].length; j++) {
+            x = g_zoom * info[i][j][0] / (10 + info[i][j][2]);
+            y = g_zoom * info[i][j][1] / (10 + info[i][j][2]);
+            if (!j) {
+                ctx.beginPath();
+                ctx.moveTo(g_pos_x + x, g_pos_y + -y);
+                ctx.fillStyle = getRgba(parseInt(0x7f * light) * 0x100, 1.0);
+            } else {
+                ctx.lineTo(g_pos_x + x, g_pos_y + -y);
+            }
+        }
+        ctx.closePath();
+        ctx.stroke();
+        //    }
+    }
+}
+
+function getRgba(color, alpha) {
+    var rv = [(color & 0xff0000)/0x10000, (color & 0xff00)/0x100, color & 0xff, alpha];
+    return "rgba(" + rv.join(",") + ")";
+}
+</script>
+
+</head>
+<body onLoad=init()>
+<canvas id="canvas" width="640" height="480"></canvas>
+</body>
+</html>
+

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, Canvas World!</title>
+<!--[if IE]><script src="excanvas.js"></script><![endif]-->
+<script type="text/javascript">
+var X_MAX = 640;
+var Y_MAX = 480;
+var RATIO = 45;
+var canvas;
+var ctx;
+var angle;
+var posX;
+var posY;
+var scale;
+var branch;
+var x = 0;
+var y = 0;
+
+function draw()
+{
+    canvas = document.getElementById("canvas");
+    ctx = canvas.getContext("2d");
+    drawScreen( ctx );
+   
+    setInterval( fern, 100 );
+}
+
+function drawScreen( ctx ) {
+    ctx.fillStyle = "rgb( 0, 0, 0 )";
+    ctx.fillRect( 0, 0, X_MAX, Y_MAX );
+}
+ 
+function fern() {
+    var sw;
+    var tx = 0;
+    var ty = 0;
+    var i;
+ 
+    for (i = 0; i < 100; i++) {
+        tx = 0;
+        ty = 0;
+        ctx.strokeStyle = "rgb( 0, 127, 0 )"; 
+        ctx.beginPath();
+        ctx.moveTo(( x * RATIO) + X_MAX / 2 - 50, Y_MAX - y * RATIO);
+        ctx.lineTo(( x * RATIO) + X_MAX / 2 - 50 + 2, Y_MAX - y * RATIO + 2);
+        ctx.closePath();
+        ctx.stroke();
+ 
+        sw = Math.floor( Math.random() * 100 );
+        if (sw > 15) {
+            tx = 0.85 * x + 0.04 * y;
+            ty = -0.04 * x + 0.85 * y + 1.6;
+        }
+        else if (sw > 8) {
+            tx = -0.15 * x + 0.28 * y;
+            ty = 0.26 * x + 0.24 * y + 0.44;
+        }
+        else if (sw > 1) {
+            tx = 0.2 * x - 0.26 * y;
+            ty = 0.23 * x + 0.22 * y + 1.6;
+        }
+        else {
+            tx = 0;
+            ty = y * 0.16;
+        }
+ 
+        x = tx;
+        y = ty;
+    }
+}
+</script>
+</head>
+<body onload="draw()">
+<canvas id="canvas" width="640" height="480"></canvas>
+</body>
+</html>

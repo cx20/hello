@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, Canvas World!</title>
+<!--[if IE]><script src="excanvas.js"></script><![endif]-->
+<script type="text/javascript">
+var X_MAX = 640;
+var Y_MAX = 480;
+var letters = Array(256).join(1).split("");
+var canvas;
+var ctx;
+
+function init() {
+    canvas = document.getElementById("Canvas");
+    ctx = canvas.getContext("2d");
+    setInterval( draw, 33 );
+}
+
+function draw() {
+    drawScreen( ctx );
+    letters.map( drawMatrix );
+}
+
+function drawScreen( ctx ) {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+    ctx.fillRect( 0, 0, X_MAX, Y_MAX );
+}
+
+function drawMatrix( value, index, array )
+{
+    var text = String.fromCharCode(Math.random() * 256);
+    var y_pos = value;
+    var x_pos = index * 10;
+    ctx.fillStyle = "#00ff00";
+    ctx.fillText(text, x_pos, y_pos);
+    array[index] = (y_pos > 480 + Math.random() * 480) ? 0 : y_pos + 10;
+}
+</script>
+</head>
+<body onload="init()">
+<canvas id="Canvas" width="640" height="480"></canvas>
+</body>
+</html>

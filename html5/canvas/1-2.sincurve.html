@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, Canvas World!</title>
+<!--[if IE]><script src="excanvas.js"></script><![endif]-->
+<script type="text/javascript">
+var X_MAX = 640;
+var Y_MAX = 480;
+var R = 240;
+
+function draw() {
+    var canvas = document.getElementById("canvas");
+    var ctx = canvas.getContext("2d");
+    drawScreen( ctx );
+    drawGraph( ctx );
+    drawSinCurve( ctx );
+}
+
+function drawScreen( ctx ) {
+    ctx.fillStyle = "rgb( 0, 0, 0 )";
+    ctx.fillRect( 0, 0, X_MAX, Y_MAX );
+}
+
+function drawGraph( ctx ) {
+    ctx.strokeStyle = "rgb( 0, 127, 0 )";
+    ctx.beginPath();
+    var x, y;
+    for (x = 0; x <= X_MAX; x += 20) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, Y_MAX);
+    }
+    for (y = 0; y <= Y_MAX; y += 20) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(X_MAX, y);
+    }
+    ctx.stroke();
+}
+
+function drawSinCurve( ctx ) {
+    ctx.strokeStyle = "rgb( 0, 255, 0 )";
+    ctx.beginPath();
+    var x, y;
+    ctx.moveTo(0, R);
+    for (x = 0; x <= X_MAX; x += 20) {
+        y = R - R * Math.sin( 2 * Math.PI * ( x / X_MAX ) )
+        ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+}
+</script>
+</head>
+<body onload="draw()">
+<canvas id="canvas" width="640" height="480"></canvas>
+</body>
+</html>

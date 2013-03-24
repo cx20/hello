@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, Canvas World!</title>
+<!--[if IE]><script src="excanvas.js"></script><![endif]-->
+<script type="text/javascript">
+var X_MAX = 640;
+var Y_MAX = 480;
+
+var A1 = 150, f1 = 2, p1 = 1/16, d1 = 0.02;
+var A2 = 150, f2 = 2, p2 = 3 / 2, d2 = 0.0315;
+var A3 = 150, f3 = 2, p3 = 13 / 15, d3 = 0.02;
+var A4 = 150, f4 = 2, p4 = 1, d4 = 0.02;
+
+var r = 0, g = 0, b = 0;
+var ctx;
+
+function draw() {
+    ctx = document.getElementById("canvas").getContext("2d");
+    drawScreen( ctx );
+    drawGraph( ctx );
+    randomColor();
+    
+    setInterval(randomColor, 1000);
+
+    setInterval(randomHarmonograph, 100);
+}
+
+function drawScreen( ctx ) {
+    ctx.fillStyle = "rgb( 0, 0, 0 )";
+    ctx.fillRect( 0, 0, X_MAX, Y_MAX );
+}
+
+function drawGraph( ctx ) {
+    ctx.strokeStyle = "rgb( 0, 127, 0 )";
+    ctx.beginPath();
+    var x, y;
+    for (x = 0; x <= X_MAX; x += 20) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, Y_MAX);
+    }
+    for (y = 0; y <= Y_MAX; y += 20) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(X_MAX, y);
+    }
+    ctx.stroke();
+}
+
+function randomColor() {
+    r = Math.floor(Math.random() * 256);
+    g = Math.floor(Math.random() * 256);
+    b = Math.floor(Math.random() * 256);
+}
+
+function randomHarmonograph() {
+    f1 = (f1 + Math.random() / 40) % 10;
+    f2 = (f2 + Math.random() / 40) % 10;
+    f3 = (f3 + Math.random() / 40) % 10;
+    f4 = (f4 + Math.random() / 40) % 10;
+//    p1 += 0.05 % (Math.PI*2)
+    p1 += (Math.PI*2 * 10 / 360);
+    drawHarmonograph();
+}
+
+// Animated Harmonograph
+// http://hernan.amiune.com/labs/harmonograph/animated-harmonograph.html
+function drawHarmonograph() {
+    drawScreen( ctx );
+    drawGraph( ctx );
+    ctx.strokeStyle = "rgb(" + r + "," + g + "," + b + ")";
+//    ctx.strokeStyle = "rgb( 0, 255, 0 )";
+    ctx.beginPath();
+    for (var t = 0; t < 100; t+=0.01) {
+        var x = X_MAX / 2 + A1 * Math.sin(f1 * t + Math.PI * p1) * Math.exp(-d1 * t) + A2 * Math.sin(f2 * t + Math.PI * p2) * Math.exp(-d2 * t);
+        var y = Y_MAX / 2 - A3 * Math.sin(f3 * t + Math.PI * p3) * Math.exp(-d3 * t) + A4 * Math.sin(f4 * t + Math.PI * p4) * Math.exp(-d4 * t);
+        ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+}
+</script>
+</head> 
+<body onload="draw()">
+<canvas id="canvas" width="640" height="480"></canvas> 
+</body>
+</html>

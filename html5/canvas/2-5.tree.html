@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, Canvas World!</title>
+<!--[if IE]><script src="excanvas.js"></script><![endif]-->
+<script type="text/javascript">
+var X_MAX = 640;
+var Y_MAX = 480;
+var canvas;
+var ctx;
+var angle;
+var posX;
+var posY;
+var scale;
+var branch;
+
+function draw()
+{
+    canvas = document.getElementById("canvas");
+    ctx = canvas.getContext("2d");
+    drawScreen( ctx );
+    
+    var n = 8;
+    var x0 = 320, y0 = 480;
+    var len = 140;
+    var a = 90;
+    scale = 1.4;
+    branch = 20.0;
+    
+    tree( n, x0, y0, len, a );
+}
+
+function drawScreen( ctx ) {
+    ctx.fillStyle = "rgb( 0, 0, 0 )";
+    ctx.fillRect( 0, 0, X_MAX, Y_MAX );
+}
+
+function tree( n, x0, y0, len, a )
+{
+    if ( n == 0 )
+    {
+        return;
+    }
+    
+    setPoint( x0, y0 );
+    setAngle( a );
+    move( len );
+    
+    x0 = posX;
+    y0 = posY;
+    
+    tree( n - 1, x0, y0, len / scale, a - branch );
+    tree( n - 1, x0, y0, len / scale, a + branch );
+}
+
+function turn( a )
+{
+    angle = ( angle + a ) % 360;
+}
+
+function move( len )
+{
+    var x = len * Math.cos( 2 * Math.PI / 360 * angle );
+    var y = len * Math.sin( 2 * Math.PI / 360 * angle );
+    
+    ctx.strokeStyle = "rgb( 0, 255, 0 )";
+    ctx.beginPath();
+    ctx.moveTo( posX, posY );
+    setPoint( posX + x, posY - y );
+    ctx.lineTo( posX, posY );
+    ctx.closePath();
+    ctx.stroke();
+}
+
+function setAngle( a )
+{
+    angle = a;
+}
+
+function setPoint( x, y )
+{
+    posX = x;
+    posY = y;
+}
+</script>
+</head>
+<body onload="draw()">
+<canvas id="canvas" width="640" height="480"></canvas>
+</body>
+</html>
