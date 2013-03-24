@@ -6,34 +6,34 @@
 <script type="text/javascript">
 var fov = 250;
 
-var SC_W = 640; 
-var SC_H = 480; 
-var RS  =100; 
-var PLAYWIDTH = SC_W/RS; 
-var PLAYHEIGHT = 50;
-var HALF_WIDTH = SC_W/2; 
-var HALF_HEIGHT = SC_H/2; 
+var X_MAX = 640; 
+var Y_MAX = 480; 
+var RS   = 100; 
+var PLAYWIDTH   = X_MAX/RS; 
+var PLAYHEIGHT  = 50;
+var HALF_WIDTH  = X_MAX/2; 
+var HALF_HEIGHT = Y_MAX/2; 
 
-var screenLeft = 0.0; 
-var screenTop  = -10.0; 
-var screenFront =0.0; 
+var screenLeft  = 0; 
+var screenTop   = -10.0; 
+var screenFront = 0; 
 
 var canvas;
 var ctx;
 
 function draw()
 {
-    canvas = document.getElementById('canvas');
-    ctx = canvas.getContext('2d');
+    canvas = document.getElementById("canvas");
+    ctx = canvas.getContext("2d");
     setInterval(drawLand, 50);
 }
 
-function convert3Dto2D(x3d,y3d,z3d)
+function convert3Dto2D(x3d, y3d, z3d)
 {  
     var scale = fov / (fov + z3d); 
-    var x2d = ((x3d-HALF_WIDTH) * scale) + HALF_WIDTH;
-    var y2d = ((y3d-HALF_HEIGHT) * scale) + HALF_HEIGHT -(z3d*0.01); 
-    return [x2d,y2d];
+    var x2d = ((x3d - HALF_WIDTH) * scale) + HALF_WIDTH;
+    var y2d = ((y3d - HALF_HEIGHT) * scale) + HALF_HEIGHT -(z3d * 0.01); 
+    return [x2d, y2d];
 }
 
 function noise(x, y)
@@ -43,35 +43,35 @@ function noise(x, y)
 
 function drawLand() 
 {
-    ctx.fillStyle="rgb(0,0,0)";
-    ctx.fillRect(0,0, SC_W, SC_H);
+    ctx.fillStyle = "rgb(0,0,0)";
+    ctx.fillRect(0, 0, X_MAX, Y_MAX);
     screenFront+=1; 
     screenLeft +=1; 
 
     ctx.lineWidth=0.5;
 
-    var slicecount = SC_W / RS; 
-    var leftshift = (screenLeft%1) *RS; 
-    var frontshift = (screenFront%1) *RS; 
+    var slicecount = X_MAX / RS; 
+    var leftshift = (screenLeft % 1) * RS; 
+    var frontshift = (screenFront % 1) * RS; 
         
     var p2d = [0,0]; 
     
-    for(var slicez = 100; slicez>=10; slicez--)
+    for(var slicez = 100; slicez >= 10; slicez--)
     {
         ctx.beginPath();
         
         // rudimentary frustum culling
-        var edgewidth = slicez*1.22; 
+        var edgewidth = slicez * 1.22; 
         
-        var zpos  = (slicez*RS)-frontshift; 
+        var zpos  = (slicez * RS) - frontshift; 
         var slicevisible = false; 
         
         // this bit of code makes the colour fade out towards the distance.
-        if(Math.abs(zpos)<100) linecol = 0xff; 
-            else if(zpos >7000)
+        if(Math.abs(zpos) < 100) linecol = 0xff; 
+            else if(zpos > 7000)
             {
                 // should give number from 1 - 2000;  
-                linecol = (((10000-zpos)/3000)*0xff);
+                linecol = (((10000 - zpos) / 3000) * 0xff);
             }
             else
             {
@@ -84,19 +84,25 @@ function drawLand()
         
         var firstpoint = true; 
         
-        for(var slicex = -edgewidth; slicex<=slicecount+edgewidth; slicex++)
+        for(var slicex = -edgewidth; slicex <= slicecount + edgewidth; slicex++)
         {
-            var h = (noise(slicex+screenLeft, screenFront+slicez));
-            var xpos  = (slicex*RS)-leftshift;
-            var ypos  = (h-screenTop)*RS;
+            var h = noise( slicex + screenLeft, screenFront + slicez );
+            var xpos  = (slicex * RS) - leftshift;
+            var ypos  = (h - screenTop) * RS;
             
-            p2d = convert3Dto2D(xpos,ypos,zpos); 
-            if (p2d[1] > SC_H)
-                p2d[1]=SC_H; 
-            else if (p2d[1]<0)
+            p2d = convert3Dto2D(xpos, ypos, zpos); 
+            if (p2d[1] > Y_MAX)
+            {
+                p2d[1] = Y_MAX; 
+            }
+            else if (p2d[1] < 0)
+            {
                 p2d[1] = 0; 
+            }
             else
-                slicevisible = true; 
+            {
+                slicevisible = true;
+            }
             
             if (firstpoint)
             {
@@ -107,11 +113,12 @@ function drawLand()
             {
                 ctx.lineTo(p2d[0], p2d[1]); 
             }
-                
         }
         
-           if (slicevisible)
-               ctx.stroke();
+        if (slicevisible)
+        {
+            ctx.stroke();
+        }
     }
     
 }
