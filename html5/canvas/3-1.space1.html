@@ -22,11 +22,34 @@ function draw()
     render();
 }
 
-function draw3Din2D(point3d)
+function initPoints()
+{
+    var point;
+    var i;
+    for (i = 0; i < numPoints; i++)
+    {
+        point = { x:(Math.random()*400)-200, y:(Math.random()*400)-200, z:(Math.random()*400)-200 };
+        points.push(point); 
+    }
+
+}
+
+function render() 
+{
+    clear();
+    var i;
+    for ( i = 0; i < numPoints; i++)
+    {
+        draw3D(points[i]); 
+    }
+}
+
+
+function draw3D(point)
 {  
-    x3d = point3d[0];
-    y3d = point3d[1]; 
-    z3d = point3d[2]; 
+    var x3d = point.x;
+    var y3d = point.y; 
+    var z3d = point.z; 
     var scale = fov / (fov + z3d); 
     var x2d = (x3d * scale) + HALF_WIDTH;
     var y2d = (y3d * scale) + HALF_HEIGHT;
@@ -41,29 +64,10 @@ function draw3Din2D(point3d)
     
 }
 
-function initPoints()
-{
-    for (i=0; i<numPoints; i++)
-    {
-        point = [(Math.random()*400)-200, (Math.random()*400)-200, (Math.random()*400)-200 ];
-        points.push(point); 
-    }
-
-}
-
 function clear()
 {
     ctx.fillStyle = "rgb( 0, 0, 0 )";
     ctx.fillRect( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT );
-}
-
-function render() 
-{
-    clear();
-    for (i = 0; i < numPoints; i++)
-    {
-        draw3Din2D(points[i]); 
-    }
 }
 </script>
 </head>

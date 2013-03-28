@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, Canvas World!</title>
+<!--[if IE]><script src="excanvas.js"></script><![endif]-->
+<script type="text/javascript">
+// forked from xlune's "‚Í‚¶‚ß‚Ä‚ÌCube" http://jsdo.it/xlune/cube
+/*  
+            50 y 
+            ^  -50 
+            | / z
+            |/       x
+-50 -----------------> +50
+          / |
+     +50 /  |
+          -50
+
+        [7]------[4]
+       / |      / |
+     [3]------[0] |
+      |  |     |  |
+      | [6]----|-[5]
+      |/       |/
+     [2]------[1]
+
+*/
+
+/*
+var g_points = [
+    {x: 5, y: 5, z: 5}, // g_points[0]
+    {x: 5, y:-5, z: 5}, // g_points[1]
+    {x:-5, y:-5, z: 5}, // g_points[2]
+    {x:-5, y: 5, z: 5}, // g_points[3]
+    {x: 5, y: 5, z:-5}, // g_points[4]
+    {x: 5, y:-5, z:-5}, // g_points[5]
+    {x:-5, y:-5, z:-5}, // g_points[6]
+    {x:-5, y: 5, z:-5}  // g_points[7]
+  ];
+*/
+var g_mario = [];    // new Array( 16 * 16 );
+/*
+// ƒƒ}ƒŠƒI„
+// ddddddddddddd   
+// dddddd¬¬¬¬¬dd   
+// ddddd¬¬¬¬¬¬¬¬¬  
+// ddddd¡¡¡  ¡ d¡¡¡
+// dddd¡ ¡   ¡  ¡¡¡
+// dddd¡ ¡¡   ¡   ¡
+// dddd¡¡    ¡¡¡¡¡d
+// dddddd       ¡dd
+// dd¡¡¡¡¡¬¡¡¡¬¡ddd
+// d¡¡¡¡¡¡¡¬¡¡¡¬dd¡
+//   ¡¡¡¡¡¡¬¬¬¬¬dd¡
+//    d¬¬¡¬¬ ¬¬ ¬¡¡
+// d d¡¬¬¬¬¬¬¬¬¬¬¡¡
+// dd¡¡¡¬¬¬¬¬¬¬¬¬¡¡
+// d¡¡¡¬¬¬¬¬¬¬ddddd
+// d¡dd¬¬¬¬dddddddd
+
+// ƒF‚Ìí—Ş„
+// "–³":"#000000"
+// "”’":"#ffffff"
+// "”§":"#ffcccc"
+// "’ƒ":"#800000"
+// "Ô":"#ff0000"
+// "‰©":"#ffff00"
+// "—Î":"#00ff00"
+// "…":"#00ffff"
+// "Â":"#0000ff"
+// "‡":"#800080"
+*/
+var g_strLines = [
+        "–³–³–³–³–³–³–³–³–³–³–³–³–³”§”§”§", 
+        "–³–³–³–³–³–³ÔÔÔÔÔ–³–³”§”§”§", 
+        "–³–³–³–³–³ÔÔÔÔÔÔÔÔÔ”§”§", 
+        "–³–³–³–³–³’ƒ’ƒ’ƒ”§”§’ƒ”§–³ÔÔÔ", 
+        "–³–³–³–³’ƒ”§’ƒ”§”§”§’ƒ”§”§ÔÔÔ", 
+        "–³–³–³–³’ƒ”§’ƒ’ƒ”§”§”§’ƒ”§”§”§Ô", 
+        "–³–³–³–³’ƒ’ƒ”§”§”§”§’ƒ’ƒ’ƒ’ƒÔ–³", 
+        "–³–³–³–³–³–³”§”§”§”§”§”§”§Ô–³–³", 
+        "–³–³ÔÔÔÔÔÂÔÔÔÂÔ–³–³–³", 
+        "–³ÔÔÔÔÔÔÔÂÔÔÔÂ–³–³’ƒ", 
+        "”§”§ÔÔÔÔÔÔÂÂÂÂÂ–³–³’ƒ", 
+        "”§”§”§–³ÂÂÔÂÂ‰©ÂÂ‰©Â’ƒ’ƒ", 
+        "–³”§–³’ƒÂÂÂÂÂÂÂÂÂÂ’ƒ’ƒ", 
+        "–³–³’ƒ’ƒ’ƒÂÂÂÂÂÂÂÂÂ’ƒ’ƒ", 
+        "–³’ƒ’ƒ’ƒÂÂÂÂÂÂÂ–³–³–³–³–³", 
+        "–³’ƒ–³–³ÂÂÂÂ–³–³–³–³–³–³–³–³"
+    ];
+
+var canvas;
+var ctx;
+var X_MAX = 640;
+var Y_MAX = 480;
+var BASE_X = 250;
+var BASE_Y = 150;
+var RAD_STEP = Math.PI / 180;
+var g_vp = 500;
+var g_rad_x = 0;
+var g_rad_y = 0;
+var g_rad_z = 0;
+
+function init()
+{
+    g_rad_x = RAD_STEP * 3;
+    g_rad_y = RAD_STEP * 4;
+    g_rad_z = RAD_STEP * -3;
+
+    txtX_rad.value = g_rad_x;
+    txtY_rad.value = g_rad_y;
+    txtZ_rad.value = g_rad_z;
+
+    canvas = document.getElementById("canvas");
+    ctx = canvas.getContext("2d");
+    clearScreen();
+    
+    initMario();
+
+    setInterval(draw, 100);
+}
+
+function initMario(){
+
+    var strLine;
+    var strMessage;
+    for ( y = 0; y < g_strLines.length; y++ )
+    {
+        strMessage = "";
+        strLine = g_strLines[y];
+        for ( x = 0; x < strLine.length; x++ )
+        {
+            var points = [
+                {x: 5, y: 5, z: 5}, // g_points[0]
+                {x: 5, y:-5, z: 5}, // g_points[1]
+                {x:-5, y:-5, z: 5}, // g_points[2]
+                {x:-5, y: 5, z: 5}, // g_points[3]
+                {x: 5, y: 5, z:-5}, // g_points[4]
+                {x: 5, y:-5, z:-5}, // g_points[5]
+                {x:-5, y:-5, z:-5}, // g_points[6]
+                {x:-5, y: 5, z:-5}  // g_points[7]
+              ];
+            var c = strLine.substr( x, 1 );
+            adjustPoint( points, x, y );
+            var style = getRgbColor( c );
+            g_mario.push( { cube:points, style:style } );
+        }
+    }
+}
+
+function getRgbColor( c )
+{
+    var colorHash = {
+        "–³":"#000000",
+        "”’":"#ffffff",
+        "”§":"#ffcccc",
+        "’ƒ":"#800000",
+        "Ô":"#ff0000",
+        "‰©":"#ffff00",
+        "—Î":"#00ff00",
+        "…":"#00ffff",
+        "Â":"#0000ff",
+        "‡":"#800080"
+    }
+    return colorHash[ c ];
+}
+
+function adjustPoint( points, x, y )
+{
+    var i = 0;
+    for ( i = 0; i < points.length; i++ )
+    {
+        points[i].x += x * 15;
+        points[i].y += y * 15;
+    }
+}
+
+function draw() {
+    clearScreen();
+
+    var i;
+    for ( i = 0; i < g_mario.length; i++ )
+    {
+        drawMario( g_mario[i] );
+    }
+}
+
+function drawMario( mario ){
+    var p;
+    var p2 = [];
+    var i, s;
+    var x1, y1, z1;
+    var x2, y2, z2;
+    var x3, y3, z3;
+    var points = mario.cube;
+    var style = mario.style;
+    
+    for(i = 0; i < points.length; i++ ) {
+        p = points[i];
+
+        // ˆÈ‰ºƒRƒƒ“ƒg‚ÍuCŒ¾Œê‚É‚æ‚é‚Í‚¶‚ß‚Ä‚ÌƒAƒ‹ƒSƒŠƒYƒ€“ü–åv‚Ì‰ğà‚æ‚è”²ˆ
+        //
+        // ¡ Amazon.co.jpF CŒ¾Œê‚É‚æ‚é‚Í‚¶‚ß‚Ä‚ÌƒAƒ‹ƒSƒŠƒYƒ€“ü–å: ‰Í¼ ’©—Y: –{
+        // http://www.amazon.co.jp/dp/4874085008
+        // 
+        // 8.4 ‚RŸŒ³À•W•ÏŠ·
+        // 
+        
+        // y²ü‚è‚ÉƒÀŠp‰ñ“]‚·‚é
+        // x1 = x * cos(ƒÀ) + z * sin(ƒÀ)
+        // y1 = y
+        // z1 = -x * sin(ƒÀ) + z * cos(ƒÀ)
+        x1 = p.x * Math.cos(g_rad_y) + p.z * Math.sin(g_rad_y);
+        y1 = p.y;
+        z1 = -p.x * Math.sin(g_rad_y) + p.z * Math.cos(g_rad_y);
+        
+        // x²ü‚è‚Éƒ¿Šp‰ñ“]‚·‚é
+        // x2 = x1
+        // y2 = y1 * cos(ƒ¿) - z1 * sin(ƒ¿)
+        // z2 = y1 * sin(ƒ¿) + z1 * cos(ƒ¿)
+        x2 = x1;
+        y2 = y1 * Math.cos(g_rad_x) - z1 * Math.sin(g_rad_x);
+        z2 = y1 * Math.sin(g_rad_x) + z1 * Math.cos(g_rad_x);
+        
+        // z²ü‚è‚ÉƒÁŠp‰ñ“]‚·‚é
+        // x2 = x2 * cos(ƒÁ) - y2 * sin(ƒÁ)
+        // y2 = x2 * sin(ƒÁ) + y2 * cos(ƒÁ)
+        // z2 = z2
+        x3 = x2 * Math.cos(g_rad_z) - y2 * Math.sin(g_rad_z);
+        y3 = x2 * Math.sin(g_rad_z) + y2 * Math.cos(g_rad_z);
+        z3 = z2;
+        
+        // ŒvZŒ‹‰Ê‚ğ–ß‚·
+        p.x = x3;
+        p.y = y3;
+        p.z = z3;
+        
+        // ã‹L‚Ì‰ñ“]‚Å“¾‚ç‚ê‚½À•W‚ğ z = 0 •½–Ê‚É•½s“Š‰e‚·‚é
+        // ix3, y3, z3 ‚Ì‚¤‚¿Az3 ‚ğ–³‹‚·‚é‚±‚Æ‚ª z = 0 ‚Ö‚Ì•½s“Š‰e‚ğˆÓ–¡‚·‚éBj
+        s = g_vp / (g_vp - p.z);
+        p2[i] = { x: p.x * s, y: p.y * s };
+    }
+    drawCube(p2, style);
+}
+
+function drawCube(p, style){
+//    clearScreen();
+    ctx.beginPath();
+    //ctx.strokeStyle = "#FFFFFF";
+    ctx.strokeStyle = style;
+/*
+            50 y 
+            ^  -50 
+            | / z
+            |/       x
+-50 -----------------> +50
+          / |
+     +50 /  |
+          -50
+
+        [7]------[4]
+       / |      / |
+     [3]------[0] |
+      |  |     |  |
+      | [6]----|-[5]
+      |/       |/
+     [2]------[1]
+
+*/
+    ctx.moveTo(p[0].x + BASE_X, p[0].y + BASE_Y);
+    ctx.lineTo(p[1].x + BASE_X, p[1].y + BASE_Y);
+    ctx.lineTo(p[2].x + BASE_X, p[2].y + BASE_Y);
+    ctx.lineTo(p[3].x + BASE_X, p[3].y + BASE_Y);
+    ctx.lineTo(p[0].x + BASE_X, p[0].y + BASE_Y);
+    ctx.lineTo(p[4].x + BASE_X, p[4].y + BASE_Y);
+    ctx.lineTo(p[5].x + BASE_X, p[5].y + BASE_Y);
+    ctx.lineTo(p[6].x + BASE_X, p[6].y + BASE_Y);
+    ctx.lineTo(p[7].x + BASE_X, p[7].y + BASE_Y);
+    ctx.lineTo(p[4].x + BASE_X, p[4].y + BASE_Y);
+    ctx.moveTo(p[1].x + BASE_X, p[1].y + BASE_Y);
+    ctx.lineTo(p[5].x + BASE_X, p[5].y + BASE_Y);
+    ctx.moveTo(p[2].x + BASE_X, p[2].y + BASE_Y);
+    ctx.lineTo(p[6].x + BASE_X, p[6].y + BASE_Y);
+    ctx.moveTo(p[3].x + BASE_X, p[3].y + BASE_Y);
+    ctx.lineTo(p[7].x + BASE_X, p[7].y + BASE_Y);
+    ctx.closePath();
+    ctx.stroke();
+}
+
+function clearScreen() {
+    ctx.fillStyle = "rgb( 0, 0, 0 )";
+    ctx.fillRect( 0, 0, X_MAX, Y_MAX );
+}
+
+function btnX_minus_onclick() {
+    g_rad_x -= RAD_STEP;
+    txtX_rad.value = g_rad_x;
+}
+
+function btnX_plus_onclick() {
+    g_rad_x += RAD_STEP;
+    txtX_rad.value = g_rad_x;
+}
+
+function btnY_minus_onclick() {
+    g_rad_y -= RAD_STEP;
+    txtY_rad.value = g_rad_y;
+}
+
+function btnY_plus_onclick() {
+    g_rad_y += RAD_STEP;
+    txtY_rad.value = g_rad_y;
+}
+
+function btnZ_minus_onclick() {
+    g_rad_z -= RAD_STEP;
+    txtZ_rad.value = g_rad_z;
+}
+
+function btnZ_plus_onclick() {
+    g_rad_z += RAD_STEP;
+    txtZ_rad.value = g_rad_z;
+}
+
+</script>
+</head>
+<body onload="init()">
+<canvas id="canvas" width="640" height="480"></canvas>
+<br />
+x²‚Ì‰ñ“]Šp:
+<input id="btnX_minus" type="button" value="-" onclick="return btnX_minus_onclick()" />
+<input id="txtX_rad" type="text" style="text-align: right" />
+<input id="btnX_plus" type="button" value="+" onclick="return btnX_plus_onclick()" /><br />
+y²‚Ì‰ñ“]Šp:
+<input id="btnY_minus" type="button" value="-" onclick="return btnY_minus_onclick()" />
+<input id="txtY_rad" type="text" style="text-align: right" />
+<input id="btnY_plus" type="button" value="+" onclick="return btnY_plus_onclick()" /><br />
+z²‚Ì‰ñ“]Šp:
+<input id="btnZ_minus" type="button" value="-" onclick="return btnZ_minus_onclick()" />
+<input id="txtZ_rad" type="text" style="text-align: right" />
+<input id="btnZ_plus" type="button" value="+" onclick="return btnZ_plus_onclick()" /><br />
+</body>
+</html>

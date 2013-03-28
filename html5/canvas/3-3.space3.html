@@ -22,11 +22,36 @@ function draw()
     setInterval(render, 50);
 }
 
-function draw3Din2D(point3d)
+function initPoints()
+{
+    var i;
+    for (i = 0; i < numPoints; i++)
+    {
+        point = { x:(Math.random()*400)-200, y:(Math.random()*400)-200 , z:(Math.random()*400)-200 };
+        points.push(point); 
+    }
+
+}
+
+function render()
+{
+    clear();
+    
+    var point;
+    var i;
+    for (i = 0; i < numPoints; i++)
+    {
+        point = points[i]; 
+        rotateY(point, 0.04);     
+        draw3D(point); 
+    }
+}
+
+function draw3D(point)
 {  
-    x3d = point3d[0];
-    y3d = point3d[1]; 
-    z3d = point3d[2]; 
+    var x3d = point.x;
+    var y3d = point.y; 
+    var z3d = point.z; 
     var scale = fov / (fov + z3d); 
     var x2d = (x3d * scale) + HALF_WIDTH;
     var y2d = (y3d * scale) + HALF_HEIGHT;
@@ -39,14 +64,20 @@ function draw3Din2D(point3d)
     ctx.stroke(); 
 }
 
-function initPoints()
+function rotateY(point, angle)
 {
-    for (i = 0; i < numPoints; i++)
-    {
-        point = [(Math.random()*400)-200, (Math.random()*400)-200 , (Math.random()*400)-200 ];
-        points.push(point); 
-    }
+    var x = point.x; 
+    var z = point.z; 
+    
+    var cosRY = Math.cos(angle);
+    var sinRY = Math.sin(angle);
+    var tempz = z; 
+    var tempx = x; 
 
+    x = (tempx * cosRY) + (tempz * sinRY);
+    z = (tempx * -sinRY) + (tempz * cosRY);
+    point.x = x; 
+    point.z = z; 
 }
 
 function clear()
@@ -55,33 +86,6 @@ function clear()
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 }
 
-function render()
-{
-    clear();
-     
-    for (i = 0; i < numPoints; i++)
-    {
-        point3d = points[i]; 
-        rotatePointAroundY(point3d, 0.04);     
-        draw3Din2D(point3d); 
-    }
-}
-
-function rotatePointAroundY(point3d, angle)
-{
-    x = point3d[0]; 
-    z = point3d[2]; 
-    
-    cosRY = Math.cos(angle);
-    sinRY = Math.sin(angle);
-    tempz = z; 
-    tempx = x; 
-
-    x = (tempx * cosRY) + (tempz * sinRY);
-    z = (tempx * -sinRY) + (tempz * cosRY);
-    point3d[0] = x; 
-    point3d[2] = z; 
-}
 </script>
 </head>
 <body onload="draw()">

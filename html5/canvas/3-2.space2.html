@@ -22,11 +22,43 @@ function draw()
     setInterval(render, 50);
 }
 
-function draw3Din2D(point3d)
+function initPoints()
+{
+    var point;
+    var i;
+    for (i = 0; i < numPoints; i++)
+    {
+        point = { x:(Math.random()*400)-200, y:(Math.random()*400)-200 , z:(Math.random()*400)-200 };
+        points.push(point); 
+    }
+}
+
+function render() 
+{
+    clear();
+    var point;
+    var z3d;
+    var i;
+    for (i = 0; i < numPoints; i++)
+    {
+        point = points[i]; 
+        
+        z3d = point.z; 
+        z3d -= 4; 
+        if (z3d < -fov)
+            z3d += 400;
+
+        point.z = z3d; 
+
+        draw3D(point); 
+    }
+}
+
+function draw3D(point)
 {  
-    x3d = point3d[0];
-    y3d = point3d[1]; 
-    z3d = point3d[2]; 
+    var x3d = point.x;
+    var y3d = point.y; 
+    var z3d = point.z; 
     var scale = fov / (fov + z3d); 
     var x2d = (x3d * scale) + HALF_WIDTH;
     var y2d = (y3d * scale) + HALF_HEIGHT;
@@ -39,40 +71,12 @@ function draw3Din2D(point3d)
     ctx.stroke(); 
 }
 
-function initPoints()
-{
-    for (i = 0; i < numPoints; i++)
-    {
-        point = [(Math.random()*400)-200, (Math.random()*400)-200 , (Math.random()*400)-200 ];
-        points.push(point); 
-    }
-
-}
-
 function clear()
 {
     ctx.fillStyle = "rgb(0, 0, 0)";
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 }
 
-function render() 
-{
-    clear();
-
-    for (i = 0; i < numPoints; i++)
-    {
-        point3d = points[i]; 
-        
-        z3d = point3d[2]; 
-        z3d -= 4; 
-        if (z3d < -fov)
-            z3d += 400;
-
-        point3d[2] = z3d; 
-
-        draw3Din2D(point3d); 
-    }
-}
 </script>
 </head>
 <body onload="draw()">

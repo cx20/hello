@@ -25,12 +25,56 @@ function draw()
     setInterval(render, 50);
 }
 
+function initPoints()
+{
+    var point;
+    var i;
+    for (i = 0; i < numPoints; i++)
+    {
+        point = { x:(Math.random()*400)-200, y:(Math.random()*400)-200 , z:(Math.random()*400)-200 };
+        points.push(point); 
+    }
+}
 
-function draw3Din2D(point3d)
+function render() 
+{
+    clear();
+    
+    var point;
+    var i;
+    for (i = 0; i < numPoints; i++)
+    {
+        point = points[i]; 
+        rotateY(point, mouseX * -0.0003); 
+        point.z += (mouseY * 0.08);     
+        
+        if (point.x < -300)
+        {
+            point.x = 300; 
+        }
+        else if (point.x > 300)
+        {
+            point.x = -300; 
+        }
+        
+        if (point.z < -fov)
+        {
+            point.z = fov; 
+        }
+        else if (point.z > fov)
+        {
+            point.z = -fov;
+        }
+        
+        draw3D(point); 
+    }
+}
+
+function draw3D(point)
 {  
-    x3d = point3d[0];
-    y3d = point3d[1]; 
-    z3d = point3d[2]; 
+    var x3d = point.x;
+    var y3d = point.y; 
+    var z3d = point.z; 
     var scale = fov / (fov + z3d); 
     var x2d = (x3d * scale) + HALF_WIDTH;
     var y2d = (y3d * scale) + HALF_HEIGHT;
@@ -43,59 +87,27 @@ function draw3Din2D(point3d)
     ctx.stroke(); 
 }
 
-function initPoints()
+
+function rotateY(point, angle)
 {
-    for (i = 0; i < numPoints; i++)
-    {
-        point = [(Math.random()*400)-200, (Math.random()*400)-200 , (Math.random()*400)-200 ];
-        points.push(point); 
-    }
+    var x = point.x; 
+    var z = point.z + fov; 
+    
+    var cosRY = Math.cos(angle);
+    var sinRY = Math.sin(angle);
+    var tempz = z; 
+    var tempx = x; 
+
+    x = (tempx * cosRY) + (tempz * sinRY);
+    z = (tempx * -sinRY) + (tempz * cosRY);
+    point.x = x; 
+    point.z = z - fov; 
 }
 
 function clear()
 {
     ctx.fillStyle = "rgb(0, 0, 0)";
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-}
-
-function render() 
-{
-    clear();
-
-    for (i = 0; i < numPoints; i++)
-    {
-        point3d = points[i]; 
-        rotatePointAroundY(point3d, mouseX * -0.0003); 
-        point3d[2] += (mouseY * 0.08);     
-        
-        
-        if (point3d[0] < -300)
-            point3d[0] = 300; 
-        else if (point3d[0] > 300)
-            point3d[0] = -300; 
-        if (point3d[2] < -fov)
-            point3d[2] = fov; 
-        else if (point3d[2] > 249)
-            point3d[2] = -249;
-        
-        draw3Din2D(point3d); 
-    }
-}
-
-function rotatePointAroundY(point3d, angle)
-{
-    x = point3d[0]; 
-    z = point3d[2] + fov; 
-    
-    cosRY = Math.cos(angle);
-    sinRY = Math.sin(angle);
-    tempz = z; 
-    tempx = x; 
-
-    x = (tempx * cosRY) + (tempz * sinRY);
-    z = (tempx * -sinRY) + (tempz * cosRY);
-    point3d[0] = x; 
-    point3d[2] = z - fov; 
 }
 
 function updateMouse(e) 
