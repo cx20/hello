@@ -9,7 +9,7 @@ var Y_MAX = 480;
 var R = 100;
 var N_POINT1 = 60;
 var N_POINT2 = 60;
-var RADIAN = Math.PI / 180; 
+var RAD_STEP = Math.PI / 180;
 var FOCUS = 280;
 var CENTER_X = X_MAX / 2;
 var CENTER_Y = Y_MAX / 2;
@@ -18,12 +18,19 @@ var canvas;
 var ctx;
 var points = [];
 var theta = 0;
+var g_rad_x = 0;
+var g_rad_y = 0;
+var g_rad_z = 0;
 var scale;
 
 function init()
 {
     canvas = document.getElementById("canvas");
     ctx = canvas.getContext("2d");
+
+    g_rad_x = RAD_STEP * 0.1;
+    g_rad_y = RAD_STEP * 2;
+    g_rad_z = RAD_STEP * -0.1;
 
     var theta1;
     var theta2;
@@ -33,10 +40,10 @@ function init()
     var i, j;
     for(i = 0; i < N_POINT1; i++)
     {
-        theta1 = (360 / N_POINT1) * i * RADIAN;
+        theta1 = (360 / N_POINT1) * i * RAD_STEP;
         for(j = 0; j < N_POINT2; j++)
         {
-            theta2 = (360 / N_POINT2) * j * RADIAN;
+            theta2 = (360 / N_POINT2) * j * RAD_STEP;
             x = R * Math.cos(theta2) * Math.sin(theta1);
             y = R * Math.sin(theta2);
             z = R * Math.cos(theta2) * Math.cos(theta1);
@@ -53,28 +60,52 @@ function init()
 
 function draw()
 {
-    drawScreen( ctx );
+    clearScreen();
     var p;
-    var x, y, z;
+    //var x, y, z;
+    var x1, y1, z1;
+    var x2, y2, z2;
+    var x3, y3, z3;
     var i;
-    for(i = 0 ; i < points.length; i++)
+    for(i = 0; i < points.length; i++)
     {
         p = points[i];
-        x = p.x * Math.cos(theta * RADIAN) + p.y * Math.sin(theta * RADIAN) * Math.sin(theta * RADIAN) - p.z * Math.sin(theta * RADIAN) * Math.cos(theta * RADIAN);
-        y = p.y * Math.cos(theta * RADIAN) + p.z * Math.sin(theta * RADIAN);
-        z = p.x * Math.sin(theta * RADIAN) - p.y * Math.sin(theta * RADIAN) * Math.cos(theta * RADIAN) + p.z * Math.cos(theta * RADIAN) * Math.cos(theta * RADIAN);
+        // yŽ²Žü‚è‚ÉƒÀŠp‰ñ“]‚·‚é
+        // x1 = x * cos(ƒÀ) + z * sin(ƒÀ)
+        // y1 = y
+        // z1 = -x * sin(ƒÀ) + z * cos(ƒÀ)
+        x1 = p.x * Math.cos(theta * g_rad_y) + p.z * Math.sin(theta * g_rad_y);
+        y1 = p.y;
+        z1 = -p.x * Math.sin(theta * g_rad_y) + p.z * Math.cos(theta * g_rad_y);
         
-        scale = FOCUS * 1.5 / (FOCUS - z);
-        x = parseInt( x * scale) + CENTER_X;
-        y = parseInt(-y * scale) + CENTER_Y;
+        // xŽ²Žü‚è‚Éƒ¿Šp‰ñ“]‚·‚é
+        // x2 = x1
+        // y2 = y1 * cos(ƒ¿) - z1 * sin(ƒ¿)
+        // z2 = y1 * sin(ƒ¿) + z1 * cos(ƒ¿)
+        x2 = x1;
+        y2 = y1 * Math.cos(theta * g_rad_x) - z1 * Math.sin(theta * g_rad_x);
+        z2 = y1 * Math.sin(theta * g_rad_x) + z1 * Math.cos(theta * g_rad_x);
+        
+        // zŽ²Žü‚è‚ÉƒÁŠp‰ñ“]‚·‚é
+        // x2 = x2 * cos(ƒÁ) - y2 * sin(ƒÁ)
+        // y2 = x2 * sin(ƒÁ) + y2 * cos(ƒÁ)
+        // z2 = z2
+        x3 = x2 * Math.cos(theta * g_rad_z) - y2 * Math.sin(theta * g_rad_z);
+        y3 = x2 * Math.sin(theta * g_rad_z) + y2 * Math.cos(theta * g_rad_z);
+        z3 = z2;
+
+        scale = FOCUS * 1.5 / (FOCUS - z3);
+        x3 = parseInt( x3 * scale) + CENTER_X;
+        y3 = parseInt(-y3 * scale) + CENTER_Y;
         ctx.fillStyle = p.style;
-        ctx.fillRect( x, y, 1, 1 );
+        ctx.fillRect( x3, y3, 1, 1 );
     }
     theta++;
 }
 
-function drawScreen( ctx ) {
-    ctx.fillStyle = "rgb( 0, 0, 0 )";
+function clearScreen() {
+    ctx.fillStyle = "rgba( 0, 0, 0, 0.01 )";
+    //ctx.fillStyle = "rgb( 0, 0, 0 )";
     ctx.fillRect( 0, 0, X_MAX, Y_MAX );
 }
 </script>
