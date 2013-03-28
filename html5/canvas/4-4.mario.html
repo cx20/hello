@@ -4,7 +4,6 @@
 <title>Hello, Canvas World!</title>
 <!--[if IE]><script src="excanvas.js"></script><![endif]-->
 <script type="text/javascript">
-// forked from xlune's "‚Í‚¶‚ß‚Ä‚ÌCube" http://jsdo.it/xlune/cube
 /*  
             50 y 
             ^  -50 
@@ -102,9 +101,9 @@ var g_rad_z = 0;
 
 function init()
 {
-    g_rad_x = RAD_STEP * 3;
-    g_rad_y = RAD_STEP * 4;
-    g_rad_z = RAD_STEP * -3;
+    g_rad_x = RAD_STEP * 0;
+    g_rad_y = RAD_STEP * 2;
+    g_rad_z = RAD_STEP * -10;
 
     txtX_rad.value = g_rad_x;
     txtY_rad.value = g_rad_y;
@@ -325,6 +324,7 @@ function btnZ_plus_onclick() {
 </head>
 <body onload="init()">
 <canvas id="canvas" width="640" height="480"></canvas>
+<a href="https://github.com/cx20/hello/blob/master/html5/canvas/4-4.mario.html" target="_blank">View Source</a>
 <br />
 xŽ²‚Ì‰ñ“]Šp:
 <input id="btnX_minus" type="button" value="-" onclick="return btnX_minus_onclick()" />
