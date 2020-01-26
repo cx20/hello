@@ -2,20 +2,19 @@
 <html>
 <head>
 <title>Hello, Canvas World!</title>
-<!--[if IE]><script src="excanvas.js"></script><![endif]-->
-<script type="text/javascript">
-var X_MAX = 640;
-var Y_MAX = 480;
-var RATIO = 45;
-var canvas;
-var ctx;
-var angle;
-var posX;
-var posY;
-var scale;
-var branch;
-var x = 0;
-var y = 0;
+<script>
+const X_MAX = 640;
+const Y_MAX = 480;
+const RATIO = 45;
+let canvas;
+let ctx;
+let angle;
+let posX;
+let posY;
+let scale;
+let branch;
+let x = 0;
+let y = 0;
 
 function draw()
 {
@@ -32,10 +31,10 @@ function drawScreen( ctx ) {
 }
  
 function fern() {
-    var sw;
-    var tx = 0;
-    var ty = 0;
-    var i;
+    let sw;
+    let tx = 0;
+    let ty = 0;
+    let i;
  
     for (i = 0; i < 100; i++) {
         tx = 0;

@@ -2,13 +2,12 @@
 <html>
 <head>
 <title>Hello, Canvas World!</title>
-<!--[if IE]><script src="excanvas.js"></script><![endif]-->
-<script type="text/javascript">
-var X_MAX = 640;
-var Y_MAX = 480;
-var letters = Array(256).join(1).split("");
-var canvas;
-var ctx;
+<script>
+const X_MAX = 640;
+const Y_MAX = 480;
+let letters = Array(256).join(1).split("");
+let canvas;
+let ctx;
 
 function init() {
     canvas = document.getElementById("Canvas");
@@ -28,9 +27,9 @@ function drawScreen( ctx ) {
 
 function drawMatrix( value, index, array )
 {
-    var text = String.fromCharCode(Math.random() * 256);
-    var y_pos = value;
-    var x_pos = index * 10;
+    let text = String.fromCharCode(Math.random() * 256);
+    let y_pos = value;
+    let x_pos = index * 10;
     ctx.fillStyle = "#00ff00";
     ctx.fillText(text, x_pos, y_pos);
     array[index] = (y_pos > 480 + Math.random() * 480) ? 0 : y_pos + 10;

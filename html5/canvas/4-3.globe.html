@@ -2,26 +2,25 @@
 <html>
 <head>
 <title>Hello, Canvas World!</title>
-<!--[if IE]><script src="excanvas.js"></script><![endif]-->
-<script type="text/javascript">
-var X_MAX = 640;
-var Y_MAX = 480;
-var R = 100;
-var N_POINT1 = 60;
-var N_POINT2 = 60;
-var RAD_STEP = Math.PI / 180;
-var FOCUS = 280;
-var CENTER_X = X_MAX / 2;
-var CENTER_Y = Y_MAX / 2;
+<script>
+const X_MAX = 640;
+const Y_MAX = 480;
+const R = 100;
+const N_POINT1 = 60;
+const N_POINT2 = 60;
+const RAD_STEP = Math.PI / 180;
+const FOCUS = 280;
+const CENTER_X = X_MAX / 2;
+const CENTER_Y = Y_MAX / 2;
 
-var canvas;
-var ctx;
-var points = [];
-var theta = 0;
-var g_rad_x = 0;
-var g_rad_y = 0;
-var g_rad_z = 0;
-var scale;
+let canvas;
+let ctx;
+let points = [];
+let theta = 0;
+let g_rad_x = 0;
+let g_rad_y = 0;
+let g_rad_z = 0;
+let scale;
 
 function init()
 {
@@ -32,12 +31,12 @@ function init()
     g_rad_y = RAD_STEP * 2;
     g_rad_z = RAD_STEP * -0.1;
 
-    var theta1;
-    var theta2;
-    var x, y, z;
-    var r, g, b;
-    var style;
-    var i, j;
+    let theta1;
+    let theta2;
+    let x, y, z;
+    let r, g, b;
+    let style;
+    let i, j;
     for(i = 0; i < N_POINT1; i++)
     {
         theta1 = (360 / N_POINT1) * i * RAD_STEP;
@@ -61,34 +60,34 @@ function init()
 function draw()
 {
     clearScreen();
-    var p;
-    //var x, y, z;
-    var x1, y1, z1;
-    var x2, y2, z2;
-    var x3, y3, z3;
-    var i;
+    let p;
+    //let x, y, z;
+    let x1, y1, z1;
+    let x2, y2, z2;
+    let x3, y3, z3;
+    let i;
     for(i = 0; i < points.length; i++)
     {
         p = points[i];
-        // yŽ²Žü‚è‚ÉƒÀŠp‰ñ“]‚·‚é
-        // x1 = x * cos(ƒÀ) + z * sin(ƒÀ)
+        // yï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Éƒï¿½ï¿½pï¿½ï¿½]ï¿½ï¿½ï¿½ï¿½
+        // x1 = x * cos(ï¿½ï¿½) + z * sin(ï¿½ï¿½)
         // y1 = y
-        // z1 = -x * sin(ƒÀ) + z * cos(ƒÀ)
+        // z1 = -x * sin(ï¿½ï¿½) + z * cos(ï¿½ï¿½)
         x1 = p.x * Math.cos(theta * g_rad_y) + p.z * Math.sin(theta * g_rad_y);
         y1 = p.y;
         z1 = -p.x * Math.sin(theta * g_rad_y) + p.z * Math.cos(theta * g_rad_y);
         
-        // xŽ²Žü‚è‚Éƒ¿Šp‰ñ“]‚·‚é
+        // xï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Éƒï¿½ï¿½pï¿½ï¿½]ï¿½ï¿½ï¿½ï¿½
         // x2 = x1
-        // y2 = y1 * cos(ƒ¿) - z1 * sin(ƒ¿)
-        // z2 = y1 * sin(ƒ¿) + z1 * cos(ƒ¿)
+        // y2 = y1 * cos(ï¿½ï¿½) - z1 * sin(ï¿½ï¿½)
+        // z2 = y1 * sin(ï¿½ï¿½) + z1 * cos(ï¿½ï¿½)
         x2 = x1;
         y2 = y1 * Math.cos(theta * g_rad_x) - z1 * Math.sin(theta * g_rad_x);
         z2 = y1 * Math.sin(theta * g_rad_x) + z1 * Math.cos(theta * g_rad_x);
         
-        // zŽ²Žü‚è‚ÉƒÁŠp‰ñ“]‚·‚é
-        // x2 = x2 * cos(ƒÁ) - y2 * sin(ƒÁ)
-        // y2 = x2 * sin(ƒÁ) + y2 * cos(ƒÁ)
+        // zï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Éƒï¿½ï¿½pï¿½ï¿½]ï¿½ï¿½ï¿½ï¿½
+        // x2 = x2 * cos(ï¿½ï¿½) - y2 * sin(ï¿½ï¿½)
+        // y2 = x2 * sin(ï¿½ï¿½) + y2 * cos(ï¿½ï¿½)
         // z2 = z2
         x3 = x2 * Math.cos(theta * g_rad_z) - y2 * Math.sin(theta * g_rad_z);
         y3 = x2 * Math.sin(theta * g_rad_z) + y2 * Math.cos(theta * g_rad_z);

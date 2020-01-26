@@ -2,14 +2,13 @@
 <html>
 <head>
 <title>Hello, Canvas World!</title>
-<!--[if IE]><script src="excanvas.js"></script><![endif]-->
-<script type="text/javascript">
-var X_MAX = 640;
-var Y_MAX = 480;
-var r, g, b;
-var letters = Array(256).join(1).split("");
-var canvas;
-var ctx;
+<script>
+const X_MAX = 640;
+const Y_MAX = 480;
+let r, g, b;
+let letters = Array(256).join(1).split("");
+let canvas;
+let ctx;
 
 function init() {
     canvas = document.getElementById("Canvas");
@@ -29,9 +28,9 @@ function drawScreen( ctx ) {
 
 function drawAlphabet( value, index, array )
 {
-    var text = String.fromCharCode(0x41 + Math.random() * 26);
-    var x_pos = index * 5;
-    var y_pos = value;
+    let text = String.fromCharCode(0x41 + Math.random() * 26);
+    let x_pos = index * 5;
+    let y_pos = value;
     randomColor();
     ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
     ctx.fillText(text, x_pos, y_pos);

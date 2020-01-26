@@ -2,17 +2,16 @@
 <html>
 <head>
 <title>Hello, Canvas World!</title>
-<!--[if IE]><script src="excanvas.js"></script><![endif]-->
-<script type="text/javascript">
-var fov = 250;
-var SCREEN_WIDTH = 640; 
-var SCREEN_HEIGHT = 480; 
-var HALF_WIDTH = SCREEN_WIDTH/2; 
-var HALF_HEIGHT = SCREEN_HEIGHT/2; 
-var numPoints = 200; 
-var points = [];
-var canvas;
-var ctx;
+<script>
+let fov = 250;
+const SCREEN_WIDTH = 640; 
+const SCREEN_HEIGHT = 480; 
+const HALF_WIDTH = SCREEN_WIDTH/2; 
+const HALF_HEIGHT = SCREEN_HEIGHT/2; 
+let numPoints = 200; 
+let points = [];
+let canvas;
+let ctx;
 
 function draw()
 {
@@ -24,7 +23,7 @@ function draw()
 
 function initPoints()
 {
-    var i;
+    let i;
     for (i = 0; i < numPoints; i++)
     {
         point = { x:(Math.random()*400)-200, y:(Math.random()*400)-200 , z:(Math.random()*400)-200 };
@@ -37,8 +36,8 @@ function render()
 {
     clear();
     
-    var point;
-    var i;
+    let point;
+    let i;
     for (i = 0; i < numPoints; i++)
     {
         point = points[i]; 
@@ -49,12 +48,12 @@ function render()
 
 function draw3D(point)
 {  
-    var x3d = point.x;
-    var y3d = point.y; 
-    var z3d = point.z; 
-    var scale = fov / (fov + z3d); 
-    var x2d = (x3d * scale) + HALF_WIDTH;
-    var y2d = (y3d * scale) + HALF_HEIGHT;
+    let x3d = point.x;
+    let y3d = point.y; 
+    let z3d = point.z; 
+    let scale = fov / (fov + z3d); 
+    let x2d = (x3d * scale) + HALF_WIDTH;
+    let y2d = (y3d * scale) + HALF_HEIGHT;
     
     ctx.lineWidth = scale; 
     ctx.strokeStyle = "rgb(255, 255, 255)";
@@ -66,13 +65,13 @@ function draw3D(point)
 
 function rotateY(point, angle)
 {
-    var x = point.x; 
-    var z = point.z; 
+    let x = point.x; 
+    let z = point.z; 
     
-    var cosRY = Math.cos(angle);
-    var sinRY = Math.sin(angle);
-    var tempz = z; 
-    var tempx = x; 
+    let cosRY = Math.cos(angle);
+    let sinRY = Math.sin(angle);
+    let tempz = z; 
+    let tempx = x; 
 
     x = (tempx * cosRY) + (tempz * sinRY);
     z = (tempx * -sinRY) + (tempz * cosRY);

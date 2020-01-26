@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
+<meta charset="UTF-8">
 <title>Hello, Canvas World!</title>
-<!--[if IE]><script src="excanvas.js"></script><![endif]-->
-<script type="text/javascript">
+<script type>
 /*  
             50 y 
             ^  -50 
@@ -25,7 +25,7 @@
 */
 
 /*
-var g_points = [
+let g_points = [
     {x: 5, y: 5, z: 5}, // g_points[0]
     {x: 5, y:-5, z: 5}, // g_points[1]
     {x:-5, y:-5, z: 5}, // g_points[2]
@@ -36,68 +36,68 @@ var g_points = [
     {x:-5, y: 5, z:-5}  // g_points[7]
   ];
 */
-var g_mario = [];    // new Array( 16 * 16 );
+let g_mario = [];    // new Array( 16 * 16 );
 /*
-// ƒƒ}ƒŠƒI„
-// ddddddddddddd   
-// dddddd¬¬¬¬¬dd   
-// ddddd¬¬¬¬¬¬¬¬¬  
-// ddddd¡¡¡  ¡ d¡¡¡
-// dddd¡ ¡   ¡  ¡¡¡
-// dddd¡ ¡¡   ¡   ¡
-// dddd¡¡    ¡¡¡¡¡d
-// dddddd       ¡dd
-// dd¡¡¡¡¡¬¡¡¡¬¡ddd
-// d¡¡¡¡¡¡¡¬¡¡¡¬dd¡
-//   ¡¡¡¡¡¡¬¬¬¬¬dd¡
-//    d¬¬¡¬¬ ¬¬ ¬¡¡
-// d d¡¬¬¬¬¬¬¬¬¬¬¡¡
-// dd¡¡¡¬¬¬¬¬¬¬¬¬¡¡
-// d¡¡¡¬¬¬¬¬¬¬ddddd
-// d¡dd¬¬¬¬dddddddd
+// ï¼œãƒžãƒªã‚ªï¼ž
+// â€¥â€¥â€¥â€¥â€¥â€¥â€¥â€¥â€¥â€¥â€¥â€¥â€¥â–¡â–¡â–¡
+// â€¥â€¥â€¥â€¥â€¥â€¥ã€“ã€“ã€“ã€“ã€“â€¥â€¥â–¡â–¡â–¡
+// â€¥â€¥â€¥â€¥â€¥ã€“ã€“ã€“ã€“ã€“ã€“ã€“ã€“ã€“â–¡â–¡
+// â€¥â€¥â€¥â€¥â€¥â– â– â– â–¡â–¡â– â–¡â€¥â– â– â– 
+// â€¥â€¥â€¥â€¥â– â–¡â– â–¡â–¡â–¡â– â–¡â–¡â– â– â– 
+// â€¥â€¥â€¥â€¥â– â–¡â– â– â–¡â–¡â–¡â– â–¡â–¡â–¡â– 
+// â€¥â€¥â€¥â€¥â– â– â–¡â–¡â–¡â–¡â– â– â– â– â– â€¥
+// â€¥â€¥â€¥â€¥â€¥â€¥â–¡â–¡â–¡â–¡â–¡â–¡â–¡â– â€¥â€¥
+// â€¥â€¥â– â– â– â– â– ã€“â– â– â– ã€“â– â€¥â€¥â€¥
+// â€¥â– â– â– â– â– â– â– ã€“â– â– â– ã€“â€¥â€¥â– 
+// â–¡â–¡â– â– â– â– â– â– ã€“ã€“ã€“ã€“ã€“â€¥â€¥â– 
+// â–¡â–¡â–¡â€¥ã€“ã€“â– ã€“ã€“â–¡ã€“ã€“â–¡ã€“â– â– 
+// â€¥â–¡â€¥â– ã€“ã€“ã€“ã€“ã€“ã€“ã€“ã€“ã€“ã€“â– â– 
+// â€¥â€¥â– â– â– ã€“ã€“ã€“ã€“ã€“ã€“ã€“ã€“ã€“â– â– 
+// â€¥â– â– â– ã€“ã€“ã€“ã€“ã€“ã€“ã€“â€¥â€¥â€¥â€¥â€¥
+// â€¥â– â€¥â€¥ã€“ã€“ã€“ã€“â€¥â€¥â€¥â€¥â€¥â€¥â€¥â€¥
 
-// ƒF‚ÌŽí—Þ„
-// "–³":"#000000"
-// "”’":"#ffffff"
-// "”§":"#ffcccc"
-// "’ƒ":"#800000"
-// "Ô":"#ff0000"
-// "‰©":"#ffff00"
-// "—Î":"#00ff00"
-// "…":"#00ffff"
-// "Â":"#0000ff"
-// "Ž‡":"#800080"
+// ï¼œè‰²ã®ç¨®é¡žï¼ž
+// "ç„¡":"#000000"
+// "ç™½":"#ffffff"
+// "è‚Œ":"#ffcccc"
+// "èŒ¶":"#800000"
+// "èµ¤":"#ff0000"
+// "é»„":"#ffff00"
+// "ç·‘":"#00ff00"
+// "æ°´":"#00ffff"
+// "é’":"#0000ff"
+// "ç´«":"#800080"
 */
-var g_strLines = [
-        "–³–³–³–³–³–³–³–³–³–³–³–³–³”§”§”§", 
-        "–³–³–³–³–³–³ÔÔÔÔÔ–³–³”§”§”§", 
-        "–³–³–³–³–³ÔÔÔÔÔÔÔÔÔ”§”§", 
-        "–³–³–³–³–³’ƒ’ƒ’ƒ”§”§’ƒ”§–³ÔÔÔ", 
-        "–³–³–³–³’ƒ”§’ƒ”§”§”§’ƒ”§”§ÔÔÔ", 
-        "–³–³–³–³’ƒ”§’ƒ’ƒ”§”§”§’ƒ”§”§”§Ô", 
-        "–³–³–³–³’ƒ’ƒ”§”§”§”§’ƒ’ƒ’ƒ’ƒÔ–³", 
-        "–³–³–³–³–³–³”§”§”§”§”§”§”§Ô–³–³", 
-        "–³–³ÔÔÔÔÔÂÔÔÔÂÔ–³–³–³", 
-        "–³ÔÔÔÔÔÔÔÂÔÔÔÂ–³–³’ƒ", 
-        "”§”§ÔÔÔÔÔÔÂÂÂÂÂ–³–³’ƒ", 
-        "”§”§”§–³ÂÂÔÂÂ‰©ÂÂ‰©Â’ƒ’ƒ", 
-        "–³”§–³’ƒÂÂÂÂÂÂÂÂÂÂ’ƒ’ƒ", 
-        "–³–³’ƒ’ƒ’ƒÂÂÂÂÂÂÂÂÂ’ƒ’ƒ", 
-        "–³’ƒ’ƒ’ƒÂÂÂÂÂÂÂ–³–³–³–³–³", 
-        "–³’ƒ–³–³ÂÂÂÂ–³–³–³–³–³–³–³–³"
+let g_strLines = [
+        "ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡è‚Œè‚Œè‚Œ", 
+        "ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡èµ¤èµ¤èµ¤èµ¤èµ¤ç„¡ç„¡è‚Œè‚Œè‚Œ", 
+        "ç„¡ç„¡ç„¡ç„¡ç„¡èµ¤èµ¤èµ¤èµ¤èµ¤èµ¤èµ¤èµ¤èµ¤è‚Œè‚Œ", 
+        "ç„¡ç„¡ç„¡ç„¡ç„¡èŒ¶èŒ¶èŒ¶è‚Œè‚ŒèŒ¶è‚Œç„¡èµ¤èµ¤èµ¤", 
+        "ç„¡ç„¡ç„¡ç„¡èŒ¶è‚ŒèŒ¶è‚Œè‚Œè‚ŒèŒ¶è‚Œè‚Œèµ¤èµ¤èµ¤", 
+        "ç„¡ç„¡ç„¡ç„¡èŒ¶è‚ŒèŒ¶èŒ¶è‚Œè‚Œè‚ŒèŒ¶è‚Œè‚Œè‚Œèµ¤", 
+        "ç„¡ç„¡ç„¡ç„¡èŒ¶èŒ¶è‚Œè‚Œè‚Œè‚ŒèŒ¶èŒ¶èŒ¶èŒ¶èµ¤ç„¡", 
+        "ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡è‚Œè‚Œè‚Œè‚Œè‚Œè‚Œè‚Œèµ¤ç„¡ç„¡", 
+        "ç„¡ç„¡èµ¤èµ¤èµ¤èµ¤èµ¤é’èµ¤èµ¤èµ¤é’èµ¤ç„¡ç„¡ç„¡", 
+        "ç„¡èµ¤èµ¤èµ¤èµ¤èµ¤èµ¤èµ¤é’èµ¤èµ¤èµ¤é’ç„¡ç„¡èŒ¶", 
+        "è‚Œè‚Œèµ¤èµ¤èµ¤èµ¤èµ¤èµ¤é’é’é’é’é’ç„¡ç„¡èŒ¶", 
+        "è‚Œè‚Œè‚Œç„¡é’é’èµ¤é’é’é»„é’é’é»„é’èŒ¶èŒ¶", 
+        "ç„¡è‚Œç„¡èŒ¶é’é’é’é’é’é’é’é’é’é’èŒ¶èŒ¶", 
+        "ç„¡ç„¡èŒ¶èŒ¶èŒ¶é’é’é’é’é’é’é’é’é’èŒ¶èŒ¶", 
+        "ç„¡èŒ¶èŒ¶èŒ¶é’é’é’é’é’é’é’ç„¡ç„¡ç„¡ç„¡ç„¡", 
+        "ç„¡èŒ¶ç„¡ç„¡é’é’é’é’ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡ç„¡"
     ];
 
-var canvas;
-var ctx;
-var X_MAX = 640;
-var Y_MAX = 480;
-var BASE_X = 250;
-var BASE_Y = 150;
-var RAD_STEP = Math.PI / 180;
-var g_vp = 500;
-var g_rad_x = 0;
-var g_rad_y = 0;
-var g_rad_z = 0;
+let canvas;
+let ctx;
+const X_MAX = 640;
+const Y_MAX = 480;
+const BASE_X = 250;
+const BASE_Y = 150;
+const RAD_STEP = Math.PI / 180;
+let g_vp = 500;
+let g_rad_x = 0;
+let g_rad_y = 0;
+let g_rad_z = 0;
 
 function init()
 {
@@ -120,15 +120,15 @@ function init()
 
 function initMario(){
 
-    var strLine;
-    var strMessage;
+    let strLine;
+    let strMessage;
     for ( y = 0; y < g_strLines.length; y++ )
     {
         strMessage = "";
         strLine = g_strLines[y];
         for ( x = 0; x < strLine.length; x++ )
         {
-            var points = [
+            let points = [
                 {x: 5, y: 5, z: 5}, // g_points[0]
                 {x: 5, y:-5, z: 5}, // g_points[1]
                 {x:-5, y:-5, z: 5}, // g_points[2]
@@ -138,10 +138,10 @@ function initMario(){
                 {x:-5, y:-5, z:-5}, // g_points[6]
                 {x:-5, y: 5, z:-5}  // g_points[7]
               ];
-            var c = strLine.substr( x, 1 );
+            let c = strLine.substr( x, 1 );
             adjustPoint( points, x, y );
-            var style = getRgbColor( c );
-            if ( c != "–³" )
+            let style = getRgbColor( c );
+            if ( c != "ç„¡" )
             {
                 g_mario.push( { cube:points, style:style } );
             }
@@ -151,24 +151,24 @@ function initMario(){
 
 function getRgbColor( c )
 {
-    var colorHash = {
-        "–³":"#000000",
-        "”’":"#ffffff",
-        "”§":"#ffcccc",
-        "’ƒ":"#800000",
-        "Ô":"#ff0000",
-        "‰©":"#ffff00",
-        "—Î":"#00ff00",
-        "…":"#00ffff",
-        "Â":"#0000ff",
-        "Ž‡":"#800080"
+    let colorHash = {
+        "ç„¡":"#000000",
+        "ç™½":"#ffffff",
+        "è‚Œ":"#ffcccc",
+        "èŒ¶":"#800000",
+        "èµ¤":"#ff0000",
+        "é»„":"#ffff00",
+        "ç·‘":"#00ff00",
+        "æ°´":"#00ffff",
+        "é’":"#0000ff",
+        "ç´«":"#800080"
     }
     return colorHash[ c ];
 }
 
 function adjustPoint( points, x, y )
 {
-    var i = 0;
+    let i = 0;
     for ( i = 0; i < points.length; i++ )
     {
         points[i].x += x * 15;
@@ -179,7 +179,7 @@ function adjustPoint( points, x, y )
 function draw() {
     clearScreen();
 
-    var i;
+    let i;
     for ( i = 0; i < g_mario.length; i++ )
     {
         drawMario( g_mario[i] );
@@ -187,57 +187,57 @@ function draw() {
 }
 
 function drawMario( mario ){
-    var p;
-    var p2 = [];
-    var i, s;
-    var x1, y1, z1;
-    var x2, y2, z2;
-    var x3, y3, z3;
-    var points = mario.cube;
-    var style = mario.style;
+    let p;
+    let p2 = [];
+    let i, s;
+    let x1, y1, z1;
+    let x2, y2, z2;
+    let x3, y3, z3;
+    let points = mario.cube;
+    let style = mario.style;
     
     for(i = 0; i < points.length; i++ ) {
         p = points[i];
 
-        // ˆÈ‰ºà–¾‚ÍuCŒ¾Œê‚É‚æ‚é‚Í‚¶‚ß‚Ä‚ÌƒAƒ‹ƒSƒŠƒYƒ€“ü–åv‚Ì‰ðà‚ðŽQl‚É‹LÚ
+        // ä»¥ä¸‹èª¬æ˜Žã¯ã€ŒCè¨€èªžã«ã‚ˆã‚‹ã¯ã˜ã‚ã¦ã®ã‚¢ãƒ«ã‚´ãƒªã‚ºãƒ å…¥é–€ã€ã®è§£èª¬ã‚’å‚è€ƒã«è¨˜è¼‰
         //
-        // ¡ Amazon.co.jpF CŒ¾Œê‚É‚æ‚é‚Í‚¶‚ß‚Ä‚ÌƒAƒ‹ƒSƒŠƒYƒ€“ü–å: ‰Í¼ ’©—Y: –{
+        // â–  Amazon.co.jpï¼š Cè¨€èªžã«ã‚ˆã‚‹ã¯ã˜ã‚ã¦ã®ã‚¢ãƒ«ã‚´ãƒªã‚ºãƒ å…¥é–€: æ²³è¥¿ æœé›„: æœ¬
         // http://www.amazon.co.jp/dp/4874085008
         // 
-        // 8.4 ‚RŽŸŒ³À•W•ÏŠ·
+        // 8.4 ï¼“æ¬¡å…ƒåº§æ¨™å¤‰æ›
         // 
         
-        // yŽ²Žü‚è‚ÉƒÀŠp‰ñ“]‚·‚é
-        // x1 = x * cos(ƒÀ) + z * sin(ƒÀ)
+        // yè»¸å‘¨ã‚Šã«Î²è§’å›žè»¢ã™ã‚‹
+        // x1 = x * cos(Î²) + z * sin(Î²)
         // y1 = y
-        // z1 = -x * sin(ƒÀ) + z * cos(ƒÀ)
+        // z1 = -x * sin(Î²) + z * cos(Î²)
         x1 = p.x * Math.cos(g_rad_y) + p.z * Math.sin(g_rad_y);
         y1 = p.y;
         z1 = -p.x * Math.sin(g_rad_y) + p.z * Math.cos(g_rad_y);
         
-        // xŽ²Žü‚è‚Éƒ¿Šp‰ñ“]‚·‚é
+        // xè»¸å‘¨ã‚Šã«Î±è§’å›žè»¢ã™ã‚‹
         // x2 = x1
-        // y2 = y1 * cos(ƒ¿) - z1 * sin(ƒ¿)
-        // z2 = y1 * sin(ƒ¿) + z1 * cos(ƒ¿)
+        // y2 = y1 * cos(Î±) - z1 * sin(Î±)
+        // z2 = y1 * sin(Î±) + z1 * cos(Î±)
         x2 = x1;
         y2 = y1 * Math.cos(g_rad_x) - z1 * Math.sin(g_rad_x);
         z2 = y1 * Math.sin(g_rad_x) + z1 * Math.cos(g_rad_x);
         
-        // zŽ²Žü‚è‚ÉƒÁŠp‰ñ“]‚·‚é
-        // x2 = x2 * cos(ƒÁ) - y2 * sin(ƒÁ)
-        // y2 = x2 * sin(ƒÁ) + y2 * cos(ƒÁ)
+        // zè»¸å‘¨ã‚Šã«Î³è§’å›žè»¢ã™ã‚‹
+        // x2 = x2 * cos(Î³) - y2 * sin(Î³)
+        // y2 = x2 * sin(Î³) + y2 * cos(Î³)
         // z2 = z2
         x3 = x2 * Math.cos(g_rad_z) - y2 * Math.sin(g_rad_z);
         y3 = x2 * Math.sin(g_rad_z) + y2 * Math.cos(g_rad_z);
         z3 = z2;
         
-        // ŒvŽZŒ‹‰Ê‚ð–ß‚·
+        // è¨ˆç®—çµæžœã‚’æˆ»ã™
         p.x = x3;
         p.y = y3;
         p.z = z3;
         
-        // ã‹L‚Ì‰ñ“]‚Å“¾‚ç‚ê‚½À•W‚ð z = 0 •½–Ê‚É•½s“Š‰e‚·‚é
-        // ix3, y3, z3 ‚Ì‚¤‚¿Az3 ‚ð–³Ž‹‚·‚é‚±‚Æ‚ª z = 0 ‚Ö‚Ì•½s“Š‰e‚ðˆÓ–¡‚·‚éBj
+        // ä¸Šè¨˜ã®å›žè»¢ã§å¾—ã‚‰ã‚ŒãŸåº§æ¨™ã‚’ z = 0 å¹³é¢ã«å¹³è¡ŒæŠ•å½±ã™ã‚‹
+        // ï¼ˆx3, y3, z3 ã®ã†ã¡ã€z3 ã‚’ç„¡è¦–ã™ã‚‹ã“ã¨ãŒ z = 0 ã¸ã®å¹³è¡ŒæŠ•å½±ã‚’æ„å‘³ã™ã‚‹ã€‚ï¼‰
         s = g_vp / (g_vp - p.z);
         p2[i] = { x: p.x * s, y: p.y * s };
     }
@@ -327,15 +327,15 @@ function btnZ_plus_onclick() {
 <canvas id="canvas" width="640" height="480"></canvas>
 <a href="https://github.com/cx20/hello/blob/master/html5/canvas/4-4.mario.html" target="_blank">View Source</a>
 <br />
-xŽ²‚Ì‰ñ“]Šp:
+xè»¸ã®å›žè»¢è§’:
 <input id="btnX_minus" type="button" value="-" onclick="return btnX_minus_onclick()" />
 <input id="txtX_rad" type="text" style="text-align: right" />
 <input id="btnX_plus" type="button" value="+" onclick="return btnX_plus_onclick()" /><br />
-yŽ²‚Ì‰ñ“]Šp:
+yè»¸ã®å›žè»¢è§’:
 <input id="btnY_minus" type="button" value="-" onclick="return btnY_minus_onclick()" />
 <input id="txtY_rad" type="text" style="text-align: right" />
 <input id="btnY_plus" type="button" value="+" onclick="return btnY_plus_onclick()" /><br />
-zŽ²‚Ì‰ñ“]Šp:
+zè»¸ã®å›žè»¢è§’:
 <input id="btnZ_minus" type="button" value="-" onclick="return btnZ_minus_onclick()" />
 <input id="txtZ_rad" type="text" style="text-align: right" />
 <input id="btnZ_plus" type="button" value="+" onclick="return btnZ_plus_onclick()" /><br />

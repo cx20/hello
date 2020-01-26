@@ -2,15 +2,14 @@
 <html>
 <head>
 <title>Hello, Canvas World!</title>
-<!--[if IE]><script src="excanvas.js"></script><![endif]-->
-<script type="text/javascript">
-var X_MAX = 640;
-var Y_MAX = 480;
-var canvas;
-var ctx;
-var angle;
-var posX;
-var posY;
+<script>
+const X_MAX = 640;
+const Y_MAX = 480;
+let canvas;
+let ctx;
+let angle;
+let posX;
+let posY;
 
 function draw()
 {
@@ -18,13 +17,13 @@ function draw()
     ctx = canvas.getContext("2d");
     drawScreen( ctx );
     
-    var n = 4;
-    var len = 5;
+    let n = 4;
+    let len = 5;
     
     setPoint( 100, 120 );
     setAngle( 0 );
     
-    for ( var i = 0; i < 3; i++ )
+    for ( let i = 0; i < 3; i++ )
     {
         koch( n, len );
         turn( -120 );
@@ -60,8 +59,8 @@ function turn( a )
 
 function move( len )
 {
-    var x = len * Math.cos( 2 * Math.PI / 360 * angle );
-    var y = len * Math.sin( 2 * Math.PI / 360 * angle );
+    let x = len * Math.cos( 2 * Math.PI / 360 * angle );
+    let y = len * Math.sin( 2 * Math.PI / 360 * angle );
     
     ctx.strokeStyle = "rgb( 0, 255, 0 )";
     ctx.beginPath();
