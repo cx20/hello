@@ -9,35 +9,35 @@
 <tr><td>
 ■CX's Canvas World!<br>
 ├三角関数<br>
-｜├<a href="./1-1.graph.html" target="main">方眼用紙</a><br>
-｜├<a href="./1-2.sincurve.html" target="main">Sin カーブ</a><br>
-｜├<a href="./1-3.coscurve.html" target="main">Cos カーブ</a><br>
-｜├<a href="./1-4.sincos.html" target="main">Sin/Cos カーブ</a><br>
-｜├<a href="./1-5.lissajous.html" target="main">リサージュ図形</a><br>
-｜├<a href="./1-6.harmonograph.html" target="main">ハーモノグラフ</a><br>
-｜└<a href="./1-7.wave.html" target="main">波</a><br>
+｜├<a href="#1-1.graph">方眼用紙</a><br>
+｜├<a href="#1-2.sincurve">Sin カーブ</a><br>
+｜├<a href="#1-3.coscurve">Cos カーブ</a><br>
+｜├<a href="#1-4.sincos">Sin/Cos カーブ</a><br>
+｜├<a href="#1-5.lissajous">リサージュ図形</a><br>
+｜├<a href="#1-6.harmonograph">ハーモノグラフ</a><br>
+｜└<a href="#1-7.wave">波</a><br>
 ├フラクタル<br>
-｜├<a href="./2-1.koch1.html" target="main">コッホ曲線1</a><br>
-｜├<a href="./2-2.koch2.html" target="main">コッホ曲線2</a><br>
-｜├<a href="./2-3.triangle.html" target="main">シェルピンスキー</a><br>
-｜├<a href="./2-4.stech.html" target="main">クロスステッチ</a><br>
-｜├<a href="./2-5.tree.html" target="main">樹木曲線</a><br>
-｜├<a href="./2-6.fern.html" target="main">シダ</a><br>
-｜├<a href="./2-7.ccurve.html" target="main">C曲線</a><br>
-｜└<a href="./2-8.dragon.html" target="main">ドラゴン曲線</a><br>
+｜├<a href="#2-1.koch1">コッホ曲線1</a><br>
+｜├<a href="#2-2.koch2">コッホ曲線2</a><br>
+｜├<a href="#2-3.triangle">シェルピンスキー</a><br>
+｜├<a href="#2-4.stech">クロスステッチ</a><br>
+｜├<a href="#2-5.tree">樹木曲線</a><br>
+｜├<a href="#2-6.fern">シダ</a><br>
+｜├<a href="#2-7.ccurve">C曲線</a><br>
+｜└<a href="#2-8.dragon">ドラゴン曲線</a><br>
 ├宇宙<br>
-｜├<a href="./3-1.space1.html" target="main">宇宙1</a><br>
-｜├<a href="./3-2.space2.html" target="main">宇宙2</a><br>
-｜├<a href="./3-3.space3.html" target="main">宇宙3</a><br>
-｜└<a href="./3-4.space4.html" target="main">宇宙4</a><br>
+｜├<a href="#3-1.space1">宇宙1</a><br>
+｜├<a href="#3-2.space2">宇宙2</a><br>
+｜├<a href="#3-3.space3">宇宙3</a><br>
+｜└<a href="#3-4.space4">宇宙4</a><br>
 ├立体<br>
-｜├<a href="./4-1.cube1.html" target="main">ワイヤフレーム</a><br>
-｜├<a href="./4-2.cube2.html" target="main">立方体</a><br>
-｜├<a href="./4-3.globe.html" target="main">球体</a><br>
-｜└<a href="./4-4.mario.html" target="main">マリオ</a><br>
+｜├<a href="#4-1.cube1">ワイヤフレーム</a><br>
+｜├<a href="#4-2.cube2">立方体</a><br>
+｜├<a href="#4-3.globe">球体</a><br>
+｜└<a href="#4-4.mario">マリオ</a><br>
 └文字<br>
-　├<a href="./5-1.alphabet.html" target="main">ランダム</a><br>
-　└<a href="./5-2.matrix.html" target="main">マトリックス</a><br>
+　├<a href="#5-1.alphabet">ランダム</a><br>
+　└<a href="#5-2.matrix">マトリックス</a><br>
 </td>
 <td>
 </td>
@@ -49,4 +49,26 @@
  </iframe>
 </div>
 </div>
+<script>
+window.onload = function() {
+    let hash = location.hash;
+    navigate(hash);
+}
+
+window.addEventListener("click", {
+    handleEvent: function(e) {
+        let hash = e.target.hash;
+        navigate(hash);
+    }
+}, false);
+
+function navigate(hash) {
+    if ( hash.length > 0 ) {
+        let url = hash.replace("#", "./") + ".html";
+        main.location.href = url;
+    } else {
+        main.location.href = "./1-1.graph.html"; // default
+    }
+}
+</script>
 </html>
