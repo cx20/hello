@@ -99,8 +99,7 @@ let g_rad_x = 0;
 let g_rad_y = 0;
 let g_rad_z = 0;
 
-function init()
-{
+function init() {
     g_rad_x = RAD_STEP * 0;
     g_rad_y = RAD_STEP * 1;
     g_rad_z = RAD_STEP * -5;
@@ -118,16 +117,14 @@ function init()
     setInterval(draw, 60);
 }
 
-function initMario(){
+function initMario() {
 
     let strLine;
     let strMessage;
-    for ( y = 0; y < g_strLines.length; y++ )
-    {
+    for ( y = 0; y < g_strLines.length; y++ ) {
         strMessage = "";
         strLine = g_strLines[y];
-        for ( x = 0; x < strLine.length; x++ )
-        {
+        for ( x = 0; x < strLine.length; x++ ) {
             let points = [
                 {x: 5, y: 5, z: 5}, // g_points[0]
                 {x: 5, y:-5, z: 5}, // g_points[1]
@@ -149,8 +146,7 @@ function initMario(){
     }
 }
 
-function getRgbColor( c )
-{
+function getRgbColor( c ) {
     let colorHash = {
         "無":"#000000",
         "白":"#ffffff",
@@ -166,8 +162,7 @@ function getRgbColor( c )
     return colorHash[ c ];
 }
 
-function adjustPoint( points, x, y )
-{
+function adjustPoint( points, x, y ) {
     let i = 0;
     for ( i = 0; i < points.length; i++ )
     {

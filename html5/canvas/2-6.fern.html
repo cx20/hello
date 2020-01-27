@@ -16,8 +16,7 @@ let branch;
 let x = 0;
 let y = 0;
 
-function draw()
-{
+function draw() {
     canvas = document.getElementById("canvas");
     ctx = canvas.getContext("2d");
     drawScreen( ctx );
@@ -50,16 +49,13 @@ function fern() {
         if (sw > 15) {
             tx = 0.85 * x + 0.04 * y;
             ty = -0.04 * x + 0.85 * y + 1.6;
-        }
-        else if (sw > 8) {
+        } else if (sw > 8) {
             tx = -0.15 * x + 0.28 * y;
             ty = 0.26 * x + 0.24 * y + 0.44;
-        }
-        else if (sw > 1) {
+        } else if (sw > 1) {
             tx = 0.2 * x - 0.26 * y;
             ty = 0.23 * x + 0.22 * y + 1.6;
-        }
-        else {
+        } else {
             tx = 0;
             ty = y * 0.16;
         }

@@ -13,8 +13,7 @@ let posY;
 let scale;
 let branch;
 
-function draw()
-{
+function draw() {
     canvas = document.getElementById("canvas");
     ctx = canvas.getContext("2d");
     drawScreen( ctx );
@@ -34,10 +33,8 @@ function drawScreen( ctx ) {
     ctx.fillRect( 0, 0, X_MAX, Y_MAX );
 }
 
-function tree( n, x0, y0, len, a )
-{
-    if ( n == 0 )
-    {
+function tree( n, x0, y0, len, a ) {
+    if ( n == 0 ) {
         return;
     }
     
@@ -52,13 +49,11 @@ function tree( n, x0, y0, len, a )
     tree( n - 1, x0, y0, len / scale, a + branch );
 }
 
-function turn( a )
-{
+function turn( a ) {
     angle = ( angle + a ) % 360;
 }
 
-function move( len )
-{
+function move( len ) {
     let x = len * Math.cos( 2 * Math.PI / 360 * angle );
     let y = len * Math.sin( 2 * Math.PI / 360 * angle );
     
@@ -71,13 +66,11 @@ function move( len )
     ctx.stroke();
 }
 
-function setAngle( a )
-{
+function setAngle( a ) {
     angle = a;
 }
 
-function setPoint( x, y )
-{
+function setPoint( x, y ) {
     posX = x;
     posY = y;
 }

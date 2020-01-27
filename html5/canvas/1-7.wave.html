@@ -20,28 +20,24 @@ let screenFront = 0;
 let canvas;
 let ctx;
 
-function draw()
-{
+function draw() {
     canvas = document.getElementById("canvas");
     ctx = canvas.getContext("2d");
     setInterval(drawLand, 50);
 }
 
-function convert3Dto2D(x3d, y3d, z3d)
-{  
+function convert3Dto2D(x3d, y3d, z3d) {  
     let scale = fov / (fov + z3d); 
     let x2d = ((x3d - HALF_WIDTH) * scale) + HALF_WIDTH;
     let y2d = ((y3d - HALF_HEIGHT) * scale) + HALF_HEIGHT -(z3d * 0.01); 
     return [x2d, y2d];
 }
 
-function noise(x, y)
-{
+function noise(x, y) {
     return(Math.sin(y*0.2) + Math.sin((x+(y*0.6))*0.2)) * 4; 
 }
 
-function drawLand() 
-{
+function drawLand() {
     ctx.fillStyle = "rgb(0,0,0)";
     ctx.fillRect(0, 0, X_MAX, Y_MAX);
     screenFront+=1; 
@@ -55,8 +51,7 @@ function drawLand()
         
     let p2d = [0,0]; 
     
-    for(let slicez = 100; slicez >= 10; slicez--)
-    {
+    for(let slicez = 100; slicez >= 10; slicez--) {
         ctx.beginPath();
         
         // rudimentary frustum culling
@@ -66,16 +61,14 @@ function drawLand()
         let slicevisible = false; 
         
         // this bit of code makes the colour fade out towards the distance.
-        if(Math.abs(zpos) < 100) linecol = 0xff; 
-            else if(zpos > 7000)
-            {
-                // should give number from 1 - 2000;  
-                linecol = (((10000 - zpos) / 3000) * 0xff);
-            }
-            else
-            {
-                linecol = 0xff;
-            }
+        if(Math.abs(zpos) < 100) {
+            linecol = 0xff; 
+        } else if(zpos > 7000) {
+            // should give number from 1 - 2000;  
+            linecol = (((10000 - zpos) / 3000) * 0xff);
+        } else {
+            linecol = 0xff;
+        }
         
         ctx.strokeStyle = "rgb(0,"+linecol+",0)";
 
@@ -83,39 +76,29 @@ function drawLand()
         
         let firstpoint = true; 
         
-        for(let slicex = -edgewidth; slicex <= slicecount + edgewidth; slicex++)
-        {
+        for(let slicex = -edgewidth; slicex <= slicecount + edgewidth; slicex++) {
             let h = noise( slicex + screenLeft, screenFront + slicez );
             let xpos  = (slicex * RS) - leftshift;
             let ypos  = (h - screenTop) * RS;
             
             p2d = convert3Dto2D(xpos, ypos, zpos); 
-            if (p2d[1] > Y_MAX)
-            {
+            if (p2d[1] > Y_MAX) {
                 p2d[1] = Y_MAX; 
-            }
-            else if (p2d[1] < 0)
-            {
+            } else if (p2d[1] < 0) {
                 p2d[1] = 0; 
-            }
-            else
-            {
+            } else {
                 slicevisible = true;
             }
             
-            if (firstpoint)
-            {
+            if (firstpoint) {
                 ctx.moveTo(p2d[0], p2d[1]); 
                 firstpoint = false; 
-            }
-            else
-            {
+            } else {
                 ctx.lineTo(p2d[0], p2d[1]); 
             }
         }
         
-        if (slicevisible)
-        {
+        if (slicevisible) {
             ctx.stroke();
         }
     }

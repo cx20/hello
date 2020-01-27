@@ -13,16 +13,14 @@ let points = [];
 let canvas;
 let ctx;
 
-function draw()
-{
+function draw() {
     canvas = document.getElementById("canvas2d");
     ctx = canvas.getContext("2d");
     initPoints();
     setInterval(render, 50);
 }
 
-function initPoints()
-{
+function initPoints() {
     let i;
     for (i = 0; i < numPoints; i++)
     {
@@ -32,8 +30,7 @@ function initPoints()
 
 }
 
-function render()
-{
+function render() {
     clear();
     
     let point;
@@ -46,8 +43,7 @@ function render()
     }
 }
 
-function draw3D(point)
-{  
+function draw3D(point) {  
     let x3d = point.x;
     let y3d = point.y; 
     let z3d = point.z; 
@@ -63,8 +59,7 @@ function draw3D(point)
     ctx.stroke(); 
 }
 
-function rotateY(point, angle)
-{
+function rotateY(point, angle) {
     let x = point.x; 
     let z = point.z; 
     
@@ -79,8 +74,7 @@ function rotateY(point, angle)
     point.z = z; 
 }
 
-function clear()
-{
+function clear() {
     ctx.fillStyle = "rgb(0, 0, 0)";
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 }

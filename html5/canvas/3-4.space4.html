@@ -15,8 +15,7 @@ let points = [];
 let canvas;
 let ctx;
 
-function draw()
-{
+function draw() {
     canvas = document.getElementById("canvas2d");
     ctx = canvas.getContext("2d");
     document.onmousemove = updateMouse;
@@ -24,44 +23,34 @@ function draw()
     setInterval(render, 50);
 }
 
-function initPoints()
-{
+function initPoints() {
     let point;
     let i;
-    for (i = 0; i < numPoints; i++)
-    {
+    for (i = 0; i < numPoints; i++) {
         point = { x:(Math.random()*400)-200, y:(Math.random()*400)-200 , z:(Math.random()*400)-200 };
         points.push(point); 
     }
 }
 
-function render() 
-{
+function render() {
     clear();
     
     let point;
     let i;
-    for (i = 0; i < numPoints; i++)
-    {
+    for (i = 0; i < numPoints; i++) {
         point = points[i]; 
         rotateY(point, mouseX * -0.0003); 
         point.z += (mouseY * 0.08);     
         
-        if (point.x < -300)
-        {
+        if (point.x < -300) {
             point.x = 300; 
-        }
-        else if (point.x > 300)
-        {
+        } else if (point.x > 300) {
             point.x = -300; 
         }
         
-        if (point.z < -fov)
-        {
+        if (point.z < -fov) {
             point.z = fov; 
-        }
-        else if (point.z > fov)
-        {
+        } else if (point.z > fov) {
             point.z = -fov;
         }
         
@@ -69,8 +58,7 @@ function render()
     }
 }
 
-function draw3D(point)
-{  
+function draw3D(point) {  
     let x3d = point.x;
     let y3d = point.y; 
     let z3d = point.z; 
@@ -86,9 +74,7 @@ function draw3D(point)
     ctx.stroke(); 
 }
 
-
-function rotateY(point, angle)
-{
+function rotateY(point, angle) {
     let x = point.x; 
     let z = point.z + fov; 
     
@@ -103,14 +89,12 @@ function rotateY(point, angle)
     point.z = z - fov; 
 }
 
-function clear()
-{
+function clear() {
     ctx.fillStyle = "rgb(0, 0, 0)";
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 }
 
-function updateMouse(e) 
-{
+function updateMouse(e) {
     mouseX = e.pageX - canvas.offsetLeft - HALF_WIDTH; 
     mouseY = e.pageY - canvas.offsetTop - HALF_HEIGHT;
 }

@@ -22,8 +22,7 @@ let g_rad_y = 0;
 let g_rad_z = 0;
 let scale;
 
-function init()
-{
+function init() {
     canvas = document.getElementById("canvas");
     ctx = canvas.getContext("2d");
 
@@ -37,11 +36,9 @@ function init()
     let r, g, b;
     let style;
     let i, j;
-    for(i = 0; i < N_POINT1; i++)
-    {
+    for(i = 0; i < N_POINT1; i++) {
         theta1 = (360 / N_POINT1) * i * RAD_STEP;
-        for(j = 0; j < N_POINT2; j++)
-        {
+        for(j = 0; j < N_POINT2; j++) {
             theta2 = (360 / N_POINT2) * j * RAD_STEP;
             x = R * Math.cos(theta2) * Math.sin(theta1);
             y = R * Math.sin(theta2);
@@ -57,8 +54,7 @@ function init()
     setInterval(draw, 50);
 }
 
-function draw()
-{
+function draw() {
     clearScreen();
     let p;
     //let x, y, z;
@@ -66,28 +62,27 @@ function draw()
     let x2, y2, z2;
     let x3, y3, z3;
     let i;
-    for(i = 0; i < points.length; i++)
-    {
+    for(i = 0; i < points.length; i++) {
         p = points[i];
-        // y������Ƀ��p��]����
-        // x1 = x * cos(��) + z * sin(��)
+        // y軸周りにβ角回転する
+        // x1 = x * cos(β) + z * sin(β)
         // y1 = y
-        // z1 = -x * sin(��) + z * cos(��)
+        // z1 = -x * sin(β) + z * cos(β)
         x1 = p.x * Math.cos(theta * g_rad_y) + p.z * Math.sin(theta * g_rad_y);
         y1 = p.y;
         z1 = -p.x * Math.sin(theta * g_rad_y) + p.z * Math.cos(theta * g_rad_y);
         
-        // x������Ƀ��p��]����
+        // x軸周りにα角回転する
         // x2 = x1
-        // y2 = y1 * cos(��) - z1 * sin(��)
-        // z2 = y1 * sin(��) + z1 * cos(��)
+        // y2 = y1 * cos(α) - z1 * sin(α)
+        // z2 = y1 * sin(α) + z1 * cos(α)
         x2 = x1;
         y2 = y1 * Math.cos(theta * g_rad_x) - z1 * Math.sin(theta * g_rad_x);
         z2 = y1 * Math.sin(theta * g_rad_x) + z1 * Math.cos(theta * g_rad_x);
         
-        // z������Ƀ��p��]����
-        // x2 = x2 * cos(��) - y2 * sin(��)
-        // y2 = x2 * sin(��) + y2 * cos(��)
+        // z軸周りにγ角回転する
+        // x2 = x2 * cos(γ) - y2 * sin(γ)
+        // y2 = x2 * sin(γ) + y2 * cos(γ)
         // z2 = z2
         x3 = x2 * Math.cos(theta * g_rad_z) - y2 * Math.sin(theta * g_rad_z);
         y3 = x2 * Math.sin(theta * g_rad_z) + y2 * Math.cos(theta * g_rad_z);
