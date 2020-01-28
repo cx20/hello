@@ -63,13 +63,13 @@ window.onload = function() {
 window.addEventListener("click", {
     handleEvent: function(e) {
         let hash = e.target.hash;
-        let pathname = e.target.pathname;
+        let pathname = e.target.pathname.split("/").pop();
         let url = e.target.href;
         // URL にハッシュ部分が設定されていない場合
         if (hash.length == 0 ) {
             // URL を「#～」に置き換える
-            // 例）「/1-5.lissajous.html」→「#1-5.lissajous」
-            hash = pathname.replace("/", "#").replace(".html", "");
+            // 例）「1-5.lissajous.html」→「#1-5.lissajous」
+            hash = "#" + pathname.replace(".html", "");
             // アドレスバーの URL に「#～」を付与する
             location.href = hash;
         }
