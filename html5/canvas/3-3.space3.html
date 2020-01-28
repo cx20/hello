@@ -22,8 +22,7 @@ function draw() {
 
 function initPoints() {
     let i;
-    for (i = 0; i < numPoints; i++)
-    {
+    for (i = 0; i < numPoints; i++) {
         point = { x:(Math.random()*400)-200, y:(Math.random()*400)-200 , z:(Math.random()*400)-200 };
         points.push(point); 
     }
@@ -35,8 +34,7 @@ function render() {
     
     let point;
     let i;
-    for (i = 0; i < numPoints; i++)
-    {
+    for (i = 0; i < numPoints; i++) {
         point = points[i]; 
         rotateY(point, 0.04);     
         draw3D(point); 
