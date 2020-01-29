@@ -66,7 +66,7 @@ window.addEventListener("click", {
         let pathname = e.target.pathname.split("/").pop();
         let url = e.target.href;
         // URL にハッシュ部分が設定されていない場合
-        if (hash.length == 0 ) {
+        if (hash.length == 0) {
             // URL を「#～」に置き換える
             // 例）「1-5.lissajous.html」→「#1-5.lissajous」
             hash = "#" + pathname.replace(".html", "");
@@ -79,7 +79,7 @@ window.addEventListener("click", {
 }, false);
 
 function getUrlfromHash(hash) {
-    if ( hash.length > 0 ) {
+    if (hash.length > 0) {
         return hash.replace("#", "./") + ".html";
     } else {
         return "./1-1.graph.html"; // default
