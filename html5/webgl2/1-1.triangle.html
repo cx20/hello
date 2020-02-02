@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Testing Triangle Using WebGL2</title>
+  <link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+<body>
+<script id="vs" type="x-shader/x-vertex">#version 300 es
+in  vec3 position;
+
+void main() {
+    gl_Position = vec4(position, 1.0);
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">#version 300 es
+precision mediump float;
+out vec4 fragColor;
+
+void main() {
+    fragColor = vec4(0.0, 0.0, 1.0, 1.0);
+}
+</script>
+<canvas id="c" width="465" height="465"></canvas>
+<script>
+let c, gl;
+let aLoc = [];
+
+function initWebGL() {
+    c = document.getElementById("c");
+    gl = c.getContext("webgl2");
+    resizeCanvas();
+    window.addEventListener("resize", function(){
+        resizeCanvas();
+    });
+}
+
+function resizeCanvas() {
+    c.width = window.innerWidth;
+    c.height = window.innerHeight;
+    gl.viewport(0, 0, c.width, c.height);
+}
+
+function initShaders() {
+    let p = gl.createProgram();
+    let vs = gl.createShader(gl.VERTEX_SHADER);
+    let fs = gl.createShader(gl.FRAGMENT_SHADER);
+    let v = document.getElementById("vs").textContent;
+    let f = document.getElementById("fs").textContent;
+    gl.shaderSource(vs, v);
+    gl.shaderSource(fs, f);
+    gl.compileShader(vs);
+    gl.compileShader(fs);
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    gl.useProgram(p);
+    aLoc[0] = gl.getAttribLocation(p, "position");
+    gl.enableVertexAttribArray(aLoc[0]);
+}
+
+function draw() {
+    let positions = [ 
+         0.0, 0.5, 0.0, // v0
+        -0.5,-0.5, 0.0, // v1
+         0.5,-0.5, 0.0  // v2
+    ];
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(aLoc[0], 3, gl.FLOAT, false, 0, 0);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.flush();
+}
+
+initWebGL();
+initShaders();
+draw();
+</script>
+<a href="https://github.com/cx20/hello/blob/master/html5/webgl2/1-1.triangle.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
+</body>
+</html>
