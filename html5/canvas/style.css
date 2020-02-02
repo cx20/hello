@@ -1,48 +1,10 @@
-<style type="text/css">
-
-BODY {line-height: 120%}
-BODY
-{
-/*	font-size:x-small; */
-	font-size:10pt;
-}
-TR
-{
-/*	font-size:x-small; */
-	font-size:10pt;
-}
-TD
-{
-/*	font-size:x-small; */
-	font-size:10pt;
-}
-TH
-{
-/*	font-size:x-small; */
-	font-size:10pt;
-}
-small
-{
-/*	font-size:xx-small; */
-	font-size:10pt;
+* {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
 }
 
-P {line-height: 120%}
-UL {line-height: 120%}
-OL {line-height: 120%}
-
-H1 {font-size: x-large ;}
-H2 {font-size: large ;}
-H3 {font-size: medium ;}
-H4 {font-size: normal ;}
-H5 {font-size: small ;}
-H6 {font-size: x-small ;}
-
-.toptitle {margin-bottom: 10px}
-.underline {text-decoration: underline}
-
-A:link		{ Text-Decoration :None}
-A:visited	{ Text-Decoration :None}
-A:hover		{ Text-Decoration :underline}
-
-</style>
+body {
+  background: #fff;
+}
