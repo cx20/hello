@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Lissajous curve Using WebGL2</title>
+  <link rel="stylesheet" type="text/css" href="style_dark.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix.js"></script>
+</head>
+<body>
+<script id="vs" type="x-shader/x-vertex">#version 300 es
+in vec3 position;
+in vec3 color;
+out vec4 vColor;
+uniform mat4 pjMatrix;
+uniform mat4 mvMatrix;
+
+void main()
+{
+    vColor = vec4(color, 1.0);
+    gl_Position = pjMatrix * mvMatrix * vec4(position, 1.0);
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">#version 300 es
+precision mediump float;
+in vec4 vColor;
+out vec4 fragColor;
+
+void main()
+{
+    fragColor  = vColor;
+}
+</script>
+
+<canvas id="c" width="465" height="465"></canvas>
+<script>
+let c, gl;
+let aLoc = [];
+let uLoc = [];
+
+let positions = [];
+let colors = [];
+const MAX = 72;
+const A = 2.0;
+const B = 3.0;
+const SCALE = 1;
+
+let translation;
+let scale;
+let eye;
+let center;
+let up;
+let view;
+let mvMatrix = mat4.create();
+let pMatrix = mat4.create();
+
+let rad = 0;
+
+function initWebGL() {
+    c = document.getElementById("c");
+    gl = c.getContext("webgl2");
+
+    resizeCanvas();
+    window.addEventListener("resize", function(){
+        resizeCanvas();
+    });
+}
+
+function resizeCanvas() {
+    c.width = window.innerWidth;
+    c.height = window.innerHeight;
+    gl.viewport(0, 0, c.width, c.height);
+}
+
+function initShaders() {
+    let p = gl.createProgram();
+    let vs = gl.createShader(gl.VERTEX_SHADER);
+    let fs = gl.createShader(gl.FRAGMENT_SHADER);
+    let v = document.getElementById("vs").textContent;
+    let f = document.getElementById("fs").textContent;
+    gl.shaderSource(vs, v);
+    gl.shaderSource(fs, f);
+    gl.compileShader(vs);
+    gl.compileShader(fs);
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    gl.useProgram(p);
+    aLoc[0] = gl.getAttribLocation(p, "position");
+    aLoc[1] = gl.getAttribLocation(p, "color");
+    gl.enableVertexAttribArray(aLoc[0]);
+    gl.enableVertexAttribArray(aLoc[1]);
+    uLoc[0] = gl.getUniformLocation(p, "pjMatrix");
+    uLoc[1] = gl.getUniformLocation(p, "mvMatrix");
+}
+
+function initBuffers() {
+    // 正弦波×余弦波の座標データを用意
+    //             1.0 y 
+    //              ^  -1.0 
+    //              | / z
+    //              |/       x
+    // -1.0 -----------------> +1.0
+    //            / |
+    //      +1.0 /  |
+    //           -1.0
+    // 
+    //             [3]
+    //         [4]     [2]
+    //      [5]            [1]
+    //      *                *
+    //     [6]              [0]
+    //      *                *
+    //      [7]            [11]
+    //         [8]     [10]
+    //             [9]
+    //
+    for ( let i = 0; i <= MAX; i++ ) {
+        let x = 0.5 * Math.cos(2 * Math.PI * i / MAX * A);
+        let y = 0.5 * Math.sin(2 * Math.PI * i / MAX * B);
+        let z = 0.5 * Math.sin(2 * Math.PI * i / MAX * A);
+        let r = x + 0.5;
+        let g = y + 0.5;
+        let b = z + 0.5;
+        positions = positions.concat([x, y, z]);
+        colors = colors.concat([r, g, b]);
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(aLoc[0], 3, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(aLoc[1], 3, gl.FLOAT, false, 0, 0);
+}
+
+function render(){
+    rad += Math.PI * 1.0 / 180.0;
+
+    mat4.perspective(pMatrix, 45, window.innerWidth / window.innerHeight, 0.1, 100.0);
+    mat4.identity(mvMatrix);
+    let translation = vec3.create();
+    vec3.set(translation, 0.0, 0.0, -2.0);
+    mat4.translate(mvMatrix, mvMatrix, translation);
+    mat4.rotate(mvMatrix, mvMatrix, rad, [0, 1, 0]);
+
+    gl.uniformMatrix4fv(uLoc[0], false, pMatrix);
+    gl.uniformMatrix4fv(uLoc[1], false, mvMatrix);
+    
+    draw();
+
+    requestAnimationFrame(render);
+}
+
+function draw() {
+    gl.drawArrays(gl.LINE_STRIP, 0, positions.length / 3);
+    gl.drawArrays(gl.POINTS, 0, positions.length / 3);
+    gl.flush();
+}
+
+window.onload = function() {
+    initWebGL();
+    initShaders();
+    initBuffers();
+    render();
+};
+</script>
+<a href="https://github.com/cx20/hello/blob/master/html5/webgl2/3-1.lissajous.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
+</body>
+</html>
