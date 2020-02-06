@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Lissajous curve Using WebGL</title>
+  <link rel="stylesheet" type="text/css" href="style_dark.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix.js"></script>
+</head>
+<body>
+<script id="vs" type="x-shader/x-vertex">
+attribute vec3 position;
+varying   vec4 vColor;
+uniform mat4 pjMatrix;
+uniform mat4 mvMatrix;
+uniform float time;
+uniform float f1;
+uniform float f2;
+uniform float f3;
+uniform float f4;
+
+float A1 = 0.2, p1 = 1.0/16.0,  d1 = 0.02;
+float A2 = 0.2, p2 = 3.0/2.0,   d2 = 0.0315;
+float A3 = 0.2, p3 = 13.0/15.0, d3 = 0.02;
+float A4 = 0.2, p4 = 1.0,       d4 = 0.02;
+float PI = 3.141592;
+
+void main()
+{
+    vec3 p = position;
+/*
+    f1 = sin(time);
+    f2 = mod(time, 0.5);
+    f3 = mod(time, 1.0);
+    f4 = 1.0;
+*/
+    p1 = time;
+    
+    float t = ((p.x/360.0) - 0.5)  * 50.0;
+    float x = A1 * sin(f1 * t + PI * p1) * exp(-d1 * t) + A2 * sin(f2 * t + PI * p2) * exp(-d2 * t);
+    float y = A3 * sin(f3 * t + PI * p3) * exp(-d3 * t) + A4 * sin(f4 * t + PI * p4) * exp(-d4 * t);
+    float z = A1 * cos(f1 * t + PI * p1) * exp(-d1 * t) + A2 * cos(f2 * t + PI * p2) * exp(-d2 * t);
+
+    p.x = x;
+    p.y = y;
+    p.z = z;
+
+    vColor = vec4(x + 0.5, y + 0.5, z + 0.5, 1.0);
+    gl_Position = pjMatrix * mvMatrix * vec4(p, 1.0);
+    //gl_PointSize = 10.0;
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+precision mediump float;
+varying   vec4 vColor;
+
+void main()
+{
+    gl_FragColor = vColor;
+}
+</script>
+
+<canvas id="c" width="465" height="465"></canvas>
+<script>
+let c, gl;
+
+let aLoc = [];
+let uLoc = [];
+let data = [];
+let colors = [];
+
+let mvMatrix = mat4.create();
+let pMatrix = mat4.create();
+
+let rad = 0;
+
+let baseTime = +new Date;
+let time = 0;
+let f1 = 2;
+let f2 = 2;
+let f3 = 2;
+let f4 = 2;
+
+function initWebGL() {
+    c = document.getElementById("c");
+    gl = c.getContext("experimental-webgl");
+
+    resizeCanvas();
+    window.addEventListener("resize", function(){
+        resizeCanvas();
+    });
+}
+
+function resizeCanvas() {
+    c.width = window.innerWidth;
+    c.height = window.innerHeight;
+    gl.viewport(0, 0, c.width, c.height);
+}
+
+function initShaders() {
+    let p = gl.createProgram();
+    let vs = gl.createShader(gl.VERTEX_SHADER);
+    let fs = gl.createShader(gl.FRAGMENT_SHADER);
+    let v = document.getElementById("vs").textContent;
+    let f = document.getElementById("fs").textContent;
+    gl.shaderSource(vs, v);
+    gl.shaderSource(fs, f);
+    gl.compileShader(vs);
+    gl.compileShader(fs);
+    console.log(gl.getShaderInfoLog(vs));
+    console.log(gl.getShaderInfoLog(fs));
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    gl.useProgram(p);
+    aLoc[0] = gl.getAttribLocation(p, "position");
+    uLoc[0] = gl.getUniformLocation(p, 'pjMatrix');
+    uLoc[1] = gl.getUniformLocation(p, 'mvMatrix');
+    uLoc[2] = gl.getUniformLocation(p, 'time');
+    uLoc[3] = gl.getUniformLocation(p, 'f1');
+    uLoc[4] = gl.getUniformLocation(p, 'f2');
+    uLoc[5] = gl.getUniformLocation(p, 'f3');
+    uLoc[6] = gl.getUniformLocation(p, 'f4');
+    gl.enableVertexAttribArray(aLoc[0]);
+}
+
+function initBuffers() {
+    // 3次元リサージュの座標データを用意
+    //             1.0 y 
+    //              ^  -1.0 
+    //              | / z
+    //              |/       x
+    // -1.0 -----------------> +1.0
+    //            / |
+    //      +1.0 /  |
+    //           -1.0
+    // 
+    let MAX = 360;
+    let A = 100.0;
+    let B = 99.0;
+    let C = 1.0;
+    let alpha = Math.PI/4;
+    let beta  = Math.PI/3;
+    let theta = 0; // Math.PI/2;
+    for ( let i = 0; i <= MAX; i += 0.1 ) {
+        let x = i;
+        let y = 0.0;
+        let z = 0.0;
+        data = data.concat([x, y, z]);
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(aLoc[0], 3, gl.FLOAT, false, 0, 0);
+}
+
+function animate() {
+    render();
+    requestAnimationFrame(animate);
+}
+
+function render() {
+    rad += Math.PI * 1.0 / 180.0;
+
+    let c = Math.cos(rad);
+    let s = Math.sin(rad);
+
+    mat4.perspective(pMatrix, 45, window.innerWidth / window.innerHeight, 0.1, 1000.0);
+    mat4.identity(mvMatrix);
+    let translation = vec3.create();
+    vec3.set(translation, 0.0, 0.0, -2.0);
+    mat4.translate(mvMatrix, mvMatrix, translation);
+    mat4.rotate(mvMatrix, mvMatrix, rad, [0, 1, 0]);
+
+    gl.uniformMatrix4fv(uLoc[0], false, pMatrix);
+    gl.uniformMatrix4fv(uLoc[1], false, mvMatrix);
+
+    // uniform float time 
+    time = (+new Date - baseTime) / 1000;
+    gl.uniform1f(uLoc[2], time);
+
+
+    // uniform float f1～f4
+    f1 = (f1 + Math.random() / 40) % 10;
+    f2 = (f2 + Math.random() / 40) % 10;
+    f3 = (f3 + Math.random() / 40) % 10;
+    f4 = (f4 + Math.random() / 40) % 10;
+    gl.uniform1f(uLoc[3], f1);
+    gl.uniform1f(uLoc[4], f2);
+    gl.uniform1f(uLoc[5], f3);
+    gl.uniform1f(uLoc[6], f4);
+    
+    gl.drawArrays(gl.LINE_STRIP, 0, data.length / 3);
+    gl.drawArrays(gl.POINTS, 0, data.length / 3);
+    gl.flush();
+}
+
+window.onload = function() {
+    initWebGL();
+    initShaders();
+    initBuffers();
+    animate();
+};
+</script>
+<a href="https://github.com/cx20/hello/blob/master/html5/webgl/3-3.harmonograph.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
+</body>
+</html>
