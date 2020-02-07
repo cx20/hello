@@ -12,8 +12,7 @@ attribute vec3 position;
 uniform mat4 pjMatrix;
 uniform mat4 mvMatrix;
 
-void main()
-{
+void main() {
     gl_Position = pjMatrix * mvMatrix * vec4(position, 1.0);
     gl_PointSize = 10.0;
 }
@@ -22,8 +21,7 @@ void main()
 <script id="fs" type="x-shader/x-fragment">
 precision mediump float;
 
-void main()
-{
+void main() {
     gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
 }
 </script>

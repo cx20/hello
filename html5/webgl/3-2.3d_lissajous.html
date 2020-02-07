@@ -13,8 +13,7 @@ varying   vec4 vColor;
 uniform mat4 pjMatrix;
 uniform mat4 mvMatrix;
 
-void main()
-{
+void main() {
     vColor = vec4(color, 1.0);
     gl_Position = pjMatrix * mvMatrix * vec4(position, 1.0);
 }
@@ -24,8 +23,7 @@ void main()
 precision mediump float;
 varying   vec4 vColor;
 
-void main()
-{
+void main() {
     gl_FragColor  = vColor;
 }
 </script>
