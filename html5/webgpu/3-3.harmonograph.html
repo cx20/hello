@@ -206,14 +206,14 @@ async function init(glslang) {
     let render =  function () {
         uniformBuffer.setSubData(0, getTransformationMatrix());
 
-	    // uniform float time 
-	    time = (+new Date - baseTime) / 1000;
+        // uniform float time 
+        time = (+new Date - baseTime) / 1000;
 
-	    // uniform float f1Å`f4
-	    f1 = (f1 + Math.random() / 40) % 10;
-	    f2 = (f2 + Math.random() / 40) % 10;
-	    f3 = (f3 + Math.random() / 40) % 10;
-	    f4 = (f4 + Math.random() / 40) % 10;
+        // uniform float f1Å`f4
+        f1 = (f1 + Math.random() / 40) % 10;
+        f2 = (f2 + Math.random() / 40) % 10;
+        f3 = (f3 + Math.random() / 40) % 10;
+        f4 = (f4 + Math.random() / 40) % 10;
 
         uniformBuffer.setSubData(4 * 16 + 0, new Float32Array([time]));
         uniformBuffer.setSubData(4 * 16 + 4, new Float32Array([f1]));
@@ -286,6 +286,6 @@ function makeIndexBuffer(device, data) {
     return indicesBuffer
 }
 </script>
-<a href="https://github.com/cx20/hello/blob/master/html5/webgpu/3-1.lissajous.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
+<a href="https://github.com/cx20/hello/blob/master/html5/webgpu/3-3.harmonograph.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
 </body>
 </html>
