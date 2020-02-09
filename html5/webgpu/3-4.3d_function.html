@@ -20,11 +20,13 @@ void main() {
     vec3 p = position;
 
     float i = floor(p.x / 100.0);
-    float j = (i - 50.0) * 0.2;
-    float k = ((p.x - i * 100.0) - 50.0) * 0.2;
-    float x = j;
-    float y = sin(sqrt(j * j + k * k) + uniforms.theta) / sqrt(j * j + k * k);
-    float z = k;
+    float j = p.x - i * 100.0;
+    float i2 = (i - 50.0) * 0.2;
+    float j2 = (j - 50.0) * 0.2;
+    
+    float x = i2;
+    float y = sin(sqrt(i2 * i2 + j2 * j2) + uniforms.theta)/ sqrt(i2 * i2 + j2 * j2);
+    float z = j2;
     
     float x2 = x / 10.0;
     float y2 = y / 2.0;
