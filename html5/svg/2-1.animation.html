@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, SVG World!</title>
+  <link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" width="256px" height="256px">
+    <rect x="0" y="0" width="200" height="200" fill="#00f">
+        <animateTransform attributeName="transform" attributeType="xml" type="scale" dur="2s" repeatCount="1" values="0.1 0.1; 1 1" additive="sum" />
+        <animateTransform attributeName="transform" attributeType="xml" type="rotate" dur="2s" repeatCount="1" from="0 100,100" to="180 100,100" additive="sum" />
+        <animate attributeName="fill" attributeType="xml" dur="2s" repeatCount="1" values="#f00; #00f" />
+    </rect>
+</svg>
+<a href="https://github.com/cx20/hello/blob/master/html5/svg/2-1.animation.html" target="_blank">View Source</a>
+</body>
+</html>
