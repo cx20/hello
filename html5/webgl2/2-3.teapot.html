@@ -95,12 +95,12 @@ function initBuffers() {
     gl.vertexAttribPointer(aLoc[0], 3, gl.FLOAT, false, 0, 0);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-    var unpackedColors = [];
-    for (var i=0; i < vertexNormals.length; i += 3) {
-        var r = vertexNormals[i+0] + 0.5;
-        var g = vertexNormals[i+1] + 0.5;
-        var b = vertexNormals[i+2] + 0.5;
-        var a = 1.0;
+    let unpackedColors = [];
+    for (let i=0; i < vertexNormals.length; i += 3) {
+        let r = vertexNormals[i+0] + 0.5;
+        let g = vertexNormals[i+1] + 0.5;
+        let b = vertexNormals[i+2] + 0.5;
+        let a = 1.0;
         unpackedColors.push(r);
         unpackedColors.push(g);
         unpackedColors.push(b);
