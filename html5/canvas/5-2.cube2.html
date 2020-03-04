@@ -101,21 +101,21 @@ function drawPolygon(theta, phi) {
     for (i = 0; i < info.length; i++) {
         info[i].shift();
         light = info[i].shift();
-        //    if (light >= 0) {
-        for (j = 0; j < info[i].length; j++) {
-            x = g_zoom * info[i][j][0] / (10 + info[i][j][2]);
-            y = g_zoom * info[i][j][1] / (10 + info[i][j][2]);
-            if (!j) {
-                ctx.beginPath();
-                ctx.moveTo(g_pos_x + x, g_pos_y + -y);
-                ctx.fillStyle = getRgba(parseInt(0x7f * light) * 0x100, 1.0);
-            } else {
-                ctx.lineTo(g_pos_x + x, g_pos_y + -y);
+        if (light >= 0) {
+            for (j = 0; j < info[i].length; j++) {
+                x = g_zoom * info[i][j][0] / (10 + info[i][j][2]);
+                y = g_zoom * info[i][j][1] / (10 + info[i][j][2]);
+                if (!j) {
+                    ctx.beginPath();
+                    ctx.moveTo(g_pos_x + x, g_pos_y + -y);
+                    ctx.fillStyle = getRgba(parseInt(0x7f * light) * 0x100, 1.0);
+                } else {
+                    ctx.lineTo(g_pos_x + x, g_pos_y + -y);
+                }
             }
+            ctx.closePath();
+            ctx.fill();
         }
-        ctx.closePath();
-        ctx.stroke();
-        //    }
     }
 }
 
@@ -128,7 +128,7 @@ function getRgba(color, alpha) {
 </head>
 <body onLoad=init()>
 <canvas id="canvas" width="640" height="480"></canvas>
-<a href="https://github.com/cx20/hello/blob/master/html5/canvas/4-1.cube1.html" target="_blank">View Source</a>
+<a href="https://github.com/cx20/hello/blob/master/html5/canvas/5-2.cube2.html" target="_blank">View Source</a>
 </body>
 </html>
 

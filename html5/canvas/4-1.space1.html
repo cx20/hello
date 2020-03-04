@@ -17,13 +17,14 @@ function draw() {
     canvas = document.getElementById("canvas2d");
     ctx = canvas.getContext("2d");
     initPoints();
-    setInterval(render, 50);
+    render();
 }
 
 function initPoints() {
+    let point;
     let i;
     for (i = 0; i < numPoints; i++) {
-        point = { x:(Math.random()*400)-200, y:(Math.random()*400)-200 , z:(Math.random()*400)-200 };
+        point = { x:(Math.random()*400)-200, y:(Math.random()*400)-200, z:(Math.random()*400)-200 };
         points.push(point); 
     }
 
@@ -31,13 +32,9 @@ function initPoints() {
 
 function render() {
     clear();
-    
-    let point;
     let i;
-    for (i = 0; i < numPoints; i++) {
-        point = points[i]; 
-        rotateY(point, 0.04);     
-        draw3D(point); 
+    for ( i = 0; i < numPoints; i++) {
+        draw3D(points[i]); 
     }
 }
 
@@ -50,37 +47,23 @@ function draw3D(point) {
     let y2d = (y3d * scale) + HALF_HEIGHT;
     
     ctx.lineWidth = scale; 
-    ctx.strokeStyle = "rgb(255, 255, 255)";
+    ctx.strokeStyle = "rgb(255, 255, 255)";     
     ctx.beginPath();
     ctx.moveTo(x2d, y2d); 
+    ctx.lineTo(x2d + 1, y2d); 
     ctx.lineTo(x2d + scale, y2d); 
     ctx.stroke(); 
-}
-
-function rotateY(point, angle) {
-    let x = point.x; 
-    let z = point.z; 
     
-    let cosRY = Math.cos(angle);
-    let sinRY = Math.sin(angle);
-    let tempz = z; 
-    let tempx = x; 
-
-    x = (tempx * cosRY) + (tempz * sinRY);
-    z = (tempx * -sinRY) + (tempz * cosRY);
-    point.x = x; 
-    point.z = z; 
 }
 
 function clear() {
-    ctx.fillStyle = "rgb(0, 0, 0)";
-    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    ctx.fillStyle = "rgb( 0, 0, 0 )";
+    ctx.fillRect( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT );
 }
-
 </script>
 </head>
 <body onload="draw()">
 <canvas id="canvas2d" width="640" height="480"></canvas>
-<a href="https://github.com/cx20/hello/blob/master/html5/canvas/3-3.space3.html" target="_blank">View Source</a>
+<a href="https://github.com/cx20/hello/blob/master/html5/canvas/4-1.space1.html" target="_blank">View Source</a>
 </body>
 </html>

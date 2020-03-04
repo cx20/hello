@@ -17,12 +17,15 @@ function draw() {
     drawScreen( ctx );
     
     let n = 4;
-    let len = 8;
+    let len = 3;
     
-    setPoint( 0, 300 );
+    setPoint( 200, 360 );
     setAngle( 0 );
-
-    koch( n, len );
+    
+    for ( let k = 0; k <= 4; k++ ) {
+        stech( n, len );
+        turn( 90 );
+    }
 }
 
 function drawScreen( ctx ) {
@@ -30,20 +33,15 @@ function drawScreen( ctx ) {
     ctx.fillRect( 0, 0, X_MAX, Y_MAX );
 }
 
-function koch( n, len )
-{
+function stech( n, len ) {
     if ( n == 0 ) {
         move( len );
-    }
-    else
-    {
-        koch( n - 1, len );
-        turn( 60 );
-        koch( n - 1, len );
-        turn( -120 );
-        koch( n - 1, len );
-        turn( 60 );
-        koch( n - 1, len );
+    } else {
+        stech( n - 1, len ); turn( -90 );
+        stech( n - 1, len ); turn(  90 );
+        stech( n - 1, len ); turn(  90 );
+        stech( n - 1, len ); turn( -90 );
+        stech( n - 1, len );
     }
 }
 
@@ -76,6 +74,6 @@ function setPoint( x, y ) {
 </head>
 <body onload="draw()">
 <canvas id="canvas" width="640" height="480"></canvas>
-<a href="https://github.com/cx20/hello/blob/master/html5/canvas/2-1.koch1.html" target="_blank">View Source</a>
+<a href="https://github.com/cx20/hello/blob/master/html5/canvas/3-4.stech.html" target="_blank">View Source</a>
 </body>
 </html>

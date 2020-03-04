@@ -10,19 +10,22 @@ let ctx;
 let angle;
 let posX;
 let posY;
+let scale;
+let branch;
 
 function draw() {
     canvas = document.getElementById("canvas");
     ctx = canvas.getContext("2d");
     drawScreen( ctx );
     
-    let n = 7;
-    let len = 4;
+    let n = 8;
+    let x0 = 320, y0 = 480;
+    let len = 140;
+    let a = 90;
+    scale = 1.4;
+    branch = 20.0;
     
-    setPoint( 60, 460 );
-    setAngle( 0 );
-    
-    koch( n, len, 0, 1 );
+    tree( n, x0, y0, len, a );
 }
 
 function drawScreen( ctx ) {
@@ -30,17 +33,20 @@ function drawScreen( ctx ) {
     ctx.fillRect( 0, 0, X_MAX, Y_MAX );
 }
 
-function koch( n, len, d, sign ) {
+function tree( n, x0, y0, len, a ) {
     if ( n == 0 ) {
-        setAngle( d );
-        move( len );
+        return;
     }
-    else
-    {
-        koch( n - 1, len, d + 60 * sign, -sign );
-        koch( n - 1, len, d, sign );
-        koch( n - 1, len, d - 60 * sign, -sign );
-    }
+    
+    setPoint( x0, y0 );
+    setAngle( a );
+    move( len );
+    
+    x0 = posX;
+    y0 = posY;
+    
+    tree( n - 1, x0, y0, len / scale, a - branch );
+    tree( n - 1, x0, y0, len / scale, a + branch );
 }
 
 function turn( a ) {
@@ -72,6 +78,6 @@ function setPoint( x, y ) {
 </head>
 <body onload="draw()">
 <canvas id="canvas" width="640" height="480"></canvas>
-<a href="https://github.com/cx20/hello/blob/master/html5/canvas/2-3.triangle.html" target="_blank">View Source</a>
+<a href="https://github.com/cx20/hello/blob/master/html5/canvas/3-5.tree.html" target="_blank">View Source</a>
 </body>
 </html>

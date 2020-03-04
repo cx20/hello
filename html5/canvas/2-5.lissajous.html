@@ -6,16 +6,23 @@
 const X_MAX = 640;
 const Y_MAX = 480;
 const R = 240;
-let canvas;
+const A = 2;
+const B = 3;
+let p1 = 0;
 let ctx;
 
-function draw() {
-    canvas = document.getElementById("canvas");
-    ctx = canvas.getContext("2d");
+function draw0() {
+    ctx = document.getElementById("canvas").getContext("2d");
     drawScreen( ctx );
     drawGraph( ctx );
-    drawSinCurve( ctx );
-    drawCosCurve( ctx );
+
+    setInterval( draw, 100 );
+}
+
+function draw() {
+    drawScreen( ctx );
+    drawGraph( ctx );
+    drawLissajous( ctx );
 }
 
 function drawScreen( ctx ) {
@@ -38,33 +45,26 @@ function drawGraph( ctx ) {
     ctx.stroke();
 }
 
-function drawSinCurve( ctx ) {
+function drawLissajous( ctx ) {
     ctx.strokeStyle = "rgb( 0, 255, 0 )";
     ctx.beginPath();
-    let x, y;
-    ctx.moveTo(0, R);
-    for (x = 0; x <= X_MAX; x += 20) {
-        y = R - R * Math.sin( 2 * Math.PI * ( x / X_MAX ) )
-        ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-}
-
-function drawCosCurve( ctx ) {
-    ctx.strokeStyle = "rgb( 255, 0, 0 )";
-    ctx.beginPath();
-    let x, y;
-    ctx.moveTo(0, 0);
-    for (x = 0; x <= X_MAX; x += 20) {
-        y = R - R * Math.cos( 2 * Math.PI * ( x / X_MAX ) )
+    let x, y, t;
+    t = 0;
+    x = X_MAX / 2 + R * Math.cos( A * Math.PI * ( t / X_MAX ) );
+    y = R         - R * Math.sin( B * Math.PI * ( t / X_MAX ) + p1 );
+    ctx.moveTo(x, y);
+    p1 += (Math.PI*2 * 10 / 360);
+    for (t = 0; t <= X_MAX * 10; t += 10) {
+        x = X_MAX / 2 + R * Math.cos( A * Math.PI * ( t / X_MAX ) );
+        y = R         - R * Math.sin( B * Math.PI * ( t / X_MAX ) + p1 );
         ctx.lineTo(x, y);
     }
     ctx.stroke();
 }
 </script>
 </head>
-<body onload="draw()">
+<body onload="draw0()">
 <canvas id="canvas" width="640" height="480"></canvas>
-<a href="https://github.com/cx20/hello/blob/master/html5/canvas/1-4.sincos.html" target="_blank">View Source</a>
+<a href="https://github.com/cx20/hello/blob/master/html5/canvas/2-5.lissajous.html" target="_blank">View Source</a>
 </body>
 </html>

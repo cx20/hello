@@ -7,7 +7,7 @@ const X_MAX = 640;
 const Y_MAX = 480;
 let canvas;
 let ctx;
-let angle = 0;
+let angle;
 let posX;
 let posY;
 
@@ -16,10 +16,13 @@ function draw() {
     ctx = canvas.getContext("2d");
     drawScreen( ctx );
     
-    let n = 10;
+    let n = 4;
+    let len = 8;
     
-    setPoint( 250, 320 );
-    ccurve( n );
+    setPoint( 0, 300 );
+    setAngle( 0 );
+
+    koch( n, len );
 }
 
 function drawScreen( ctx ) {
@@ -27,14 +30,20 @@ function drawScreen( ctx ) {
     ctx.fillRect( 0, 0, X_MAX, Y_MAX );
 }
 
-function ccurve( n ) {
+function koch( n, len )
+{
     if ( n == 0 ) {
-        move(6);
-    } else {
-        ccurve( n - 1 );
-        turn( 90 );
-        ccurve( n - 1 );
-        turn( -90 );
+        move( len );
+    }
+    else
+    {
+        koch( n - 1, len );
+        turn( 60 );
+        koch( n - 1, len );
+        turn( -120 );
+        koch( n - 1, len );
+        turn( 60 );
+        koch( n - 1, len );
     }
 }
 
@@ -67,6 +76,6 @@ function setPoint( x, y ) {
 </head>
 <body onload="draw()">
 <canvas id="canvas" width="640" height="480"></canvas>
-<a href="https://github.com/cx20/hello/blob/master/html5/canvas/2-7.ccurve.html" target="_blank">View Source</a>
+<a href="https://github.com/cx20/hello/blob/master/html5/canvas/3-1.koch1.html" target="_blank">View Source</a>
 </body>
 </html>

@@ -5,6 +5,7 @@
 <script>
 const X_MAX = 640;
 const Y_MAX = 480;
+let r, g, b;
 let letters = Array(256).join(1).split("");
 let canvas;
 let ctx;
@@ -12,12 +13,12 @@ let ctx;
 function init() {
     canvas = document.getElementById("Canvas");
     ctx = canvas.getContext("2d");
-    setInterval( draw, 33 );
+    setInterval( draw, 50 );
 }
 
 function draw() {
     drawScreen( ctx );
-    letters.map( drawMatrix );
+    letters.map( drawAlphabet );
 }
 
 function drawScreen( ctx ) {
@@ -25,19 +26,26 @@ function drawScreen( ctx ) {
     ctx.fillRect( 0, 0, X_MAX, Y_MAX );
 }
 
-function drawMatrix( value, index, array )
+function drawAlphabet( value, index, array )
 {
-    let text = String.fromCharCode(Math.random() * 256);
+    let text = String.fromCharCode(0x41 + Math.random() * 26);
+    let x_pos = index * 5;
     let y_pos = value;
-    let x_pos = index * 10;
-    ctx.fillStyle = "#00ff00";
+    randomColor();
+    ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
     ctx.fillText(text, x_pos, y_pos);
-    array[index] = (y_pos > 480 + Math.random() * 480) ? 0 : y_pos + 10;
+    array[index] = Math.random() * 480;
+}
+
+function randomColor() {
+    r = Math.floor(Math.random() * 256);
+    g = Math.floor(Math.random() * 256);
+    b = Math.floor(Math.random() * 256);
 }
 </script>
 </head>
 <body onload="init()">
 <canvas id="Canvas" width="640" height="480"></canvas>
-<a href="https://github.com/cx20/hello/blob/master/html5/canvas/5-2.matrix.html" target="_blank">View Source</a>
+<a href="https://github.com/cx20/hello/blob/master/html5/canvas/6-1.alphabet.html" target="_blank">View Source</a>
 </body>
 </html>
