@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello, Canvas World!</title>
+<script>
+const X_MAX = 640;
+const Y_MAX = 480;
+
+let canvas;
+let ctx;
+
+function draw() {
+    canvas = document.getElementById("Canvas");
+    ctx = canvas.getContext("2d");
+    drawScreen(ctx);
+    drawGraph(ctx);
+}
+
+function drawScreen(ctx) {
+    ctx.fillStyle = "rgb( 0, 0, 0 )";
+    ctx.fillRect(0, 0, X_MAX, Y_MAX);
+}
+
+function drawGraph(ctx) {
+    ctx.strokeStyle = "rgb( 0, 127, 0 )";
+    ctx.beginPath();
+    let x, y;
+    ctx.rect(100, 100, 300, 300);
+    ctx.stroke();
+}
+</script>
+</head>
+<body onload="draw()">
+<canvas id="Canvas" width="640" height="480"></canvas>
+<a href="https://github.com/cx20/hello/blob/master/html5/canvas/1-1.line.html" target="_blank">View Source</a>
+</body>
+</html>
