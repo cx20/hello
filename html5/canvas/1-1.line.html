@@ -22,11 +22,14 @@ function drawScreen(ctx) {
 }
 
 function drawGraph(ctx) {
-    ctx.strokeStyle = "rgb( 0, 127, 0 )";
+    ctx.strokeStyle = "#00f";
     ctx.beginPath();
-    let x, y;
-    ctx.moveTo(100, 100);
-    ctx.lineTo(X_MAX - 100, Y_MAX - 100);
+    let x = 100;
+    let y = 100;
+    let x2 = 300;
+    let y2 = 300;
+    ctx.moveTo(x, y);
+    ctx.lineTo(x2, y2);
     ctx.stroke();
 }
 </script>

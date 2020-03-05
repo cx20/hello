@@ -22,16 +22,19 @@ function drawScreen(ctx) {
 }
 
 function drawGraph(ctx) {
-    ctx.strokeStyle = "rgb( 0, 127, 0 )";
+    ctx.strokeStyle = "#00f";
     ctx.beginPath();
-    let x, y;
-    ctx.rect(100, 100, 300, 300);
+    let x = 100;
+    let y = 100;
+    let width = 300;
+    let height = 300;
+    ctx.rect(x, y, width, height);
     ctx.stroke();
 }
 </script>
 </head>
 <body onload="draw()">
 <canvas id="Canvas" width="640" height="480"></canvas>
-<a href="https://github.com/cx20/hello/blob/master/html5/canvas/1-1.line.html" target="_blank">View Source</a>
+<a href="https://github.com/cx20/hello/blob/master/html5/canvas/1-2.rect.html" target="_blank">View Source</a>
 </body>
 </html>
