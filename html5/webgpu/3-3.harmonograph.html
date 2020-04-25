@@ -107,7 +107,7 @@ async function init(glslang) {
     let vertexBuffer = makeVertexBuffer(device, new Float32Array(positions));
 
     const uniformsBindGroupLayout = device.createBindGroupLayout({
-        bindings: [{
+        entries: [{
             binding: 0,
             visibility: GPUShaderStage.VERTEX,
             type: "uniform-buffer"
@@ -171,7 +171,7 @@ async function init(glslang) {
 
     const uniformBindGroup = device.createBindGroup({
         layout: uniformsBindGroupLayout,
-        bindings: [{
+        entries: [{
             binding: 0,
             resource: {
                 buffer: uniformBuffer,
@@ -204,24 +204,23 @@ async function init(glslang) {
         usage: GPUTextureUsage.OUTPUT_ATTACHMENT
     });
     let render =  function () {
-        uniformBuffer.setSubData(0, getTransformationMatrix());
-
         // uniform float time 
         time = (+new Date - baseTime) / 1000;
 
-        // uniform float f1Å`f4
+        // uniform float f1/2/3/4
         f1 = (f1 + Math.random() / 40) % 10;
         f2 = (f2 + Math.random() / 40) % 10;
         f3 = (f3 + Math.random() / 40) % 10;
         f4 = (f4 + Math.random() / 40) % 10;
 
-        uniformBuffer.setSubData(4 * 16 + 0, new Float32Array([time]));
-        uniformBuffer.setSubData(4 * 16 + 4, new Float32Array([f1]));
-        uniformBuffer.setSubData(4 * 16 + 8, new Float32Array([f2]));
-        uniformBuffer.setSubData(4 * 16 + 12, new Float32Array([f3]));
-        uniformBuffer.setSubData(4 * 16 + 16, new Float32Array([f4]));
-
         const commandEncoder = device.createCommandEncoder();
+        const { uploadBuffer: buffer0 } = updateBufferData(device, uniformBuffer, 0, getTransformationMatrix(), commandEncoder);
+        const { uploadBuffer: buffer1 } = updateBufferData(device, uniformBuffer, 4 * 16 +  0, new Float32Array([time]), commandEncoder);
+        const { uploadBuffer: buffer2 } = updateBufferData(device, uniformBuffer, 4 * 16 +  4, new Float32Array([f1]), commandEncoder);
+        const { uploadBuffer: buffer3 } = updateBufferData(device, uniformBuffer, 4 * 16 +  8, new Float32Array([f2]), commandEncoder);
+        const { uploadBuffer: buffer4 } = updateBufferData(device, uniformBuffer, 4 * 16 + 12, new Float32Array([f3]), commandEncoder);
+        const { uploadBuffer: buffer5 } = updateBufferData(device, uniformBuffer, 4 * 16 + 16, new Float32Array([f4]), commandEncoder);
+
         const textureView = swapChain.getCurrentTexture().createView();
         const renderPassDescriptor = {
             colorAttachments: [{
@@ -243,6 +242,12 @@ async function init(glslang) {
         passEncoder.draw(positions.length / 3, 1, 0, 0);
         passEncoder.endPass();
         device.defaultQueue.submit([commandEncoder.finish()]);
+        buffer0.destroy();
+        buffer1.destroy();
+        buffer2.destroy();
+        buffer3.destroy();
+        buffer4.destroy();
+        buffer5.destroy();
         requestAnimationFrame(render);
     }
     requestAnimationFrame(render)
@@ -266,24 +271,39 @@ function makeShaderModule_GLSL(glslang, device, type, source) {
 }
 
 function makeVertexBuffer(device, data) {
-    let bufferDescriptor = {
+    const [verticesBuffer, vertexMapping] = device.createBufferMapped({
         size: data.byteLength,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
-    };
-    let verticesBuffer = device.createBuffer(bufferDescriptor);
-    verticesBuffer.setSubData(0, data);
-    return verticesBuffer
+        usage: GPUBufferUsage.VERTEX
+    });
+    new Float32Array(vertexMapping).set(data);
+    verticesBuffer.unmap();
+    return verticesBuffer;
 }
 
 function makeIndexBuffer(device, data) {
-    let bufferDescriptor = {
+    const [indicesBuffer, indicesMapping] = device.createBufferMapped({
         size: data.byteLength,
-        usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
-    };
-    let indicesBuffer = device.createBuffer(bufferDescriptor);
-    indicesBuffer.setSubData(0, data);
-    indicesBuffer.pointNum = data.length
-    return indicesBuffer
+        usage: GPUBufferUsage.INDEX
+    });
+    new Uint32Array(indicesMapping).set(data);
+    indicesBuffer.pointNum = data.length;
+    indicesBuffer.unmap();
+    return indicesBuffer;
+}
+
+function updateBufferData(device, dst, dstOffset, src, commandEncoder) {
+    const [uploadBuffer, mapping] = device.createBufferMapped({
+        size: src.byteLength,
+        usage: GPUBufferUsage.COPY_SRC,
+    });
+
+    new src.constructor(mapping).set(src);
+    uploadBuffer.unmap();
+
+    commandEncoder = commandEncoder || device.createCommandEncoder();
+    commandEncoder.copyBufferToBuffer(uploadBuffer, 0, dst, dstOffset, src.byteLength);
+
+    return { commandEncoder, uploadBuffer };
 }
 </script>
 <a href="https://github.com/cx20/hello/blob/master/html5/webgpu/3-3.harmonograph.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
