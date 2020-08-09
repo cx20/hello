@@ -28,14 +28,14 @@ void main() {
 <script id="fs" type="x-shader/x-fragment">#version 300 es
 precision mediump float;
 uniform sampler2D uTexture;
-uniform vec3 uPointLightingLocation;
+uniform vec3 uDirectLightingLocation;
 in vec4 vPosition;
 in vec3 vNormal;
 in  vec2 vTextureCoord;
 out vec4 fragColor;
 
 void main() {
-    vec3 lightDirection = normalize(uPointLightingLocation - vPosition.xyz);
+    vec3 lightDirection = normalize(uDirectLightingLocation - vPosition.xyz);
     vec3 normal = normalize(vNormal);
     float lightWeighting = max(dot(normal, lightDirection), 0.0);
     vec4 fragmentColor  = texture(uTexture, vTextureCoord);
@@ -91,7 +91,7 @@ function initShaders() {
     uLoc[0] = gl.getUniformLocation(p, "uPMatrix");
     uLoc[1] = gl.getUniformLocation(p, "uMVMatrix");
     uLoc[2] = gl.getUniformLocation(p, "uTexture");
-    uLoc[3] = gl.getUniformLocation(p, "uPointLightingLocation");
+    uLoc[3] = gl.getUniformLocation(p, "uDirectLightingLocation");
     gl.enableVertexAttribArray(aLoc[0]);
     gl.enableVertexAttribArray(aLoc[1]);
     gl.enableVertexAttribArray(aLoc[2]);
@@ -164,8 +164,8 @@ function draw() {
 
     gl.uniform1i(uLoc[2], 0);
 
-    let pointLightingLocation = [100.0, 0.0, 100.0];
-    gl.uniform3fv(uLoc[3], pointLightingLocation);
+    let DirectLightingLocation = [100.0, 0.0, 100.0];
+    gl.uniform3fv(uLoc[3], DirectLightingLocation);
 
     gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
     gl.flush();
