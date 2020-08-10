@@ -26,6 +26,7 @@ void main() {
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
+#extension GL_OES_standard_derivatives : enable
 precision mediump float;
 uniform sampler2D texture;
 uniform vec3 uDirectLightingLocation;
@@ -35,7 +36,11 @@ varying vec2 vTextureCoord;
 
 void main() {
     vec3 lightDirection = normalize(uDirectLightingLocation - vPosition.xyz);
-    vec3 normal = normalize(vNormal);
+    //vec3 normal = normalize(vNormal);
+    vec3 dx = dFdx(vPosition.xyz);
+    vec3 dy = dFdy(vPosition.xyz);
+    vec3 normal = normalize(cross(normalize(dx), normalize(dy)));
+    
     float lightWeighting = max(dot(normal, lightDirection), 0.0);
     vec4 fragmentColor  = texture2D(texture, vTextureCoord);
     gl_FragColor = vec4(fragmentColor.rgb * lightWeighting, fragmentColor.a);
@@ -44,7 +49,7 @@ void main() {
 
 <canvas id="c" width="465" height="465"></canvas>
 <script>
-let c, gl;
+let c, gl, ext;
 let aLoc = [];
 let uLoc = [];
 let texture;
@@ -57,6 +62,7 @@ let indices;
 function initWebGL() {
     c = document.getElementById("c");
     gl = c.getContext("webgl");
+    ext = gl.getExtension('OES_standard_derivatives');
     gl.enable(gl.DEPTH_TEST);
     resizeCanvas();
     window.addEventListener("resize", function(){

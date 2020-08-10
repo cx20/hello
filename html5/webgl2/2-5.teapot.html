@@ -36,7 +36,11 @@ out vec4 fragColor;
 
 void main() {
     vec3 lightDirection = normalize(uDirectLightingLocation - vPosition.xyz);
-    vec3 normal = normalize(vNormal);
+    //vec3 normal = normalize(vNormal);
+    vec3 dx = dFdx(vPosition.xyz);
+    vec3 dy = dFdy(vPosition.xyz);
+    vec3 normal = normalize(cross(normalize(dx), normalize(dy)));
+
     float lightWeighting = max(dot(normal, lightDirection), 0.0);
     vec4 fragmentColor  = texture(uTexture, vTextureCoord);
     fragColor = vec4(fragmentColor.rgb * lightWeighting, fragmentColor.a);
