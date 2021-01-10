@@ -7,20 +7,18 @@
 
 #pragma comment (lib, "d3d11.lib")
 #pragma comment (lib, "d3dx11.lib")
-//#pragma comment (lib, "d3dx10.lib")
 
 #define SCREEN_WIDTH  640
 #define SCREEN_HEIGHT 480
 
-// global declarations
-IDXGISwapChain *swapchain;
-ID3D11Device *dev;
-ID3D11DeviceContext *devcon;
-ID3D11RenderTargetView *backbuffer;
-ID3D11InputLayout *pLayout;
-ID3D11VertexShader *pVS;
-ID3D11PixelShader *pPS;
-ID3D11Buffer *pVBuffer;
+IDXGISwapChain* swapchain;
+ID3D11Device* dev;
+ID3D11DeviceContext* devcon;
+ID3D11RenderTargetView* backbuffer;
+ID3D11InputLayout* pLayout;
+ID3D11VertexShader* pVS;
+ID3D11PixelShader* pPS;
+ID3D11Buffer* pVBuffer;
 
 struct VERTEX {
     FLOAT X, Y, Z;
@@ -35,7 +33,6 @@ void InitPipeline(void);
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-// the entry point for any Windows program
 int WINAPI WinMain(HINSTANCE hInstance,
                    HINSTANCE hPrevInstance,
                    LPSTR lpCmdLine,
@@ -140,7 +137,7 @@ void InitD3D(HWND hWnd)
                                   NULL,
                                   &devcon);
 
-    ID3D11Texture2D *pBackBuffer;
+    ID3D11Texture2D* pBackBuffer;
     swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
 
     dev->CreateRenderTargetView(pBackBuffer, NULL, &backbuffer);
