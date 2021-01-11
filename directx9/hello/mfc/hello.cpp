@@ -3,7 +3,7 @@
 #include <tchar.h>
 #include <d3d9.h>
 #include <d3dx9.h>
- 
+
 class CMainFrame : public CFrameWnd
 {
 public:
@@ -25,13 +25,13 @@ private:
     LPD3DXFONT          m_pd3dFont;
     RECT                m_rect;
 };
- 
+
 class CHelloApp : public CWinApp
 {
 public:
     BOOL InitInstance();
 };
- 
+
 BOOL CHelloApp::InitInstance()
 {
     m_pMainWnd = new CMainFrame;
@@ -40,19 +40,19 @@ BOOL CHelloApp::InitInstance()
     m_pMainWnd->UpdateWindow();
     return TRUE;
 }
- 
+
 CHelloApp App;
- 
+
 BEGIN_MESSAGE_MAP( CMainFrame, CFrameWnd )
     ON_WM_PAINT()
 END_MESSAGE_MAP()
- 
+
 CMainFrame::CMainFrame()
 {
     m_pD3D       = NULL;
     m_pd3dDevice = NULL;
     m_pd3dFont   = NULL;
-    
+
     memset( &m_rect, 0, sizeof(m_rect) );
 
     Create( NULL, _T("Hello, World!") );
@@ -65,7 +65,7 @@ CMainFrame::~CMainFrame()
 {
     Cleanup();
 }
- 
+
 BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 {
     CFrameWnd::PreCreateWindow(cs);
@@ -74,7 +74,7 @@ BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 
     return TRUE;
 }
- 
+
 void CMainFrame::OnPaint()
 {
     Render();
@@ -88,7 +88,7 @@ HRESULT CMainFrame::InitD3D()
     {
         return E_FAIL;
     }
- 
+
     D3DPRESENT_PARAMETERS d3dpp;
     d3dpp.BackBufferWidth             = 0;
     d3dpp.BackBufferHeight            = 0;
@@ -104,7 +104,7 @@ HRESULT CMainFrame::InitD3D()
     d3dpp.Flags                       = 0;
     d3dpp.FullScreen_RefreshRateInHz  = 0;
     d3dpp.PresentationInterval        = 0;
- 
+
     hr = m_pD3D->CreateDevice( D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, m_hWnd,
                                       D3DCREATE_SOFTWARE_VERTEXPROCESSING,
                                       &d3dpp, &m_pd3dDevice );
@@ -112,10 +112,10 @@ HRESULT CMainFrame::InitD3D()
     {
         return E_FAIL;
     }
- 
+
     return S_OK;
 }
- 
+
 HRESULT CMainFrame::InitFont()
 {
     HRESULT hr;
@@ -130,64 +130,64 @@ HRESULT CMainFrame::InitFont()
     lf.Quality         = PROOF_QUALITY;
     lf.PitchAndFamily  = FIXED_PITCH | FF_MODERN;
     lstrcpy( lf.FaceName, _T("‚l‚r ƒSƒVƒbƒN") );
- 
+
     hr = D3DXCreateFontIndirect(m_pd3dDevice, &lf, &m_pd3dFont );
     if ( FAILED( hr ) )
     {
         Cleanup();
         return hr;
     }
- 
+
     hr = m_pd3dFont->DrawText(
-        NULL, 
+        NULL,
         _T("Hello, DirectX(MFC) World!"),
         -1,
         &m_rect,
         DT_CALCRECT | DT_LEFT | DT_SINGLELINE,
         0xffffffff
     );
- 
+
     if ( FAILED( hr ) )
     {
         Cleanup();
         return hr;
     }
- 
+
     return hr;
 }
- 
+
 VOID CMainFrame::Cleanup()
 {
     if ( m_pd3dFont != NULL )
     {
         m_pd3dFont->Release();
     }
- 
+
     if( m_pd3dDevice != NULL )
     {
         m_pd3dDevice->Release();
     }
- 
+
     if( m_pD3D != NULL )
     {
         m_pD3D->Release();
     }
 }
- 
+
 VOID CMainFrame::Render()
 {
     if( m_pd3dDevice == NULL )
     {
         return;
     }
- 
+
     if ( m_pd3dFont == NULL )
     {
         return;
     }
- 
+
     m_pd3dDevice->Clear( 0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB( 0, 0, 255 ), 1.0f, 0 );
- 
+
     if( SUCCEEDED( m_pd3dDevice->BeginScene() ) )
     {
         m_pd3dFont->DrawText(
@@ -197,9 +197,9 @@ VOID CMainFrame::Render()
             &m_rect,
             DT_LEFT | DT_SINGLELINE, 0xffffffff
         );
- 
+
         m_pd3dDevice->EndScene();
     }
- 
+
     m_pd3dDevice->Present( NULL, NULL, NULL, NULL );
 }

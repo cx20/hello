@@ -2,17 +2,17 @@
 #include <tchar.h>
 #include <d3d9.h>
 #include <d3dx9.h>
- 
+
 LPDIRECT3D9         g_pD3D       = NULL;
 LPDIRECT3DDEVICE9   g_pd3dDevice = NULL;
 LPD3DXFONT          g_pd3dFont   = NULL;
 RECT                g_rect       = { 0, 0, 0, 0 };
- 
+
 HRESULT InitD3D( HWND hWnd );
 HRESULT InitFont();
 VOID Cleanup();
 VOID Render();
- 
+
 HRESULT InitD3D( HWND hWnd )
 {
     HRESULT hr;
@@ -21,7 +21,7 @@ HRESULT InitD3D( HWND hWnd )
     {
         return E_FAIL;
     }
- 
+
     D3DPRESENT_PARAMETERS d3dpp;
     d3dpp.BackBufferWidth             = 0;
     d3dpp.BackBufferHeight            = 0;
@@ -37,7 +37,7 @@ HRESULT InitD3D( HWND hWnd )
     d3dpp.Flags                       = 0;
     d3dpp.FullScreen_RefreshRateInHz  = 0;
     d3dpp.PresentationInterval        = 0;
- 
+
     hr = g_pD3D->CreateDevice( D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd,
                                       D3DCREATE_SOFTWARE_VERTEXPROCESSING,
                                       &d3dpp, &g_pd3dDevice );
@@ -45,10 +45,10 @@ HRESULT InitD3D( HWND hWnd )
     {
         return E_FAIL;
     }
- 
+
     return S_OK;
 }
- 
+
 HRESULT InitFont()
 {
     HRESULT hr;
@@ -63,64 +63,64 @@ HRESULT InitFont()
     lf.Quality         = PROOF_QUALITY;
     lf.PitchAndFamily  = FIXED_PITCH | FF_MODERN;
     lstrcpy( lf.FaceName, _T("‚l‚r ƒSƒVƒbƒN") );
- 
+
     hr = D3DXCreateFontIndirect(g_pd3dDevice, &lf, &g_pd3dFont );
     if ( FAILED( hr ) )
     {
         Cleanup();
         return hr;
     }
- 
+
     hr = g_pd3dFont->DrawText(
-        NULL, 
+        NULL,
         _T("Hello, DirectX(C++) World!"),
         -1,
         &g_rect,
         DT_CALCRECT | DT_LEFT | DT_SINGLELINE,
         0xffffffff
     );
- 
+
     if ( FAILED( hr ) )
     {
         Cleanup();
         return hr;
     }
- 
+
     return hr;
 }
- 
+
 VOID Cleanup()
 {
     if ( g_pd3dFont != NULL )
     {
         g_pd3dFont->Release();
     }
- 
+
     if( g_pd3dDevice != NULL )
     {
         g_pd3dDevice->Release();
     }
- 
+
     if( g_pD3D != NULL )
     {
         g_pD3D->Release();
     }
 }
- 
+
 VOID Render()
 {
     if( g_pd3dDevice == NULL )
     {
         return;
     }
- 
+
     if ( g_pd3dFont == NULL )
     {
         return;
     }
- 
+
     g_pd3dDevice->Clear( 0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB( 0, 0, 255 ), 1.0f, 0 );
- 
+
     if( SUCCEEDED( g_pd3dDevice->BeginScene() ) )
     {
         g_pd3dFont->DrawText(
@@ -130,13 +130,13 @@ VOID Render()
             &g_rect,
             DT_LEFT | DT_SINGLELINE, 0xffffffff
         );
- 
+
         g_pd3dDevice->EndScene();
     }
- 
+
     g_pd3dDevice->Present( NULL, NULL, NULL, NULL );
 }
- 
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch( message )
@@ -145,22 +145,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             Cleanup();
             PostQuitMessage( 0 );
             return 0;
- 
+
         case WM_PAINT:
             Render();
             ValidateRect( hWnd, NULL );
             return 0;
     }
- 
+
     return DefWindowProc( hWnd, message, wParam, lParam );
 }
- 
- 
+
+
 int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
 {
     LPCTSTR lpszClassName = _T("helloWindow");
     LPCTSTR lpszWindowName = _T("Hello, World!");
- 
+
     WNDCLASSEX wcex;
     wcex.cbSize = sizeof(WNDCLASSEX);
     wcex.style          = CS_HREDRAW | CS_VREDRAW;
@@ -174,7 +174,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
     wcex.lpszMenuName   = NULL;
     wcex.lpszClassName  = lpszClassName;
     wcex.hIconSm        = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
- 
+
     RegisterClassEx(&wcex);
     HWND hWnd = CreateWindow(
         lpszClassName,
@@ -183,19 +183,19 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
         CW_USEDEFAULT, CW_USEDEFAULT, 640, 480,
         NULL, NULL, hInstance, NULL
         );
- 
+
     InitD3D( hWnd );
     InitFont();
- 
+
     ShowWindow( hWnd, SW_SHOWDEFAULT );
     UpdateWindow( hWnd );
- 
+
     MSG msg;
     while( GetMessage( &msg, NULL, 0, 0 ) )
     {
         TranslateMessage( &msg );
         DispatchMessage( &msg );
     }
- 
+
     return 0;
 }

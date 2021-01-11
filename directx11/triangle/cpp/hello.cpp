@@ -38,15 +38,15 @@ void InitD3D(HWND hWnd)
 
     ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
 
-    scd.BufferCount = 1;
-    scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    scd.BufferDesc.Width = SCREEN_WIDTH;
-    scd.BufferDesc.Height = SCREEN_HEIGHT;
-    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    scd.OutputWindow = hWnd;
-    scd.SampleDesc.Count = 4;
-    scd.Windowed = TRUE;
-    scd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    scd.BufferCount         = 1;
+    scd.BufferDesc.Format   = DXGI_FORMAT_R8G8B8A8_UNORM;
+    scd.BufferDesc.Width    = SCREEN_WIDTH;
+    scd.BufferDesc.Height   = SCREEN_HEIGHT;
+    scd.BufferUsage         = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    scd.OutputWindow        = hWnd;
+    scd.SampleDesc.Count    = 4;
+    scd.Windowed            = TRUE;
+    scd.Flags               = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
     D3D11CreateDeviceAndSwapChain(NULL,
                                   D3D_DRIVER_TYPE_HARDWARE,
@@ -124,9 +124,9 @@ void InitGraphics()
     D3D11_BUFFER_DESC bd;
     ZeroMemory(&bd, sizeof(bd));
 
-    bd.Usage = D3D11_USAGE_DYNAMIC;
-    bd.ByteWidth = sizeof(VERTEX) * 3;
-    bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    bd.Usage          = D3D11_USAGE_DYNAMIC;
+    bd.ByteWidth      = sizeof(VERTEX) * 3;
+    bd.BindFlags      = D3D11_BIND_VERTEX_BUFFER;
     bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
     dev->CreateBuffer(&bd, NULL, &pVBuffer);
@@ -183,12 +183,12 @@ int WINAPI WinMain(HINSTANCE hInstance,
 
     ZeroMemory(&wc, sizeof(WNDCLASSEX));
 
-    wc.cbSize = sizeof(WNDCLASSEX);
-    wc.style = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc = WndProc;
-    wc.hInstance = hInstance;
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.lpszClassName = _T("WindowClass");
+    wc.cbSize           = sizeof(WNDCLASSEX);
+    wc.style            = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc      = WndProc;
+    wc.hInstance        = hInstance;
+    wc.hCursor          = LoadCursor(NULL, IDC_ARROW);
+    wc.lpszClassName    = _T("WindowClass");
 
     RegisterClassEx(&wc);
 

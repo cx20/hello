@@ -1,5 +1,5 @@
 #include <atlbase.h>
-#include <atlwin.h> 
+#include <atlwin.h>
 #include <d3d9.h>
 #include <d3dx9.h>
 
@@ -11,7 +11,7 @@ public:
         m_pD3D       = NULL;
         m_pd3dDevice = NULL;
         m_pd3dFont   = NULL;
-        
+
         memset( &m_rect, 0, sizeof(m_rect) );
     }
 
@@ -19,13 +19,13 @@ public:
         MESSAGE_HANDLER( WM_PAINT,   OnPaint   )
         MESSAGE_HANDLER( WM_DESTROY, OnDestroy )
     END_MSG_MAP()
- 
+
     LRESULT OnPaint( UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled )
     {
         Render();
         return 0;
     }
- 
+
     LRESULT OnDestroy( UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled )
     {
         Cleanup();
@@ -41,7 +41,7 @@ public:
         {
             return E_FAIL;
         }
-     
+
         D3DPRESENT_PARAMETERS d3dpp;
         d3dpp.BackBufferWidth             = 0;
         d3dpp.BackBufferHeight            = 0;
@@ -57,7 +57,7 @@ public:
         d3dpp.Flags                       = 0;
         d3dpp.FullScreen_RefreshRateInHz  = 0;
         d3dpp.PresentationInterval        = 0;
-     
+
         hr = m_pD3D->CreateDevice( D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, m_hWnd,
                                           D3DCREATE_SOFTWARE_VERTEXPROCESSING,
                                           &d3dpp, &m_pd3dDevice );
@@ -65,10 +65,10 @@ public:
         {
             return E_FAIL;
         }
-     
+
         return S_OK;
     }
-     
+
     HRESULT InitFont()
     {
         HRESULT hr;
@@ -83,64 +83,64 @@ public:
         lf.Quality         = PROOF_QUALITY;
         lf.PitchAndFamily  = FIXED_PITCH | FF_MODERN;
         lstrcpy( lf.FaceName, _T("‚l‚r ƒSƒVƒbƒN") );
-     
+
         hr = D3DXCreateFontIndirect(m_pd3dDevice, &lf, &m_pd3dFont );
         if ( FAILED( hr ) )
         {
             Cleanup();
             return hr;
         }
-     
+
         hr = m_pd3dFont->DrawText(
-            NULL, 
+            NULL,
             _T("Hello, DirectX(ATL) World!"),
             -1,
             &m_rect,
             DT_CALCRECT | DT_LEFT | DT_SINGLELINE,
             0xffffffff
         );
-     
+
         if ( FAILED( hr ) )
         {
             Cleanup();
             return hr;
         }
-     
+
         return hr;
     }
-     
+
     VOID Cleanup()
     {
         if ( m_pd3dFont != NULL )
         {
             m_pd3dFont->Release();
         }
-     
+
         if( m_pd3dDevice != NULL )
         {
             m_pd3dDevice->Release();
         }
-     
+
         if( m_pD3D != NULL )
         {
             m_pD3D->Release();
         }
     }
-     
+
     VOID Render()
     {
         if( m_pd3dDevice == NULL )
         {
             return;
         }
-     
+
         if ( m_pd3dFont == NULL )
         {
             return;
         }
-     
+
         m_pd3dDevice->Clear( 0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB( 0, 0, 255 ), 1.0f, 0 );
-     
+
         if( SUCCEEDED( m_pd3dDevice->BeginScene() ) )
         {
             m_pd3dFont->DrawText(
@@ -150,10 +150,10 @@ public:
                 &m_rect,
                 DT_LEFT | DT_SINGLELINE, 0xffffffff
             );
-     
+
             m_pd3dDevice->EndScene();
         }
-     
+
         m_pd3dDevice->Present( NULL, NULL, NULL, NULL );
     }
 
@@ -163,13 +163,13 @@ private:
     LPD3DXFONT          m_pd3dFont;
     RECT                m_rect;
 };
- 
+
 CComModule _Module;
- 
+
 int APIENTRY _tWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow )
 {
     _Module.Init(NULL, hInstance);
- 
+
     CHelloWindow wnd;
     wnd.Create( NULL, CWindow::rcDefault, _T("Hello, World!"), WS_OVERLAPPEDWINDOW | WS_VISIBLE );
     wnd.ResizeClient( 640, 480 );
@@ -180,8 +180,8 @@ int APIENTRY _tWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpC
         TranslateMessage( &msg );
         DispatchMessage( &msg );
     }
- 
+
     _Module.Term();
- 
+
     return (int)msg.wParam;
 }

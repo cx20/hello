@@ -3,7 +3,7 @@
 #include <atlcrack.h>
 #include <d3d9.h>
 #include <d3dx9.h>
- 
+
 class CHelloWindow : public CWindowImpl<CHelloWindow>
 {
 public:
