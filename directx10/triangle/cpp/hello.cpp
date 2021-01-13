@@ -2,7 +2,6 @@
 #include <tchar.h>
 #include <d3d10.h>
 #include <d3dx10.h>
-#include <stdio.h>
 
 #pragma comment (lib, "d3d10.lib")
 #pragma comment (lib, "d3dx10.lib")
@@ -10,6 +9,7 @@
 struct VERTEX
 {
     D3DXVECTOR3 Pos;
+    D3DXVECTOR4 Color;
 };
 
 HINSTANCE               g_hInst = NULL;
@@ -133,7 +133,8 @@ HRESULT InitDevice()
 
     D3D10_INPUT_ELEMENT_DESC layout[] =
     {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D10_INPUT_PER_VERTEX_DATA, 0 },
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D10_INPUT_PER_VERTEX_DATA, 0 },
+        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D10_INPUT_PER_VERTEX_DATA, 0 }
     };
     UINT numElements = sizeof( layout ) / sizeof( layout[0] );
 
@@ -148,9 +149,9 @@ HRESULT InitDevice()
 
     VERTEX vertices[] =
     {
-        D3DXVECTOR3(  0.0f,  0.5f, 0.5f ),
-        D3DXVECTOR3(  0.5f, -0.5f, 0.5f ),
-        D3DXVECTOR3( -0.5f, -0.5f, 0.5f ),
+        { D3DXVECTOR3(  0.0f,  0.5f, 0.5f ), D3DXVECTOR4(1.0f, 0.0f, 0.0f, 1.0f) },
+        { D3DXVECTOR3(  0.5f, -0.5f, 0.5f ), D3DXVECTOR4(0.0f, 1.0f, 0.0f, 1.0f) },
+        { D3DXVECTOR3( -0.5f, -0.5f, 0.5f ), D3DXVECTOR4(0.0f, 0.0f, 1.0f, 1.0f) },
     };
     D3D10_BUFFER_DESC bd = { 0 };
     bd.Usage          = D3D10_USAGE_DEFAULT;
