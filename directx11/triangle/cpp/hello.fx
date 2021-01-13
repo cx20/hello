@@ -1,12 +1,12 @@
-struct VOut
+struct VS_OUTPUT
 {
     float4 position : SV_POSITION;
-    float4 color : COLOR;
+    float4 color : COLOR0;
 };
 
-VOut VShader(float4 position : POSITION, float4 color : COLOR)
+VS_OUTPUT VS(float4 position : POSITION, float4 color : COLOR)
 {
-    VOut output;
+    VS_OUTPUT output = (VS_OUTPUT)0;
 
     output.position = position;
     output.color = color;
@@ -14,8 +14,7 @@ VOut VShader(float4 position : POSITION, float4 color : COLOR)
     return output;
 }
 
-
-float4 PShader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
+float4 PS( VS_OUTPUT input ) : SV_Target
 {
-    return color;
+    return input.color;
 }

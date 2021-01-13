@@ -1,233 +1,299 @@
 #include <windows.h>
-#include <windowsx.h>
-#include <tchar.h>
 #include <d3d11.h>
 #include <d3dx11.h>
-#include <d3dx10.h>
+#include <d3dcompiler.h>
+#include <xnamath.h>
 
 #pragma comment (lib, "d3d11.lib")
 #pragma comment (lib, "d3dx11.lib")
 
-#define SCREEN_WIDTH  640
-#define SCREEN_HEIGHT 480
-
-IDXGISwapChain* swapchain;
-ID3D11Device* dev;
-ID3D11DeviceContext* devcon;
-ID3D11RenderTargetView* backbuffer;
-ID3D11InputLayout* pLayout;
-ID3D11VertexShader* pVS;
-ID3D11PixelShader* pPS;
-ID3D11Buffer* pVBuffer;
-
-struct VERTEX {
-    FLOAT X, Y, Z;
-    D3DXCOLOR Color;
+struct VERTEX
+{
+    XMFLOAT3 Pos;
+    XMFLOAT4 Color;
 };
 
-void InitD3D(HWND hWnd);
-void RenderFrame(void);
-void CleanD3D(void);
-void InitGraphics(void);
-void InitPipeline(void);
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+HINSTANCE               g_hInst = NULL;
+HWND                    g_hWnd = NULL;
+D3D_DRIVER_TYPE         g_driverType = D3D_DRIVER_TYPE_NULL;
+D3D_FEATURE_LEVEL       g_featureLevel = D3D_FEATURE_LEVEL_11_0;
+ID3D11Device*           g_pd3dDevice = NULL;
+ID3D11DeviceContext*    g_pImmediateContext = NULL;
+IDXGISwapChain*         g_pSwapChain = NULL;
+ID3D11RenderTargetView* g_pRenderTargetView = NULL;
+ID3D11VertexShader*     g_pVertexShader = NULL;
+ID3D11PixelShader*      g_pPixelShader = NULL;
+ID3D11InputLayout*      g_pVertexLayout = NULL;
+ID3D11Buffer*           g_pVertexBuffer = NULL;
 
-void InitD3D(HWND hWnd)
+HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
+HRESULT InitDevice();
+void CleanupDevice();
+LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
+void Render();
+
+HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
 {
-    DXGI_SWAP_CHAIN_DESC scd;
+    WNDCLASSEX wcex = { 0 };
+    wcex.cbSize        = sizeof( WNDCLASSEX );
+    wcex.style         = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc   = WndProc;
+    wcex.cbClsExtra    = 0;
+    wcex.cbWndExtra    = 0;
+    wcex.hInstance     = hInstance;
+    wcex.hCursor       = LoadCursor( NULL, IDC_ARROW );
+    wcex.hbrBackground = ( HBRUSH )( COLOR_WINDOW + 1 );
+    wcex.lpszMenuName  = NULL;
+    wcex.lpszClassName = L"WindowClass";
+    if( !RegisterClassEx( &wcex ) )
+        return E_FAIL;
 
-    ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
+    g_hInst = hInstance;
+    RECT rc = { 0, 0, 640, 480 };
+    AdjustWindowRect( &rc, WS_OVERLAPPEDWINDOW, FALSE );
+    g_hWnd = CreateWindow( L"WindowClass", L"Hello, World!",
+                           WS_OVERLAPPEDWINDOW,
+                           CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, NULL, NULL, hInstance,
+                           NULL );
+    if( !g_hWnd )
+        return E_FAIL;
 
-    scd.BufferCount         = 1;
-    scd.BufferDesc.Format   = DXGI_FORMAT_R8G8B8A8_UNORM;
-    scd.BufferDesc.Width    = SCREEN_WIDTH;
-    scd.BufferDesc.Height   = SCREEN_HEIGHT;
-    scd.BufferUsage         = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    scd.OutputWindow        = hWnd;
-    scd.SampleDesc.Count    = 4;
-    scd.Windowed            = TRUE;
-    scd.Flags               = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    ShowWindow( g_hWnd, nCmdShow );
 
-    D3D11CreateDeviceAndSwapChain(NULL,
-                                  D3D_DRIVER_TYPE_HARDWARE,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  D3D11_SDK_VERSION,
-                                  &scd,
-                                  &swapchain,
-                                  &dev,
-                                  NULL,
-                                  &devcon);
+    return S_OK;
+}
 
-    ID3D11Texture2D* pBackBuffer;
-    swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
 
-    dev->CreateRenderTargetView(pBackBuffer, NULL, &backbuffer);
+HRESULT CompileShaderFromFile( WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut )
+{
+    HRESULT hr = S_OK;
+
+    DWORD dwShaderFlags = D3DCOMPILE_ENABLE_STRICTNESS;
+
+    ID3DBlob* pErrorBlob;
+    hr = D3DX11CompileFromFile( szFileName, NULL, NULL, szEntryPoint, szShaderModel, 
+        dwShaderFlags, 0, NULL, ppBlobOut, &pErrorBlob, NULL );
+    if( FAILED(hr) )
+    {
+        if( pErrorBlob ) pErrorBlob->Release();
+        return hr;
+    }
+    if( pErrorBlob ) pErrorBlob->Release();
+
+    return S_OK;
+}
+
+HRESULT InitDevice()
+{
+    HRESULT hr = S_OK;
+
+    RECT rc;
+    GetClientRect( g_hWnd, &rc );
+    UINT width = rc.right - rc.left;
+    UINT height = rc.bottom - rc.top;
+
+    UINT createDeviceFlags = 0;
+
+    D3D_DRIVER_TYPE driverTypes[] =
+    {
+        D3D_DRIVER_TYPE_HARDWARE,
+        D3D_DRIVER_TYPE_WARP,
+        D3D_DRIVER_TYPE_REFERENCE,
+    };
+    UINT numDriverTypes = ARRAYSIZE( driverTypes );
+
+    D3D_FEATURE_LEVEL featureLevels[] =
+    {
+        D3D_FEATURE_LEVEL_11_0,
+    };
+    UINT numFeatureLevels = ARRAYSIZE( featureLevels );
+
+    DXGI_SWAP_CHAIN_DESC sd = { 0 };
+    sd.BufferCount = 1;
+    sd.BufferDesc.Width = width;
+    sd.BufferDesc.Height = height;
+    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.BufferDesc.RefreshRate.Numerator = 60;
+    sd.BufferDesc.RefreshRate.Denominator = 1;
+    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    sd.OutputWindow = g_hWnd;
+    sd.SampleDesc.Count = 1;
+    sd.SampleDesc.Quality = 0;
+    sd.Windowed = TRUE;
+
+    for( UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; driverTypeIndex++ )
+    {
+        g_driverType = driverTypes[driverTypeIndex];
+        hr = D3D11CreateDeviceAndSwapChain( NULL, g_driverType, NULL, createDeviceFlags, featureLevels, numFeatureLevels,
+                                            D3D11_SDK_VERSION, &sd, &g_pSwapChain, &g_pd3dDevice, &g_featureLevel, &g_pImmediateContext );
+        if( SUCCEEDED( hr ) )
+            break;
+    }
+    if( FAILED( hr ) )
+        return hr;
+
+    ID3D11Texture2D* pBackBuffer = NULL;
+    hr = g_pSwapChain->GetBuffer( 0, __uuidof( ID3D11Texture2D ), ( LPVOID* )&pBackBuffer );
+    if( FAILED( hr ) )
+        return hr;
+
+    hr = g_pd3dDevice->CreateRenderTargetView( pBackBuffer, NULL, &g_pRenderTargetView );
     pBackBuffer->Release();
+    if( FAILED( hr ) )
+        return hr;
 
-    devcon->OMSetRenderTargets(1, &backbuffer, NULL);
+    g_pImmediateContext->OMSetRenderTargets( 1, &g_pRenderTargetView, NULL );
 
-    D3D11_VIEWPORT viewport;
-    ZeroMemory(&viewport, sizeof(D3D11_VIEWPORT));
+    D3D11_VIEWPORT vp = { 0 };
+    vp.Width    = (FLOAT)width;
+    vp.Height   = (FLOAT)height;
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+    vp.TopLeftX = 0;
+    vp.TopLeftY = 0;
+    g_pImmediateContext->RSSetViewports( 1, &vp );
 
-    viewport.TopLeftX = 0;
-    viewport.TopLeftY = 0;
-    viewport.Width = SCREEN_WIDTH;
-    viewport.Height = SCREEN_HEIGHT;
+    ID3DBlob* pVSBlob = NULL;
+    hr = CompileShaderFromFile( L"hello.fx", "VS", "vs_4_0", &pVSBlob );
+    if( FAILED( hr ) )
+        return hr;
 
-    devcon->RSSetViewports(1, &viewport);
-
-    InitPipeline();
-    InitGraphics();
-}
-
-void RenderFrame(void)
-{
-    devcon->ClearRenderTargetView(backbuffer, D3DXCOLOR(1.0f, 1.0f, 1.0f, 1.0f));
-
-    UINT stride = sizeof(VERTEX);
-    UINT offset = 0;
-    devcon->IASetVertexBuffers(0, 1, &pVBuffer, &stride, &offset);
-    devcon->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    devcon->Draw(3, 0);
-
-    swapchain->Present(0, 0);
-}
-
-
-void CleanD3D(void)
-{
-    swapchain->SetFullscreenState(FALSE, NULL);
-
-    pLayout->Release();
-    pVS->Release();
-    pPS->Release();
-    pVBuffer->Release();
-    swapchain->Release();
-    backbuffer->Release();
-    dev->Release();
-    devcon->Release();
-}
-
-void InitGraphics()
-{
-    VERTEX Vertices[] =
+    hr = g_pd3dDevice->CreateVertexShader( pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), NULL, &g_pVertexShader );
+    if( FAILED( hr ) )
     {
-        { 0.0f,  0.5f, 0.0f, D3DXCOLOR(1.0f, 0.0f, 0.0f, 1.0f)},
-        { 0.5f, -0.5f, 0.0f, D3DXCOLOR(0.0f, 1.0f, 0.0f, 1.0f)},
-        {-0.5f, -0.5f, 0.0f, D3DXCOLOR(0.0f, 0.0f, 1.0f, 1.0f)}
+        pVSBlob->Release();
+        return hr;
+    }
+
+    D3D11_INPUT_ELEMENT_DESC layout[] =
+    {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 }
     };
+    UINT numElements = ARRAYSIZE( layout );
 
+    hr = g_pd3dDevice->CreateInputLayout( layout, numElements, pVSBlob->GetBufferPointer(),
+                                          pVSBlob->GetBufferSize(), &g_pVertexLayout );
+    pVSBlob->Release();
+    if( FAILED( hr ) )
+        return hr;
 
-    D3D11_BUFFER_DESC bd;
-    ZeroMemory(&bd, sizeof(bd));
+    g_pImmediateContext->IASetInputLayout( g_pVertexLayout );
 
-    bd.Usage          = D3D11_USAGE_DYNAMIC;
-    bd.ByteWidth      = sizeof(VERTEX) * 3;
+    ID3DBlob* pPSBlob = NULL;
+    hr = CompileShaderFromFile( L"hello.fx", "PS", "ps_4_0", &pPSBlob );
+    if( FAILED( hr ) )
+        return hr;
+
+    hr = g_pd3dDevice->CreatePixelShader( pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), NULL, &g_pPixelShader );
+    pPSBlob->Release();
+    if( FAILED( hr ) )
+        return hr;
+
+    VERTEX vertices[] =
+    {
+        { XMFLOAT3(  0.0f,  0.5f, 0.5f ), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) },
+        { XMFLOAT3(  0.5f, -0.5f, 0.5f ), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) },
+        { XMFLOAT3( -0.5f, -0.5f, 0.5f ), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f) },
+    };
+    D3D11_BUFFER_DESC bd = { 0 };
+    bd.Usage          = D3D11_USAGE_DEFAULT;
+    bd.ByteWidth      = sizeof( VERTEX ) * 3;
     bd.BindFlags      = D3D11_BIND_VERTEX_BUFFER;
-    bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    bd.CPUAccessFlags = 0;
+    D3D11_SUBRESOURCE_DATA InitData = { 0 };
+    InitData.pSysMem = vertices;
+    hr = g_pd3dDevice->CreateBuffer( &bd, &InitData, &g_pVertexBuffer );
+    if( FAILED( hr ) )
+        return hr;
 
-    dev->CreateBuffer(&bd, NULL, &pVBuffer);
+    UINT stride = sizeof( VERTEX );
+    UINT offset = 0;
+    g_pImmediateContext->IASetVertexBuffers( 0, 1, &g_pVertexBuffer, &stride, &offset );
 
-    D3D11_MAPPED_SUBRESOURCE ms;
-    devcon->Map(pVBuffer, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms);
-    memcpy(ms.pData, Vertices, sizeof(Vertices));
-    devcon->Unmap(pVBuffer, NULL);
+    g_pImmediateContext->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
+
+    return S_OK;
 }
 
-void InitPipeline()
+void CleanupDevice()
 {
-    ID3D10Blob *VS, *PS;
-    D3DX11CompileFromFile(L"hello.fx", 0, 0, "VShader", "vs_4_0", 0, 0, 0, &VS, 0, 0);
-    D3DX11CompileFromFile(L"hello.fx", 0, 0, "PShader", "ps_4_0", 0, 0, 0, &PS, 0, 0);
+    if( g_pImmediateContext ) g_pImmediateContext->ClearState();
 
-    dev->CreateVertexShader(VS->GetBufferPointer(), VS->GetBufferSize(), NULL, &pVS);
-    dev->CreatePixelShader(PS->GetBufferPointer(), PS->GetBufferSize(), NULL, &pPS);
-
-    devcon->VSSetShader(pVS, 0, 0);
-    devcon->PSSetShader(pPS, 0, 0);
-
-    D3D11_INPUT_ELEMENT_DESC ied[] =
-    {
-        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-    };
-
-    dev->CreateInputLayout(ied, 2, VS->GetBufferPointer(), VS->GetBufferSize(), &pLayout);
-    devcon->IASetInputLayout(pLayout);
+    if( g_pVertexBuffer ) g_pVertexBuffer->Release();
+    if( g_pVertexLayout ) g_pVertexLayout->Release();
+    if( g_pVertexShader ) g_pVertexShader->Release();
+    if( g_pPixelShader ) g_pPixelShader->Release();
+    if( g_pRenderTargetView ) g_pRenderTargetView->Release();
+    if( g_pSwapChain ) g_pSwapChain->Release();
+    if( g_pImmediateContext ) g_pImmediateContext->Release();
+    if( g_pd3dDevice ) g_pd3dDevice->Release();
 }
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
 {
-    switch(message)
+    PAINTSTRUCT ps;
+    HDC hdc;
+
+    switch( message )
     {
+        case WM_PAINT:
+            hdc = BeginPaint( hWnd, &ps );
+            EndPaint( hWnd, &ps );
+            break;
+
         case WM_DESTROY:
-            {
-                PostQuitMessage(0);
-                return 0;
-            } break;
+            PostQuitMessage( 0 );
+            break;
+
+        default:
+            return DefWindowProc( hWnd, message, wParam, lParam );
     }
 
-    return DefWindowProc(hWnd, message, wParam, lParam);
+    return 0;
 }
 
-int WINAPI WinMain(HINSTANCE hInstance,
-                   HINSTANCE hPrevInstance,
-                   LPSTR lpCmdLine,
-                   int nCmdShow)
+void Render()
 {
-    HWND hWnd;
-    WNDCLASSEX wc;
+    float ClearColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    g_pImmediateContext->ClearRenderTargetView( g_pRenderTargetView, ClearColor );
 
-    ZeroMemory(&wc, sizeof(WNDCLASSEX));
+    g_pImmediateContext->VSSetShader( g_pVertexShader, NULL, 0 );
+    g_pImmediateContext->PSSetShader( g_pPixelShader, NULL, 0 );
+    g_pImmediateContext->Draw( 3, 0 );
 
-    wc.cbSize           = sizeof(WNDCLASSEX);
-    wc.style            = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc      = WndProc;
-    wc.hInstance        = hInstance;
-    wc.hCursor          = LoadCursor(NULL, IDC_ARROW);
-    wc.lpszClassName    = _T("WindowClass");
+    g_pSwapChain->Present( 0, 0 );
+}
 
-    RegisterClassEx(&wc);
+int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow )
+{
+    UNREFERENCED_PARAMETER( hPrevInstance );
+    UNREFERENCED_PARAMETER( lpCmdLine );
 
-    RECT wr = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
-    AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
+    if( FAILED( InitWindow( hInstance, nCmdShow ) ) )
+        return 0;
 
-    hWnd = CreateWindowEx(NULL,
-                          _T("WindowClass"),
-                          _T("Hello, World!"),
-                          WS_OVERLAPPEDWINDOW,
-                          640,
-                          480,
-                          wr.right - wr.left,
-                          wr.bottom - wr.top,
-                          NULL,
-                          NULL,
-                          hInstance,
-                          NULL);
-
-    ShowWindow(hWnd, nCmdShow);
-
-    InitD3D(hWnd);
-
-    MSG msg;
-    while(TRUE)
+    if( FAILED( InitDevice() ) )
     {
-        if(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-
-            if(msg.message == WM_QUIT)
-                break;
-        }
-
-        RenderFrame();
+        CleanupDevice();
+        return 0;
     }
 
-    CleanD3D();
+    MSG msg = {0};
+    while( WM_QUIT != msg.message )
+    {
+        if( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) )
+        {
+            TranslateMessage( &msg );
+            DispatchMessage( &msg );
+        }
+        else
+        {
+            Render();
+        }
+    }
 
-    return msg.wParam;
+    CleanupDevice();
+
+    return ( int )msg.wParam;
 }
