@@ -3,6 +3,8 @@ SET INCLUDE=%DXSDK_DIR%\INCLUDE;%INCLUDE%
 SET LIB=%DXSDK_DIR%\Lib\x86;%LIB%
 
 cl hello.cpp ^
+         /DUNICODE ^
+         /D_UNICODE ^
          /link ^
          user32.lib ^
          /SUBSYSTEM:WINDOWS

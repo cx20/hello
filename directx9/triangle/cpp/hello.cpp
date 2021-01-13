@@ -1,67 +1,33 @@
-#include <windows.h>
 #include <tchar.h>
 #include <d3d9.h>
-#include <d3dx9.h>
 
 #pragma comment (lib, "d3d9.lib")
-#pragma comment (lib, "d3dx9.lib")
-
-LPDIRECT3D9         g_pD3D       = NULL;
-LPDIRECT3DDEVICE9   g_pd3dDevice = NULL;
-LPD3DXFONT          g_pd3dFont   = NULL;
-RECT                g_rect       = { 0, 0, 0, 0 };
-
-#define FVF_VERTEX   (D3DFVF_XYZRHW | D3DFVF_DIFFUSE)
 
 struct VERTEX
 {
-    float       x,y,z;
-    float       rhw; 
-    D3DCOLOR    diffuse;
+    FLOAT x, y, z, rhw;
+    DWORD color;
 };
 
-LPDIRECT3DVERTEXBUFFER9 pVertexBuffer = NULL;
+LPDIRECT3D9             g_pD3D = NULL;
+LPDIRECT3DDEVICE9       g_pd3dDevice = NULL;
+LPDIRECT3DVERTEXBUFFER9 g_pVB = NULL;
 
-VERTEX vertices[] = 
-{ 
-    { 300.0f,   0.0f, 0.0f, 1.0f, D3DCOLOR_XRGB(255, 0, 0) },
-    { 600.0f, 500.0f, 0.0f, 1.0f, D3DCOLOR_XRGB(0, 255, 0) },
-    { 0.0f,   500.0f, 0.0f, 1.0f, D3DCOLOR_XRGB(0, 0, 255) },
-};
-
-HRESULT InitD3D( HWND hWnd );
-VOID Cleanup();
-VOID Render();
+#define D3DFVF_VERTEX (D3DFVF_XYZRHW | D3DFVF_DIFFUSE)
 
 HRESULT InitD3D( HWND hWnd )
 {
-    HRESULT hr;
-    g_pD3D = Direct3DCreate9( D3D_SDK_VERSION );
-    if( g_pD3D == NULL )
-    {
+    if( NULL == ( g_pD3D = Direct3DCreate9( D3D_SDK_VERSION ) ) )
         return E_FAIL;
-    }
 
-    D3DPRESENT_PARAMETERS d3dpp;
-    d3dpp.BackBufferWidth             = 0;
-    d3dpp.BackBufferHeight            = 0;
-    d3dpp.BackBufferFormat            = D3DFMT_UNKNOWN;
-    d3dpp.BackBufferCount             = 0;
-    d3dpp.MultiSampleType             = D3DMULTISAMPLE_NONE;
-    d3dpp.MultiSampleQuality          = 0;
-    d3dpp.SwapEffect                  = D3DSWAPEFFECT_DISCARD;
-    d3dpp.hDeviceWindow               = NULL;
-    d3dpp.Windowed                    = TRUE;
-    d3dpp.EnableAutoDepthStencil      = 0;
-    d3dpp.AutoDepthStencilFormat      = D3DFMT_UNKNOWN;
-    d3dpp.Flags                       = 0;
-    d3dpp.FullScreen_RefreshRateInHz  = 0;
-    d3dpp.PresentationInterval        = 0;
+    D3DPRESENT_PARAMETERS d3dpp = { 0 };
+    d3dpp.Windowed         = TRUE;
+    d3dpp.SwapEffect       = D3DSWAPEFFECT_DISCARD;
+    d3dpp.BackBufferFormat = D3DFMT_UNKNOWN;
 
-    hr = g_pD3D->CreateDevice( D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd,
-                               D3DCREATE_SOFTWARE_VERTEXPROCESSING,
-                               &d3dpp, &g_pd3dDevice );
-    if( FAILED( hr ) )
+    if( FAILED( g_pD3D->CreateDevice( D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd,
+                                      D3DCREATE_SOFTWARE_VERTEXPROCESSING,
+                                      &d3dpp, &g_pd3dDevice ) ) )
     {
         return E_FAIL;
     }
@@ -69,63 +35,82 @@ HRESULT InitD3D( HWND hWnd )
     return S_OK;
 }
 
-VOID Cleanup()
+HRESULT InitVB()
 {
-    if( g_pd3dDevice != NULL )
+    VERTEX vertices[] =
     {
-        g_pd3dDevice->Release();
+        { 300.0f, 100.0f, 0.0f, 1.0f, D3DCOLOR_XRGB(255, 0, 0) },
+        { 500.0f, 400.0f, 0.0f, 1.0f, D3DCOLOR_XRGB(0, 255, 0) },
+        { 100.0f, 400.0f, 0.0f, 1.0f, D3DCOLOR_XRGB(0, 0, 255) },
+    };
+
+    if( FAILED( g_pd3dDevice->CreateVertexBuffer( 3 * sizeof( VERTEX ),
+                                                  0, D3DFVF_VERTEX,
+                                                  D3DPOOL_DEFAULT, &g_pVB, NULL ) ) )
+    {
+        return E_FAIL;
     }
 
-    if( g_pD3D != NULL )
-    {
-        g_pD3D->Release();
-    }
+    VOID* pVertices;
+    if( FAILED( g_pVB->Lock( 0, sizeof( vertices ), ( void** )&pVertices, 0 ) ) )
+        return E_FAIL;
+    memcpy( pVertices, vertices, sizeof( vertices ) );
+    g_pVB->Unlock();
+
+    return S_OK;
 }
 
-VOID Render()
+void Cleanup()
 {
-    if( g_pd3dDevice == NULL )
+    if( g_pVB != NULL )
+        g_pVB->Release();
+
+    if( g_pd3dDevice != NULL )
+        g_pd3dDevice->Release();
+
+    if( g_pD3D != NULL )
+        g_pD3D->Release();
+}
+
+LRESULT WINAPI WndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+    switch( msg )
     {
-        return;
+        case WM_DESTROY:
+            Cleanup();
+            PostQuitMessage( 0 );
+            return 0;
     }
 
+    return DefWindowProc( hWnd, msg, wParam, lParam );
+}
+
+void Render()
+{
     g_pd3dDevice->Clear( 0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB( 255, 255, 255 ), 1.0f, 0 );
 
     if( SUCCEEDED( g_pd3dDevice->BeginScene() ) )
     {
-        g_pd3dDevice->SetFVF(FVF_VERTEX);
-        g_pd3dDevice->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 1, vertices, sizeof(VERTEX)); 
+        g_pd3dDevice->SetStreamSource( 0, g_pVB, 0, sizeof( VERTEX ) );
+        g_pd3dDevice->SetFVF( D3DFVF_VERTEX );
+        g_pd3dDevice->DrawPrimitive( D3DPT_TRIANGLELIST, 0, 1 );
+
         g_pd3dDevice->EndScene();
     }
 
     g_pd3dDevice->Present( NULL, NULL, NULL, NULL );
 }
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow )
 {
-    switch( message )
-    {
-        case WM_DESTROY:
-            Cleanup();
-            PostQuitMessage( 0 );
-            return 0;
+    UNREFERENCED_PARAMETER( hPrevInstance );
+    UNREFERENCED_PARAMETER( lpCmdLine );
 
-        case WM_PAINT:
-            Render();
-            ValidateRect( hWnd, NULL );
-            return 0;
-    }
-
-    return DefWindowProc( hWnd, message, wParam, lParam );
-}
-
-int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
-{
     LPCTSTR lpszClassName = _T("helloWindow");
     LPCTSTR lpszWindowName = _T("Hello, World!");
 
-    WNDCLASSEX wcex;
-    wcex.cbSize = sizeof(WNDCLASSEX);
+    WNDCLASSEX wcex = { 0 };
+    wcex.cbSize         = sizeof(WNDCLASSEX);
     wcex.style          = CS_HREDRAW | CS_VREDRAW;
     wcex.lpfnWndProc    = WndProc;
     wcex.cbClsExtra     = 0;
@@ -137,8 +122,8 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
     wcex.lpszMenuName   = NULL;
     wcex.lpszClassName  = lpszClassName;
     wcex.hIconSm        = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
+    RegisterClassEx( &wcex );
 
-    RegisterClassEx(&wcex);
     HWND hWnd = CreateWindow(
         lpszClassName,
         lpszWindowName,
@@ -147,17 +132,29 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
         NULL, NULL, hInstance, NULL
     );
 
-    InitD3D( hWnd );
+    if( FAILED( InitD3D( hWnd ) ) )
+        return 0;
+
+    if( FAILED( InitVB() ) )
+        return 0;
 
     ShowWindow( hWnd, SW_SHOWDEFAULT );
     UpdateWindow( hWnd );
 
-    MSG msg;
-    while( GetMessage( &msg, NULL, 0, 0 ) )
+    MSG msg = { 0 };
+    while( msg.message != WM_QUIT )
     {
-        TranslateMessage( &msg );
-        DispatchMessage( &msg );
+        if( PeekMessage( &msg, NULL, 0U, 0U, PM_REMOVE ) )
+        {
+            TranslateMessage( &msg );
+            DispatchMessage( &msg );
+        }
+        else
+        {
+            Render();
+        }
     }
 
+    UnregisterClass( lpszClassName, wcex.hInstance );
     return 0;
 }
