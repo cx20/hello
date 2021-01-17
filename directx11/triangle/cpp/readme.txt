@@ -6,7 +6,6 @@ C:\> SET LIB=%LIB%;%DXSDK_DIR%\Lib\x86
 
 C:\> cl hello.cpp ^
          /DUNICODE ^
-         /D_UNICODE ^
          /link ^
          user32.lib ^
          dxguid.lib ^
