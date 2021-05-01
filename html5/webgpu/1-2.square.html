@@ -3,51 +3,54 @@
 <head>
   <title>Testing Square Using WebGPU</title>
   <link rel="stylesheet" type="text/css" href="style.css" />
-  <script src="https://cx20.github.io/webgpu-test/libs/glslang.js"></script>
 </head>
 <body>
 <script id="vs" type="x-shader/x-vertex">
-#version 450
-layout(location = 0) in vec3 position;
-layout(location = 1) in vec4 color;
-layout(location = 0) out vec4 vColor;
-void main() {
-    vColor = color;
-    gl_Position = vec4(position, 1.0);
+[[location(0)]] var<in> position : vec3<f32>;
+[[location(1)]] var<in> color : vec4<f32>;
+[[builtin(position)]] var<out> Position : vec4<f32>;
+[[location(0)]] var<out> fragColor : vec4<f32>;
+
+[[stage(vertex)]]
+fn main() -> void {
+    fragColor = color;
+    Position = vec4<f32>(position, 1.0);
+    return;
 }
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
-#version 450
-layout(location = 0) in vec4 vColor;
-layout(location = 0) out vec4 outColor;
-void main() {
-    outColor = vColor;
+[[location(0)]] var<in> fragColor : vec4<f32>;
+[[location(0)]] var<out> outColor : vec4<f32>;
+
+[[stage(fragment)]]
+fn main() -> void {
+    outColor = fragColor;
+    return;
 }
 </script>
 
 <canvas id="c" width="465" height="465"></canvas>
 <script>
-const ready = glslang();
-ready.then(init);
-const vertexShaderGLSL = document.getElementById("vs").textContent;
-const fragmentShaderGLSL = document.getElementById("fs").textContent;
+init();
+const vertexShaderWGSL = document.getElementById("vs").textContent;
+const fragmentShaderWGSL = document.getElementById("fs").textContent;
 
-async function init(glslang) {
-    const gpu = navigator['gpu']; //
+async function init() {
+    const gpu = navigator["gpu"];
     const adapter = await gpu.requestAdapter();
     const device = await adapter.requestDevice();
 
-    const c = document.getElementById('c');
+    const c = document.getElementById("c");
     c.width = window.innerWidth;
     c.height = window.innerHeight;
-    const ctx = c.getContext('gpupresent')
+    const ctx = c.getContext("gpupresent")
 
     const swapChainFormat = "bgra8unorm";
     const swapChain = configureSwapChain(device, swapChainFormat, ctx);
 
-    let vShaderModule = makeShaderModule_GLSL(glslang, device, 'vertex', vertexShaderGLSL);
-    let fShaderModule = makeShaderModule_GLSL(glslang, device, 'fragment', fragmentShaderGLSL);
+    let vShaderModule = makeShaderModule_WGSL(device, vertexShaderWGSL);
+    let fShaderModule = makeShaderModule_WGSL(device, fragmentShaderWGSL);
 
     // Square data
     //             1.0 y 
@@ -82,17 +85,10 @@ async function init(glslang) {
 
     const pipeline = device.createRenderPipeline({
         layout: device.createPipelineLayout({bindGroupLayouts: []}),
-        vertexStage: {
+        vertex: {
             module: vShaderModule,
-            entryPoint: 'main'
-        },
-        fragmentStage: {
-            module: fShaderModule,
-            entryPoint: 'main'
-        },
-        vertexState: {
-            indexFormat: 'uint32',
-            vertexBuffers: [
+            entryPoint: "main",
+            buffers: [
                 {
                     arrayStride: 3 * 4,
                     attributes: [
@@ -100,7 +96,7 @@ async function init(glslang) {
                             // position
                             shaderLocation: 0,
                             offset: 0,
-                            format: "float3"
+                            format: "float32x3"
                         },
                     ]
                 },
@@ -111,25 +107,32 @@ async function init(glslang) {
                             // color
                             shaderLocation: 1,
                             offset:  0,
-                            format: "float4"
+                            format: "float32x4"
                         }
                     ]
                 }
             ]
         },
-        colorStates: [
-            {
-                format: swapChainFormat,
-                alphaBlend: {
-                    srcFactor: "src-alpha",
-                    dstFactor: "one-minus-src-alpha",
-                    operation: "add"
+        fragment: {
+            module: fShaderModule,
+            entryPoint: "main",
+            targets: [
+                {
+                    format: swapChainFormat,
+                    alpha: {
+                        srcFactor: "src-alpha",
+                        dstFactor: "one-minus-src-alpha",
+                        operation: "add"
+                    }
                 }
-            }
-        ],
-        primitiveTopology: 'triangle-strip',
-        frontFace : "ccw",
-        cullMode : 'none'
+            ],
+        },
+        primitive: {
+            topology: "triangle-strip",
+            stripIndexFormat: "uint32",
+            frontFace : "ccw",
+            cullMode : "none"
+        },
     });
 
     let render =  function () {
@@ -137,7 +140,7 @@ async function init(glslang) {
         const textureView = swapChain.getCurrentTexture().createView();
         const renderPassDescriptor = {
             colorAttachments: [{
-                attachment: textureView,
+                view: textureView,
                 loadValue: {r: 1, g: 1, b: 1, a: 1},
             }]
         };
@@ -147,10 +150,11 @@ async function init(glslang) {
         passEncoder.setPipeline(pipeline);
         passEncoder.draw(4, 1, 0, 0);
         passEncoder.endPass();
-        device.defaultQueue.submit([commandEncoder.finish()]);
+        device.queue.submit([commandEncoder.finish()]);
         requestAnimationFrame(render)
     }
     requestAnimationFrame(render)
+
 }
 
 function configureSwapChain(device, swapChainFormat, context) {
@@ -161,10 +165,9 @@ function configureSwapChain(device, swapChainFormat, context) {
     return context.configureSwapChain(swapChainDescriptor);
 }
 
-function makeShaderModule_GLSL(glslang, device, type, source) {
+function makeShaderModule_WGSL(device, source) {
     let shaderModuleDescriptor = {
-        code: glslang.compileGLSL(source, type),
-        source: source
+        code: source
     };
     let shaderModule = device.createShaderModule(shaderModuleDescriptor);
     return shaderModule;

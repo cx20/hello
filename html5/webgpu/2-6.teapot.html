@@ -3,58 +3,64 @@
 <head>
   <title>Testing Textured Cube Using WebGPU</title>
   <link rel="stylesheet" type="text/css" href="style.css" />
-  <script src="https://cx20.github.io/webgpu-test/libs/glslang.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix.js"></script>
   <script src="//code.jquery.com/jquery-3.4.0.js"></script>
 </head>
 <body>
 <script id="vs" type="x-shader/x-vertex">
-#version 450
-layout(set = 0, binding = 0) uniform Uniforms {
-    mat4 modelViewProjectionMatrix;
-} uniforms;
+[[block]] struct Uniforms {
+    [[offset(0)]] modelViewProjectionMatrix : mat4x4<f32>;
+};
+[[binding(0), set(0)]] var<uniform> uniforms : Uniforms;
 
-layout(location = 0) in vec3 position;
-layout(location = 1) in vec3 normal;
-layout(location = 2) in vec2 textureCoord;
-layout(location = 0) out vec4 vPosition;
-layout(location = 1) out vec3 vNormal;
-layout(location = 2) out vec2 vTextureCoord;
-void main() {
-    vPosition = uniforms.modelViewProjectionMatrix * vec4(position, 1.0);
+[[location(0)]] var<in> position : vec3<f32>;
+[[location(1)]] var<in> normal : vec3<f32>;
+[[location(2)]] var<in> textureCoord : vec2<f32>;
+[[location(0)]] var<out> vPosition: vec4<f32>;
+[[location(1)]] var<out> vNormal: vec3<f32>;
+[[location(2)]] var<out> vTextureCoord : vec2<f32>;
+[[builtin(position)]] var<out> Position : vec4<f32>;
+
+[[stage(vertex)]]
+fn main() -> void {
+    vPosition = uniforms.modelViewProjectionMatrix * vec4<f32>(position, 1.0);
     vNormal = normal;
     vTextureCoord = textureCoord;
-    gl_Position = uniforms.modelViewProjectionMatrix * vec4(position, 1.0);
+    Position = uniforms.modelViewProjectionMatrix * vec4<f32>(position, 1.0);
+    return;
 }
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
-#version 450
-layout(set = 0, binding = 1) uniform sampler mySampler;
-layout(set = 0, binding = 2) uniform texture2D myTexture;
-layout(set = 0, binding = 3) uniform Uniforms {
-    vec3 directLightingLocation;
-} uniforms;
-layout(location = 0) in vec4 vPosition;
-layout(location = 1) in vec3 vNormal;
-layout(location = 2) in vec2 vTextureCoord;
-layout(location = 0) out vec4 outColor;
-void main() {
-    //vec3 uDirectLightingLocation = vec3(100.0, 0.0, 100.0);
-    vec3 lightDirection = normalize(uniforms.directLightingLocation - vPosition.xyz);
-    vec3 normal = normalize(vNormal);
-    float lightWeighting = max(dot(normal, lightDirection), 0.0);
-    vec4 fragmentColor  = texture(sampler2D(myTexture, mySampler), vTextureCoord);
-    outColor = vec4(fragmentColor.rgb * lightWeighting, fragmentColor.a);
+[[binding(1), set(0)]] var mySampler: sampler;
+[[binding(2), set(0)]] var myTexture: texture_2d<f32>;
+[[block]] struct Uniforms {
+    [[offset(0)]] pointLightingLocation : vec3<f32>;
+};
+[[binding(3), set(0)]] var<uniform> uniforms : Uniforms;
+
+[[location(0)]] var<in> vPosition: vec4<f32>;
+[[location(1)]] var<in> vNormal: vec3<f32>;
+[[location(2)]] var<in> vTextureCoord: vec2<f32>;
+[[location(0)]] var<out> outColor : vec4<f32>;
+
+[[stage(fragment)]]
+fn main() -> void {
+    var lightDirection: vec3<f32> = normalize(uniforms.pointLightingLocation - vPosition.xyz);
+    // TODO: Investigate how to do flat shading in WGSL
+    var normal: vec3<f32> = normalize(vNormal);
+    var lightWeighting: f32 = max(dot(normal, lightDirection), 0.0);
+    var fragmentColor: vec4<f32> =  textureSample(myTexture, mySampler, vTextureCoord);
+    outColor = vec4<f32>(fragmentColor.rgb * lightWeighting, fragmentColor.a);
+    return;
 }
 </script>
 
 <canvas id="c" width="465" height="465"></canvas>
 <script>
-const ready = glslang();
-ready.then(init);
-const vertexShaderGLSL = document.getElementById("vs").textContent;
-const fragmentShaderGLSL = document.getElementById("fs").textContent;
+init();
+const vertexShaderWGSL = document.getElementById("vs").textContent;
+const fragmentShaderWGSL = document.getElementById("fs").textContent;
 
 async function init(glslang) {
     const gpu = navigator['gpu']; //
@@ -73,8 +79,8 @@ async function init(glslang) {
     const swapChainFormat = "bgra8unorm";
     const swapChain = configureSwapChain(device, swapChainFormat, ctx);
 
-    let vShaderModule = makeShaderModule_GLSL(glslang, device, 'vertex', vertexShaderGLSL);
-    let fShaderModule = makeShaderModule_GLSL(glslang, device, 'fragment', fragmentShaderGLSL);
+    let vShaderModule = makeShaderModule_WGSL(device, vertexShaderWGSL);
+    let fShaderModule = makeShaderModule_WGSL(device, fragmentShaderWGSL);
 
     let vertexBuffer;
     let normalBuffer;
@@ -85,37 +91,39 @@ async function init(glslang) {
         entries: [{
             binding: 0,
             visibility: GPUShaderStage.VERTEX,
-            type: "uniform-buffer"
+            buffer: {
+                type: "uniform"
+            }
         }, {
             // Sampler
             binding: 1,
             visibility: GPUShaderStage.FRAGMENT,
-            type: "sampler"
+            sampler: {
+                type: 'filtering',
+            }
         }, {
             // Texture view
             binding: 2,
             visibility: GPUShaderStage.FRAGMENT,
-            type: "sampled-texture"
+            texture: {
+                sampleType: 'float',
+            }
         }, {
             // Lighting
             binding: 3,
             visibility: GPUShaderStage.FRAGMENT,
-            type: "uniform-buffer"
+            buffer: {
+                type: "uniform"
+            }
         }]
     });
     const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [uniformsBindGroupLayout] });
     const pipeline = device.createRenderPipeline({
         layout: pipelineLayout,
-        vertexStage: {
+        vertex: {
             module: vShaderModule,
-            entryPoint: 'main'
-        },
-        fragmentStage: {
-            module: fShaderModule,
-            entryPoint: 'main'
-        },
-        vertexState: {
-            vertexBuffers: [
+            entryPoint: 'main',
+            buffers: [
                 {
                     arrayStride: 3 * 4,
                     attributes: [
@@ -123,7 +131,7 @@ async function init(glslang) {
                             // position
                             shaderLocation: 0,
                             offset: 0,
-                            format: "float3"
+                            format: "float32x3"
                         }
                     ]
                 },
@@ -134,7 +142,7 @@ async function init(glslang) {
                             // normal
                             shaderLocation: 1,
                             offset: 0,
-                            format: "float3"
+                            format: "float32x3"
                         }
                     ]
                 },
@@ -145,28 +153,32 @@ async function init(glslang) {
                             // textureCoord
                             shaderLocation: 2,
                             offset:  0,
-                            format: "float2"
+                            format: "float32x2"
                         }
                     ]
                 }
             ]
         },
-        colorStates: [
-            {
-                format: swapChainFormat,
-                alphaBlend: {
-                    srcFactor: "src-alpha",
-                    dstFactor: "one-minus-src-alpha",
-                    operation: "add"
+        fragment: {
+            module: fShaderModule,
+            entryPoint: 'main',
+            targets: [
+                {
+                    format: swapChainFormat,
+                    alphaBlend: {
+                        srcFactor: "src-alpha",
+                        dstFactor: "one-minus-src-alpha",
+                        operation: "add"
+                    }
                 }
-            }
-        ],
-        primitiveTopology: 'triangle-list',
-        rasterizationState: {
+            ],
+        },
+        primitive: {
+            topology: 'triangle-list',
             frontFace : "ccw",
             cullMode : 'none'
         },
-        depthStencilState: {
+        depthStencil: {
             depthWriteEnabled: true,
             depthCompare: "less",
             format: "depth24plus-stencil8",
@@ -235,10 +247,10 @@ async function init(glslang) {
         size: {
             width: c.width,
             height: c.height,
-            depth: 1
+            depthOrArrayLayers: 1
         },
         format: "depth24plus-stencil8",
-        usage: GPUTextureUsage.OUTPUT_ATTACHMENT
+        usage: GPUTextureUsage.RENDER_ATTACHMENT
     });
 
     let render =  function () {
@@ -249,11 +261,11 @@ async function init(glslang) {
         const textureView = swapChain.getCurrentTexture().createView();
         const renderPassDescriptor = {
             colorAttachments: [{
-                attachment: textureView,
+                view: textureView,
                 loadValue: {r: 0, g: 0, b: 0, a: 0},
             }],
             depthStencilAttachment: {
-                attachment: depthTexture.createView(),
+                view: depthTexture.createView(),
                 depthLoadValue: 1.0,
                 depthStoreOp: "store",
                 stencilLoadValue: 0,
@@ -269,7 +281,7 @@ async function init(glslang) {
         passEncoder.setBindGroup(0, uniformBindGroup);
         passEncoder.drawIndexed(indexBuffer.pointNum, 1, 0, 0, 0);
         passEncoder.endPass();
-        device.defaultQueue.submit([commandEncoder.finish()]);
+        device.queue.submit([commandEncoder.finish()]);
         uploadBuffer1.destroy();
         uploadBuffer2.destroy();
         requestAnimationFrame(render);
@@ -294,10 +306,9 @@ function configureSwapChain(device, swapChainFormat, context) {
     return context.configureSwapChain(swapChainDescriptor);
 }
 
-function makeShaderModule_GLSL(glslang, device, type, source) {
+function makeShaderModule_WGSL(device, source) {
     let shaderModuleDescriptor = {
-        code: glslang.compileGLSL(source, type),
-        source: source
+        code: source
     };
     let shaderModule = device.createShaderModule(shaderModuleDescriptor);
     return shaderModule;
@@ -381,7 +392,7 @@ async function createTextureFromImage(device, src, usage) {
         size: {
             width: img.width,
             height: img.height,
-            depth: 1,
+            depthOrArrayLayers: 1
         },
         format: "rgba8unorm",
         usage: GPUTextureUsage.COPY_DST | usage,
@@ -404,10 +415,10 @@ async function createTextureFromImage(device, src, usage) {
     }, {
         width: img.width,
         height: img.height,
-        depth: 1,
+        depthOrArrayLayers: 1
     });
 
-    device.defaultQueue.submit([commandEncoder.finish()]);
+    device.queue.submit([commandEncoder.finish()]);
     textureDataBuffer.destroy();
 
     return texture;
