@@ -3,32 +3,35 @@
 <head>
   <title>Testing Triangle Using WebGPU</title>
   <link rel="stylesheet" type="text/css" href="style.css" />
-  <script src="https://cx20.github.io/webgpu-test/libs/glslang.js"></script>
 </head>
 <body>
 <script id="vs" type="x-shader/x-vertex">
-#version 450
-layout(location = 0) in vec3 position;
-void main() {
-    gl_Position = vec4(position, 1.0);
+[[location(0)]] var<in> position : vec3<f32>;
+[[builtin(position)]] var<out> Position : vec4<f32>;
+
+[[stage(vertex)]]
+fn main() -> void {
+    Position = vec4<f32>(position, 1.0);
+    return;
 }
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
-#version 450
-layout(location = 0) out vec4 outColor;
-void main() {
-    outColor = vec4(0.0, 0.0, 1.0, 1.0);
+[[location(0)]] var<out> outColor : vec4<f32>;
+
+[[stage(fragment)]]
+fn main() -> void {
+    outColor = vec4<f32>(0.0, 0.0, 1.0, 1.0);
+    return;
 }
 </script>
 <canvas id="c" width="465" height="465"></canvas>
 <script>
-const ready = glslang();
-ready.then(init);
-const vertexShaderGLSL = document.getElementById("vs").textContent;
-const fragmentShaderGLSL = document.getElementById("fs").textContent;
+init();
+const vertexShaderWGSL = document.getElementById("vs").textContent;
+const fragmentShaderWGSL = document.getElementById("fs").textContent;
 
-async function init(glslang) {
+async function init() {
     const gpu = navigator['gpu']; //
     const adapter = await gpu.requestAdapter();
     const device = await adapter.requestDevice();
@@ -41,9 +44,9 @@ async function init(glslang) {
     const swapChainFormat = "bgra8unorm";
     const swapChain = configureSwapChain(device, swapChainFormat, ctx);
 
-    let vShaderModule = makeShaderModule_GLSL(glslang, device, 'vertex', vertexShaderGLSL);
-    let fShaderModule = makeShaderModule_GLSL(glslang, device, 'fragment', fragmentShaderGLSL);
-
+    let vShaderModule = makeShaderModule_WGSL(device, vertexShaderWGSL);
+    let fShaderModule = makeShaderModule_WGSL(device, fragmentShaderWGSL);
+    
     let positions = [ 
          0.0, 0.5, 0.0, // v0
         -0.5,-0.5, 0.0, // v1
@@ -53,16 +56,10 @@ async function init(glslang) {
 
     const pipeline = device.createRenderPipeline({
         layout: device.createPipelineLayout({bindGroupLayouts: []}),
-        vertexStage: {
+        vertex: {
             module: vShaderModule,
-            entryPoint: 'main'
-        },
-        fragmentStage: {
-            module: fShaderModule,
-            entryPoint: 'main'
-        },
-        vertexState: {
-            vertexBuffers: [
+            entryPoint: 'main',
+            buffers: [
                 {
                     arrayStride: 3 * 4,
                     attributes: [
@@ -70,25 +67,31 @@ async function init(glslang) {
                             // position
                             shaderLocation: 0,
                             offset: 0,
-                            format: "float3"
+                            format: "float32x3"
                         }
                     ]
                 }
             ]
         },
-        colorStates: [
-            {
-                format: swapChainFormat,
-                alphaBlend: {
-                    srcFactor: "src-alpha",
-                    dstFactor: "one-minus-src-alpha",
-                    operation: "add"
+        fragment: {
+            module: fShaderModule,
+            entryPoint: 'main',
+            targets: [
+                {
+                    format: swapChainFormat,
+                    alphaBlend: {
+                        srcFactor: "src-alpha",
+                        dstFactor: "one-minus-src-alpha",
+                        operation: "add"
+                    }
                 }
-            }
-        ],
-        primitiveTopology: 'triangle-list',
-        frontFace : "ccw",
-        cullMode : 'none'
+            ],
+        },
+        primitive: {
+            primitiveTopology: 'triangle-list',
+            frontFace : "ccw",
+            cullMode : 'none'
+        }
     });
 
     let render =  function () {
@@ -96,7 +99,7 @@ async function init(glslang) {
         const textureView = swapChain.getCurrentTexture().createView();
         const renderPassDescriptor = {
             colorAttachments: [{
-                attachment: textureView,
+                view: textureView,
                 loadValue: {r: 1, g: 1, b: 1, a: 1},
             }]
         };
@@ -105,7 +108,7 @@ async function init(glslang) {
         passEncoder.setPipeline(pipeline);
         passEncoder.draw(3, 1, 0, 0);
         passEncoder.endPass();
-        device.defaultQueue.submit([commandEncoder.finish()]);
+        device.queue.submit([commandEncoder.finish()]);
         requestAnimationFrame(render)
     }
     requestAnimationFrame(render)
@@ -119,10 +122,9 @@ function configureSwapChain(device, swapChainFormat, context) {
     return context.configureSwapChain(swapChainDescriptor);
 }
 
-function makeShaderModule_GLSL(glslang, device, type, source) {
+function makeShaderModule_WGSL(device, source) {
     let shaderModuleDescriptor = {
-        code: glslang.compileGLSL(source, type),
-        source: source
+        code: source
     };
     let shaderModule = device.createShaderModule(shaderModuleDescriptor);
     return shaderModule;
