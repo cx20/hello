@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Lissajous curve Using WebGPU</title>
+  <title>3D Function Using WebGPU</title>
   <link rel="stylesheet" type="text/css" href="style_dark.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix.js"></script>
 </head>
@@ -13,14 +13,19 @@
 };
 [[binding(0), set(0)]] var<uniform> uniforms : Uniform;
 
+struct VertexInput {
+    [[location(0)]] position : vec3<f32>;
+};
+
 struct VertexOutput {
     [[builtin(position)]] Position : vec4<f32>;
     [[location(0)]] fragColor : vec4<f32>;
 };
 
 [[stage(vertex)]]
-fn main([[location(0)]] position : vec3<f32>) -> VertexOutput {
-    var p : vec3<f32> = position;
+fn main(input : VertexInput) -> VertexOutput {
+    var output : VertexOutput;
+    var p : vec3<f32> = input.position;
 
     var i : f32 = floor(p.x / 100.0);
     var j : f32 = p.x - i * 100.0;
@@ -35,27 +40,27 @@ fn main([[location(0)]] position : vec3<f32>) -> VertexOutput {
     var y2 : f32 = y / 2.0;
     var z2 : f32 = z / 10.0;
 
-    return VertexOutput( 
-         uniforms.modelViewProjectionMatrix * vec4<f32>(x2, y2, z2, 1.0),
-         vec4<f32>(x2 + 0.5, y2 + 0.5, z2 + 0.5, 1.0)
-    );
+    output.Position =  uniforms.modelViewProjectionMatrix * vec4<f32>(x2, y2, z2, 1.0);
+    output.fragColor = vec4<f32>(x2 + 0.5, y2 + 0.5, z2 + 0.5, 1.0);
+
+    return output;
 }
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
-// #version 450
-// layout(location = 0) in vec4 vColor;
-// layout(location = 0) out vec4 outColor;
-// void main() {
-//     outColor = vColor;
-// }
-[[location(0)]] var<in> fragColor : vec4<f32>;
-[[location(0)]] var<out> outColor : vec4<f32>;
+struct FragmentInput {
+    [[location(0)]] fragColor : vec4<f32>;
+};
+
+struct FragmentOutput {
+    [[location(0)]] outColor : vec4<f32>;
+};
 
 [[stage(fragment)]]
-fn main() -> void {
-    outColor = fragColor;
-    return;
+fn main(input : FragmentInput) -> FragmentOutput {
+    var output : FragmentOutput;
+    output.outColor = input.fragColor;
+    return output;
 }
 </script>
 
@@ -130,20 +135,12 @@ async function init() {
             entryPoint: 'main',
             targets: [
                 {
-                    format: swapChainFormat,
-                    alphaBlend: {
-                        srcFactor: "src-alpha",
-                        dstFactor: "one-minus-src-alpha",
-                        operation: "add"
-                    }
+                    format: swapChainFormat
                 }
-            ],
+            ]
         },
         primitive: {
-            topology: 'point-list',
-            //stripIndexFormat: "uint32",
-            frontFace : "ccw",
-            cullMode : 'none'
+            topology: 'point-list'
         },
         depthStencil: {
             depthWriteEnabled: true,

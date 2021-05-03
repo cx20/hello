@@ -13,23 +13,32 @@
 };
 [[binding(0), set(0)]] var<uniform> uniforms : Uniforms;
 
-[[location(0)]] var<in> position : vec3<f32>;
-[[builtin(position)]] var<out> Position : vec4<f32>;
+struct VertexInput {
+    [[location(0)]] position : vec3<f32>;
+};
+
+struct VertexOutput {
+    [[builtin(position)]] Position : vec4<f32>;
+};
 
 [[stage(vertex)]]
-fn main() -> void {
-    Position = uniforms.modelViewProjectionMatrix * vec4<f32>(position, 1.0);
-    return;
+fn main(input : VertexInput) -> VertexOutput {
+    var output : VertexOutput;
+    output.Position = uniforms.modelViewProjectionMatrix * vec4<f32>(input.position, 1.0);
+    return output;
 }
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
-[[location(0)]] var<out> outColor : vec4<f32>;
+struct FragmentOutput {
+    [[location(0)]] outColor : vec4<f32>;
+};
 
 [[stage(fragment)]]
-fn main() -> void {
-    outColor = vec4<f32>(0.0, 0.0, 1.0, 1.0);
-    return;
+fn main() -> FragmentOutput {
+    var output : FragmentOutput;
+    output.outColor = vec4<f32>(0.0, 0.0, 1.0, 1.0);
+    return output;
 }
 </script>
 
@@ -98,19 +107,12 @@ async function init() {
             entryPoint: 'main',
             targets: [
                 {
-                    format: swapChainFormat,
-                    alphaBlend: {
-                        srcFactor: "src-alpha",
-                        dstFactor: "one-minus-src-alpha",
-                        operation: "add"
-                    }
+                    format: swapChainFormat
                 }
-            ],
+            ]
         },
         primitive: {
-            topology: 'point-list',
-            frontFace : "ccw",
-            cullMode : 'none'
+            topology: 'point-list'
         },
         depthStencil: {
             depthWriteEnabled: true,
