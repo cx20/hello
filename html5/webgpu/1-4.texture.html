@@ -12,31 +12,42 @@
 };
 [[binding(0), set(0)]] var<uniform> uniforms : Uniforms;
 
-[[location(0)]] var<in> position : vec3<f32>;
-[[location(1)]] var<in> textureCoord : vec2<f32>;
-[[location(0)]] var<out> vTextureCoord : vec2<f32>;
-[[builtin(position)]] var<out> Position : vec4<f32>;
+struct VertexInput {
+    [[location(0)]] position : vec3<f32>;
+    [[location(1)]] textureCoord : vec2<f32>;
+};
+
+struct VertexOutput {
+    [[builtin(position)]] Position : vec4<f32>;
+    [[location(0)]] vTextureCoord : vec2<f32>;
+};
 
 [[stage(vertex)]]
-fn main() -> void {
-    vTextureCoord = textureCoord;
-    Position = uniforms.modelViewProjectionMatrix * vec4<f32>(position, 1.0);
-    return;
+fn main(input : VertexInput) -> VertexOutput {
+    var output : VertexOutput;
+    output.vTextureCoord = input.textureCoord;
+    output.Position = uniforms.modelViewProjectionMatrix * vec4<f32>(input.position, 1.0);
+    return output;
 }
-
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
 [[binding(1), set(0)]] var mySampler: sampler;
 [[binding(2), set(0)]] var myTexture: texture_2d<f32>;
 
-[[location(0)]] var<in> vTextureCoord: vec2<f32>;
-[[location(0)]] var<out> outColor : vec4<f32>;
+struct FragmentInput {
+    [[location(0)]] vTextureCoord: vec2<f32>;
+};
+
+struct FragmentOutput {
+    [[location(0)]] outColor : vec4<f32>;
+};
 
 [[stage(fragment)]]
-fn main() -> void {
-    outColor =  textureSample(myTexture, mySampler, vTextureCoord);
-    return;
+fn main(input : FragmentInput) -> FragmentOutput {
+    var output : FragmentOutput;
+    output.outColor =  textureSample(myTexture, mySampler, input.vTextureCoord);
+    return output;
 }
 </script>
 
@@ -224,19 +235,12 @@ async function init() {
             entryPoint: "main",
             targets: [
                 {
-                    format: swapChainFormat,
-                    alpha: {
-                        srcFactor: "src-alpha",
-                        dstFactor: "one-minus-src-alpha",
-                        operation: "add"
-                    }
+                    format: swapChainFormat
                 }
-            ],
+            ]
         },
         primitive: {
-            topology: "triangle-list",
-            frontFace : "ccw",
-            cullMode : "none"
+            topology: "triangle-list"
         },
         depthStencil: {
             depthWriteEnabled: true,
@@ -392,71 +396,19 @@ async function createTextureFromImage(device, src, usage) {
     const img = document.createElement("img");
     img.src = src;
     await img.decode();
+    const imageBitmap = await createImageBitmap(img);
 
-    const imageCanvas = document.createElement("canvas");
-    imageCanvas.width = img.width;
-    imageCanvas.height = img.height;
-
-    const imageCanvasContext = imageCanvas.getContext("2d");
-    imageCanvasContext.translate(0, img.height);
-    imageCanvasContext.scale(1, -1);
-    imageCanvasContext.drawImage(img, 0, 0, img.width, img.height);
-    const imageData = imageCanvasContext.getImageData(0, 0, img.width, img.height);
-
-    let data = null;
-
-    const bytesPerRow = Math.ceil(img.width * 4 / 256) * 256;
-    if (bytesPerRow == img.width * 4) {
-        data = imageData.data;
-    } else {
-        data = new Uint8Array(bytesPerRow * img.height);
-        let imagePixelIndex = 0;
-        for (let y = 0; y < img.height; ++y) {
-            for (let x = 0; x < img.width; ++x) {
-                let i = x * 4 + y * bytesPerRow;
-                data[i] = imageData.data[imagePixelIndex];
-                data[i + 1] = imageData.data[imagePixelIndex + 1];
-                data[i + 2] = imageData.data[imagePixelIndex + 2];
-                data[i + 3] = imageData.data[imagePixelIndex + 3];
-                imagePixelIndex += 4;
-            }
-        }
-    }
-
-    const texture = device.createTexture({
-        size: {
-            width: img.width,
-            height: img.height,
-            depthOrArrayLayers: 1,
-        },
-        format: "rgba8unorm",
-        usage: GPUTextureUsage.COPY_DST | usage,
+    cubeTexture = device.createTexture({
+      size: [imageBitmap.width, imageBitmap.height, 1],
+      format: 'rgba8unorm',
+      usage: usage | GPUTextureUsage.COPY_DST,
     });
-
-    const textureDataBuffer = device.createBuffer({
-        size: data.byteLength,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
-        mappedAtCreation: true
-    });
-    new Uint8Array(textureDataBuffer.getMappedRange()).set(data);
-    textureDataBuffer.unmap();
-
-    const commandEncoder = device.createCommandEncoder({});
-    commandEncoder.copyBufferToTexture({
-        buffer: textureDataBuffer,
-        bytesPerRow,
-    }, {
-        texture: texture,
-    }, {
-        width: img.width,
-        height: img.height,
-        depthOrArrayLayers: 1,
-    });
-
-    device.queue.submit([commandEncoder.finish()]);
-    textureDataBuffer.destroy();
-
-    return texture;
+    device.queue.copyImageBitmapToTexture(
+      { imageBitmap },
+      { texture: cubeTexture },
+      [imageBitmap.width, imageBitmap.height, 1]
+    );
+    return cubeTexture;
 }
 </script>
 <a href="https://github.com/cx20/hello/blob/master/html5/webgpu/1-4.texture.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Lissajous curve Using WebGPU</title>
+  <title>Harmonograph Using WebGPU</title>
   <link rel="stylesheet" type="text/css" href="style_dark.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix.js"></script>
 </head>
@@ -17,23 +17,29 @@
 };
 [[binding(0), set(0)]] var<uniform> uniforms : Params;
 
+struct VertexInput {
+    [[location(0)]] position : vec3<f32>;
+};
+
 struct VertexOutput {
     [[builtin(position)]] Position : vec4<f32>;
     [[location(0)]] fragColor : vec4<f32>;
 };
 
 [[stage(vertex)]]
-fn main([[location(0)]] position : vec3<f32>) -> VertexOutput {
+fn main(input : VertexInput) -> VertexOutput {
+    var output : VertexOutput;
+
     var A1 : f32 = 0.2;
-    var p1 : f32 = 0.0625; // 1.0/16.0;
+    var p1 : f32 = 1.0/16.0;
     var d1 : f32 = 0.02;
 
     var A2 : f32 = 0.2;
-    var p2 : f32 = 1.5; // 3.0/2.0;
+    var p2 : f32 = 3.0/2.0;
     var d2 : f32 = 0.0315;
 
     var A3 : f32 = 0.2;
-    var p3 : f32 = 0.86666; // 13.0/15.0;
+    var p3 : f32 = 13.0/15.0;
     var d3 : f32 = 0.02;
 
     var A4 : f32 = 0.2;
@@ -42,7 +48,7 @@ fn main([[location(0)]] position : vec3<f32>) -> VertexOutput {
 
     var PI : f32 = 3.141592;
 
-    var p : vec3<f32> = position;
+    var p : vec3<f32> = input.position;
     p1 = uniforms.time;
     
     var t : f32 = ((p.x/360.0) - 0.5)  * 50.0;
@@ -53,28 +59,28 @@ fn main([[location(0)]] position : vec3<f32>) -> VertexOutput {
     p.x = x;
     p.y = y;
     p.z = z;
+    
+    output.Position = uniforms.modelViewProjectionMatrix * vec4<f32>(p, 1.0);
+    output.fragColor = vec4<f32>(x + 0.5, y + 0.5, z + 0.5, 1.0);
 
-    return VertexOutput(
-        uniforms.modelViewProjectionMatrix * vec4<f32>(p, 1.0),
-        vec4<f32>(x + 0.5, y + 0.5, z + 0.5, 1.0)
-    );
+    return output;
 }
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
-// #version 450
-// layout(location = 0) in vec4 vColor;
-// layout(location = 0) out vec4 outColor;
-// void main() {
-//     outColor = vColor;
-// }
-[[location(0)]] var<in> fragColor : vec4<f32>;
-[[location(0)]] var<out> outColor : vec4<f32>;
+struct FragmentInput {
+    [[location(0)]] fragColor : vec4<f32>;
+};
+
+struct FragmentOutput {
+    [[location(0)]] outColor : vec4<f32>;
+};
 
 [[stage(fragment)]]
-fn main() -> void {
-    outColor = fragColor;
-    return;
+fn main(input : FragmentInput) -> FragmentOutput {
+    var output : FragmentOutput;
+    output.outColor = input.fragColor;
+    return output;
 }
 </script>
 
@@ -156,20 +162,13 @@ async function init() {
             entryPoint: 'main',
             targets: [
                 {
-                    format: swapChainFormat,
-                    alphaBlend: {
-                        srcFactor: "src-alpha",
-                        dstFactor: "one-minus-src-alpha",
-                        operation: "add"
-                    }
+                    format: swapChainFormat
                 }
             ]
         },
         primitive: {
             topology: 'line-strip',
-            stripIndexFormat: "uint32",
-            frontFace : "ccw",
-            cullMode : 'none'
+            stripIndexFormat: "uint32"
         },
         depthStencil: {
             depthWriteEnabled: true,
