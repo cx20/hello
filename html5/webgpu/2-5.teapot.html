@@ -59,8 +59,9 @@ struct FragmentOutput {
 fn main(input : FragmentInput) -> FragmentOutput {
     var output : FragmentOutput;
     var lightDirection: vec3<f32> = normalize(uniforms.pointLightingLocation - input.vPosition.xyz);
-    // TODO: Investigate how to do flat shading in WGSL
-    var normal: vec3<f32> = normalize(input.vNormal);
+    var dx : vec3<f32> = dpdx(input.vPosition.xyz);
+    var dy : vec3<f32> = dpdy(input.vPosition.xyz);
+    var normal : vec3<f32> = normalize(cross(normalize(dx), normalize(dy)));
     var lightWeighting: f32 = max(dot(normal, lightDirection), 0.0);
     var fragmentColor: vec4<f32> =  textureSample(myTexture, mySampler, input.vTextureCoord);
     output.outColor = vec4<f32>(fragmentColor.rgb * lightWeighting, fragmentColor.a);
