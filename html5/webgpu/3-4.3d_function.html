@@ -194,7 +194,7 @@ async function init() {
         const commandEncoder = device.createCommandEncoder();
         const { uploadBuffer: buffer1 } = updateBufferData(device, uniformBuffer, 0, getTransformationMatrix(), commandEncoder);
         const { uploadBuffer: buffer2 } = updateBufferData(device, uniformBuffer, 4 * 16, new Float32Array([rad]), commandEncoder);
-        const textureView = swapChain.getCurrentTexture().createView();
+        const textureView = ctx.getCurrentTexture().createView();
         const renderPassDescriptor = {
             colorAttachments: [{
                 view: textureView,
@@ -228,7 +228,7 @@ function configureSwapChain(device, swapChainFormat, context) {
         device: device,
         format: swapChainFormat
     };
-    return context.configureSwapChain(swapChainDescriptor);
+    return context.configure(swapChainDescriptor);
 }
 
 function makeShaderModule_WGSL(device, source) {

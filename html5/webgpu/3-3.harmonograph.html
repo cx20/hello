@@ -236,7 +236,7 @@ async function init() {
         const { uploadBuffer: buffer4 } = updateBufferData(device, uniformBuffer, 4 * 16 + 12, new Float32Array([f3]), commandEncoder);
         const { uploadBuffer: buffer5 } = updateBufferData(device, uniformBuffer, 4 * 16 + 16, new Float32Array([f4]), commandEncoder);
 
-        const textureView = swapChain.getCurrentTexture().createView();
+        const textureView = ctx.getCurrentTexture().createView();
         const renderPassDescriptor = {
             colorAttachments: [{
                 view: textureView,
@@ -274,7 +274,7 @@ function configureSwapChain(device, swapChainFormat, context) {
         device: device,
         format: swapChainFormat
     };
-    return context.configureSwapChain(swapChainDescriptor);
+    return context.configure(swapChainDescriptor);
 }
 
 function makeShaderModule_WGSL(device, source) {
