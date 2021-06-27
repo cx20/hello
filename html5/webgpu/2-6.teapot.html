@@ -41,7 +41,7 @@ fn main(input : VertexInput) -> VertexOutput {
 [[binding(1), set(0)]] var mySampler: sampler;
 [[binding(2), set(0)]] var myTexture: texture_2d<f32>;
 [[block]] struct Uniforms {
-    [[offset(0)]] pointLightingLocation : vec3<f32>;
+    pointLightingLocation : vec3<f32>;
 };
 [[binding(3), set(0)]] var<uniform> uniforms : Uniforms;
 
