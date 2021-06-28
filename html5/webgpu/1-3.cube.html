@@ -67,7 +67,7 @@ async function init() {
     let projectionMatrix = mat4.create();
     mat4.perspective(projectionMatrix, 45, aspect, 0.1, 100.0);
 
-    const ctx = c.getContext("gpupresent")
+    const ctx = c.getContext("gpupresent");
     const format = ctx.getPreferredFormat(device.adapter);
     ctx.configure({device: device, format: format});
 
@@ -156,8 +156,8 @@ async function init() {
             binding: 0,
             visibility: GPUShaderStage.VERTEX,
             buffer: {
-                type: 'uniform',
-            },
+                type: 'uniform'
+            }
         }]
     });
     const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [uniformsBindGroupLayout] });
@@ -206,7 +206,7 @@ async function init() {
         depthStencil: {
             depthWriteEnabled: true,
             depthCompare: "less",
-            format: "depth24plus-stencil8",
+            format: "depth24plus-stencil8"
         }
     });
 
