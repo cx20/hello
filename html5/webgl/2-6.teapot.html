@@ -10,24 +10,24 @@
 <script id="vs" type="x-shader/x-vertex">
 attribute vec3 position;
 attribute vec3 normal;
-uniform mat4 pjMatrix;
-uniform mat4 mvMatrix;
 attribute vec2 textureCoord;
+uniform mat4 uPMatrix;
+uniform mat4 uMVMatrix;
 varying   vec4 vPosition;
 varying   vec3 vNormal;
 varying   vec2 vTextureCoord;
 
 void main() {
-    vPosition = mvMatrix * vec4(position, 1.0);
+    vPosition = uMVMatrix * vec4(position, 1.0);
     vNormal = normal;
     vTextureCoord = textureCoord;
-    gl_Position = pjMatrix * mvMatrix * vec4(position, 1.0);
+    gl_Position = uPMatrix * uMVMatrix * vec4(position, 1.0);
 }
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
 precision mediump float;
-uniform sampler2D texture;
+uniform sampler2D uTexture;
 uniform vec3 uDirectLightingLocation;
 varying vec4 vPosition;
 varying vec3 vNormal;
@@ -37,7 +37,7 @@ void main() {
     vec3 lightDirection = normalize(uDirectLightingLocation - vPosition.xyz);
     vec3 normal = normalize(vNormal);
     float lightWeighting = max(dot(normal, lightDirection), 0.0);
-    vec4 fragmentColor  = texture2D(texture, vTextureCoord);
+    vec4 fragmentColor  = texture2D(uTexture, vTextureCoord);
     gl_FragColor = vec4(fragmentColor.rgb * lightWeighting, fragmentColor.a);
 }
 </script>
@@ -47,8 +47,6 @@ void main() {
 let c, gl;
 let aLoc = [];
 let uLoc = [];
-let texture;
-
 let vertexPositions;
 let vertexNormals;
 let vertexTextureCoords;
@@ -89,9 +87,9 @@ function initShaders() {
     aLoc[0] = gl.getAttribLocation(p, "position");
     aLoc[1] = gl.getAttribLocation(p, "normal");
     aLoc[2] = gl.getAttribLocation(p, "textureCoord");
-    uLoc[0] = gl.getUniformLocation(p, "pjMatrix");
-    uLoc[1] = gl.getUniformLocation(p, "mvMatrix");
-    uLoc[2] = gl.getUniformLocation(p, "texture");
+    uLoc[0] = gl.getUniformLocation(p, "uPMatrix");
+    uLoc[1] = gl.getUniformLocation(p, "uMVMatrix");
+    uLoc[2] = gl.getUniformLocation(p, "uTexture");
     uLoc[3] = gl.getUniformLocation(p, "uDirectLightingLocation");
     gl.enableVertexAttribArray(aLoc[0]);
     gl.enableVertexAttribArray(aLoc[1]);
@@ -127,6 +125,7 @@ function initBuffers() {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
 
     let img = new Image();
+    let texture;
     img.onload = function(){
         texture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, texture);
