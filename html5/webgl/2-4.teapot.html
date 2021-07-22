@@ -10,13 +10,13 @@
 <script id="vs" type="x-shader/x-vertex">
 attribute vec3 position;
 attribute vec4 color;
-uniform mat4 pjMatrix;
-uniform mat4 mvMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uMVMatrix;
 varying   vec4 vColor;
 
 void main() {
     vColor = color;
-    gl_Position = pjMatrix * mvMatrix * vec4(position, 1.0);
+    gl_Position = uPMatrix * uMVMatrix * vec4(position, 1.0);
 }
 </script>
 
@@ -34,8 +34,6 @@ void main() {
 let c, gl;
 let aLoc = [];
 let uLoc = [];
-let texture;
-
 let vertexPositions;
 let vertexNormals;
 let vertexTextureCoords;
@@ -75,8 +73,8 @@ function initShaders() {
     gl.useProgram(p);
     aLoc[0] = gl.getAttribLocation(p, "position");
     aLoc[1] = gl.getAttribLocation(p, "color");
-    uLoc[0] = gl.getUniformLocation(p, "pjMatrix");
-    uLoc[1] = gl.getUniformLocation(p, "mvMatrix");
+    uLoc[0] = gl.getUniformLocation(p, "uPMatrix");
+    uLoc[1] = gl.getUniformLocation(p, "uMVMatrix");
     gl.enableVertexAttribArray(aLoc[0]);
     gl.enableVertexAttribArray(aLoc[1]);
 }
