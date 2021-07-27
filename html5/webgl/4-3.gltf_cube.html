@@ -51,6 +51,7 @@ void main(void) {
 const GLTF_BASE_URL = "https://rawcdn.githack.com/cx20/jsdo-static-contents/525dacce76429f469762e746a7d4c002d33ea2a2/models/gltf/2.0/SimpleModel3/glTF/";
 const GLTF_MODEL_URL = GLTF_BASE_URL + "SimpleModel3.gltf";
 
+let gltf;
 let positionAccessor             = 0;
 let positionAccessorBufferView   = 0;
 let positionAccessorCount        = 0;
@@ -80,6 +81,7 @@ let aLoc = {};
 let uLoc = {};
 let vertexPositionBuffer;
 let vertexNormalBuffer;
+let vertexColorBuffer;
 
 let mvMatrix = mat4.create();
 let pMatrix = mat4.create();
