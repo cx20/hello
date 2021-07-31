@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Testing glTF Square Using WebGPU</title>
+  <link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+<body>
+<script id="vs" type="x-shader/x-vertex">
+struct VertexInput {
+    [[location(0)]] position : vec3<f32>;
+    [[location(1)]] color : vec3<f32>;
+};
+
+struct VertexOutput {
+    [[builtin(position)]] Position : vec4<f32>;
+    [[location(0)]] fragColor : vec4<f32>;
+};
+
+[[stage(vertex)]]
+fn main(input : VertexInput) -> VertexOutput {
+    var output : VertexOutput;
+    output.fragColor = vec4<f32>(input.color, 1.0);
+    output.Position = vec4<f32>(input.position, 1.0);
+    return output;
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+struct FragmentInput {
+    [[location(0)]] fragColor : vec4<f32>;
+};
+
+struct FragmentOutput {
+    [[location(0)]] outColor : vec4<f32>;
+};
+
+[[stage(fragment)]]
+fn main(input : FragmentInput) -> FragmentOutput {
+    var output : FragmentOutput;
+    output.outColor = input.fragColor;
+    return output;
+}
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix.js"></script>
+<script src="//code.jquery.com/jquery-3.4.0.js"></script>
+
+<canvas id="c" width="465" height="465"></canvas>
+<script>
+'use strict';
+
+const GLTF_BASE_URL = "https://rawcdn.githack.com/cx20/jsdo-static-contents/525dacce76429f469762e746a7d4c002d33ea2a2/models/gltf/2.0/SimpleModel2/glTF/";
+const GLTF_MODEL_URL = GLTF_BASE_URL + "SimpleModel2.gltf";
+
+const COMPONENT_TYPES = {
+  5120: 1, // BYTE
+  5121: 1, // UNSIGNED_BYTE
+  5122: 2, // SHORT
+  5123: 2, // UNSIGNED_SHORT
+  5125: 4, // UNSIGNED_INT
+  5126: 4  // FLOAT
+};
+
+let gltf;
+let positionAccessor             = 0;
+let positionAccessorBufferView   = 0;
+let positionAccessorCount        = 0;
+let positionAccessorComponentType= 0;
+let positionAccessorComponentSize= 0;
+let positionBufferViewByteOffset = 0;
+let positionBufferViewByteStride = 0;
+let positionBufferViewBuffer     = 0;
+let positionUri                  = "";
+let positionLength               = 0;
+
+let normalAccessor               = 0;
+let normalAccessorBufferView     = 0;
+let normalAccessorCount          = 0;
+let normalAccessorComponentType  = 0;
+let normalAccessorComponentSize  = 0;
+let normalBufferViewByteOffset   = 0;
+let normalBufferViewByteStride   = 0;
+let normalBufferViewBuffer       = 0;
+let normalUri                    = "";
+let normalLength                 = 0;
+
+let colorAccessor                = 0;
+let colorAccessorBufferView      = 0;
+let colorAccessorCount           = 0;
+let colorAccessorComponentType   = 0;
+let colorAccessorComponentSize   = 0;
+let colorBufferViewByteOffset    = 0;
+let colorBufferViewByteStride    = 0;
+let colorBufferViewBuffer        = 0;
+let colorUri                     = "";
+let colorLength                  = 0;
+
+let positions;
+let normals;
+let colors;
+
+let mvMatrix = mat4.create();
+let pMatrix = mat4.create();
+let nMatrix = mat3.create();
+let diffuse = [];
+let shininess = 0;
+let specular = [];
+
+const vertexShaderWGSL = document.getElementById("vs").textContent;
+const fragmentShaderWGSL = document.getElementById("fs").textContent;
+
+function load() {
+  //          +---------------------------------------------------- accessors[0] : POSITION   (72 bytes = 12 bytes * 6)
+  //          |               +------------------------------------ accessors[1] : NORMAL     (72 bytes = 12 bytes * 6)
+  //          |               |              +--------------------- accessors[2] : COLOR_0    (72 bytes = 12 bytes * 6)
+  //          |               |              |              +------ accessors[3] : TEXCOORD_0 (48 bytes =  8 bytes * 6)
+  //          |               |              |              |
+  // +----------------+--------------+--------------+--------------+
+  // |  accessors[0]  | accessors[1] | accessors[2] | accessors[3] |
+  // +----------------+--------------+--------------+--------------+
+  // | bufferViews[0] |bufferViews[1]|bufferViews[2]|bufferViews[3]|
+  // +----------------+--------------+--------------+--------------+
+  // |                          buffers[0]                         |
+  // +-------------------------------------------------------------+
+  //
+  // |[0][1]..[70][71]|[72][73].[143]|[144]....[215]|[216]....[263]|
+  // |<--- 72 bytes ->|<- 72 bytes ->|<- 72 bytes ->|<- 48 bytes ->|
+  // |<------------------------ 264 bytes ------------------------>|
+  
+  // <componentType>
+  // 5123 ... gl.UNSIGNED_SHORT
+  // 5126 ... gl.FLOAT
+
+  //   "accessors": [
+  //     {
+  //       "bufferView": 0,
+  //       "componentType": 5126,
+  //       "count": 6,
+  //       "max": [0.5, 0.5, 0],
+  //       "min": [-0.5,-0.5, 0],
+  //       "type": "VEC3"
+  //     },
+  //
+  positionAccessor             = gltf.meshes[0].primitives[0].attributes.POSITION;
+  positionAccessorBufferView   = gltf.accessors[positionAccessor].bufferView;
+  positionAccessorCount        = gltf.accessors[positionAccessor].count;
+  positionAccessorComponentType = gltf.accessors[positionAccessor].componentType;
+  positionAccessorComponentSize = COMPONENT_TYPES[positionAccessorComponentType];
+  positionBufferViewByteOffset = gltf.bufferViews[positionAccessorBufferView].byteOffset ?? 0;
+  positionBufferViewByteStride = gltf.bufferViews[positionAccessorBufferView].byteStride ?? 0;
+  positionBufferViewBuffer     = gltf.bufferViews[positionAccessorBufferView].buffer;
+  positionUri                  = GLTF_BASE_URL + gltf.buffers[positionBufferViewBuffer].uri;
+  positionLength               = positionAccessorCount * positionBufferViewByteStride / positionAccessorComponentSize;
+
+  normalAccessor               = gltf.meshes[0].primitives[0].attributes.NORMAL;
+  normalAccessorBufferView     = gltf.accessors[normalAccessor].bufferView;
+  normalAccessorCount          = gltf.accessors[normalAccessor].count;
+  normalAccessorComponentType  = gltf.accessors[positionAccessor].componentType;
+  normalAccessorComponentSize  = COMPONENT_TYPES[normalAccessorComponentType];
+  normalBufferViewByteOffset   = gltf.bufferViews[normalAccessorBufferView].byteOffset ?? 0;
+  normalBufferViewByteStride   = gltf.bufferViews[normalAccessorBufferView].byteStride ?? 0;
+  normalBufferViewBuffer       = gltf.bufferViews[normalAccessorBufferView].buffer;
+  normalUri                    = GLTF_BASE_URL + gltf.buffers[normalBufferViewBuffer].uri;
+  normalLength                 = normalAccessorCount    * normalBufferViewByteStride    / normalAccessorComponentSize;
+
+  colorAccessor                = gltf.meshes[0].primitives[0].attributes.COLOR_0;
+  colorAccessorBufferView      = gltf.accessors[colorAccessor].bufferView;
+  colorAccessorCount           = gltf.accessors[colorAccessor].count;
+  colorAccessorComponentType   = gltf.accessors[colorAccessor].componentType;
+  colorAccessorComponentSize   = COMPONENT_TYPES[colorAccessorComponentType];
+  colorBufferViewByteOffset    = gltf.bufferViews[colorAccessorBufferView].byteOffset ?? 0;
+  colorBufferViewByteStride    = gltf.bufferViews[colorAccessorBufferView].byteStride ?? 0;
+  colorBufferViewBuffer        = gltf.bufferViews[colorAccessorBufferView].buffer;
+  colorUri                     = GLTF_BASE_URL + gltf.buffers[colorBufferViewBuffer].uri;
+  colorLength                  = colorAccessorCount    * colorBufferViewByteStride    / colorAccessorComponentSize;
+
+  diffuse = new Float32Array(gltf.materials[0].pbrMetallicRoughness.baseColorFactor ?? [1,1,1,1]);
+
+  let promise1 = ajax(positionUri).then(function(response) {
+    positions = response;
+  }, function(error) {
+    console.error("Failed!", error);
+  });
+
+  let promise2 = ajax(normalUri).then(function(response) {
+    normals = response;
+  }, function(error) {
+    console.error("Failed!", error);
+  });
+  
+  let promise3 = ajax(colorUri).then(function(response) {
+    colors = response;
+  }, function(error) {
+    console.error("Failed!", error);
+  });
+
+  Promise.all([promise1, promise2, promise3]).then(function(){
+    init();
+  });
+}
+
+async function init() {
+    const gpu = navigator["gpu"];
+    const adapter = await gpu.requestAdapter();
+    const device = await adapter.requestDevice();
+
+    const c = document.getElementById("c");
+    c.width = window.innerWidth;
+    c.height = window.innerHeight;
+    
+    const ctx = c.getContext("webgpu");
+    const format = ctx.getPreferredFormat(device.adapter);
+    ctx.configure({device: device, format: format});
+
+    let vShaderModule = makeShaderModule_WGSL(device, vertexShaderWGSL);
+    let fShaderModule = makeShaderModule_WGSL(device, fragmentShaderWGSL);
+
+    let vertexBuffer = makeVertexBuffer(device, new Float32Array(positions, positionBufferViewByteOffset, positionLength));
+    let colorBuffer = makeVertexBuffer(device, new Float32Array(colors, colorBufferViewByteOffset, colorLength));
+
+    const pipeline = device.createRenderPipeline({
+        vertex: {
+            module: vShaderModule,
+            entryPoint: "main",
+            buffers: [
+                {
+                    arrayStride: 3 * 4,
+                    attributes: [
+                        {
+                            // position
+                            shaderLocation: 0,
+                            offset: 0,
+                            format: "float32x3"
+                        },
+                    ]
+                },
+                {
+                    arrayStride: 3 * 4,
+                    attributes: [
+                        {
+                            // color
+                            shaderLocation: 1,
+                            offset:  0,
+                            format: "float32x3"
+                        }
+                    ]
+                }
+            ]
+        },
+        fragment: {
+            module: fShaderModule,
+            entryPoint: "main",
+            targets: [
+                {
+                    format: format
+                }
+            ],
+        },
+        primitive: {
+            topology: "triangle-strip",
+            stripIndexFormat: "uint32"
+        }
+    });
+
+    let render =  function () {
+        const commandEncoder = device.createCommandEncoder();
+        const textureView = ctx.getCurrentTexture().createView();
+        const renderPassDescriptor = {
+            colorAttachments: [{
+                view: textureView,
+                loadValue: {r: 1, g: 1, b: 1, a: 1},
+                storeOp: "store"
+            }]
+        };
+        const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+        passEncoder.setVertexBuffer(0, vertexBuffer);
+        passEncoder.setVertexBuffer(1, colorBuffer);
+        passEncoder.setPipeline(pipeline);
+        passEncoder.draw(positionAccessorCount, 1, 0, 0);
+        passEncoder.endPass();
+        device.queue.submit([commandEncoder.finish()]);
+        requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+
+}
+
+function makeShaderModule_WGSL(device, source) {
+    let shaderModuleDescriptor = {
+        code: source
+    };
+    let shaderModule = device.createShaderModule(shaderModuleDescriptor);
+    return shaderModule;
+}
+
+function makeVertexBuffer(device, data) {
+    const verticesBuffer = device.createBuffer({
+        size: data.byteLength,
+        usage: GPUBufferUsage.VERTEX,
+        mappedAtCreation: true,
+    });
+    new Float32Array(verticesBuffer.getMappedRange()).set(data);
+    verticesBuffer.unmap();
+    return verticesBuffer;
+}
+function ajax(url, responseType) {
+  responseType = typeof responseType !== 'undefined' ?  responseType : "arraybuffer";
+  if ( url.match(/^data:application\/(.*);base64,/) ){
+    return new Promise(function(resolve, reject) {
+      let dataUri = url.split(',');
+      let type = dataUri[0].split(':')[1].split(';')[0];
+      let byteString = atob(dataUri[1]);
+      let byteStringLength = byteString.length;
+      let arrayBuffer = new ArrayBuffer(byteStringLength);
+      let intArray = new Uint8Array(arrayBuffer);
+      for (let i = 0; i < byteStringLength; i++) {
+        intArray[i] = byteString.charCodeAt(i);
+      }
+      resolve(arrayBuffer);
+    });
+  } else if ( url.match(/^data:text\/plain;base64,/) ){
+    return new Promise(function(resolve, reject) {
+      let dataUri = url.split(',');
+      let type = dataUri[0].split(':')[1].split(';')[0];
+      let byteString = atob(dataUri[1]);
+      resolve(byteString);
+    });
+  } else {
+    return new Promise(function(resolve, reject) {
+      let req = new XMLHttpRequest();
+      req.open('GET', url);
+      req.responseType = responseType;
+  
+      req.onload = function() {
+        if (req.status == 200) {
+          resolve(req.response);
+        } else {
+          reject(Error(req.statusText));
+        }
+      };
+  
+      req.onerror = function() {
+        reject(Error("Network Error"));
+      };
+  
+      req.send();
+    });
+  }
+
+}
+
+$.getJSON(GLTF_MODEL_URL, function (data) {
+  gltf = data;
+  load();
+});
+
+</script>
+<a href="https://github.com/cx20/hello/blob/master/html5/webgpu/4-2.gltf_square.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
+</body>
+</html>
