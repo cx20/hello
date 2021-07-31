@@ -1,11 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Testing glTF Square Using WebGPU</title>
+  <title>Testing glTF Cube Using WebGPU</title>
   <link rel="stylesheet" type="text/css" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix.js"></script>
 </head>
 <body>
 <script id="vs" type="x-shader/x-vertex">
+[[block]] struct Uniforms {
+    modelViewProjectionMatrix : mat4x4<f32>;
+};
+[[binding(0), group(0)]] var<uniform> uniforms : Uniforms;
+
 struct VertexInput {
     [[location(0)]] position : vec3<f32>;
     [[location(1)]] color : vec3<f32>;
@@ -20,7 +26,7 @@ struct VertexOutput {
 fn main(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
     output.fragColor = vec4<f32>(input.color, 1.0);
-    output.Position = vec4<f32>(input.position, 1.0);
+    output.Position = uniforms.modelViewProjectionMatrix * vec4<f32>(input.position, 1.0);
     return output;
 }
 </script>
@@ -47,10 +53,8 @@ fn main(input : FragmentInput) -> FragmentOutput {
 
 <canvas id="c" width="465" height="465"></canvas>
 <script>
-'use strict';
-
-const GLTF_BASE_URL = "https://rawcdn.githack.com/cx20/jsdo-static-contents/525dacce76429f469762e746a7d4c002d33ea2a2/models/gltf/2.0/SimpleModel2/glTF/";
-const GLTF_MODEL_URL = GLTF_BASE_URL + "SimpleModel2.gltf";
+const GLTF_BASE_URL = "https://rawcdn.githack.com/cx20/jsdo-static-contents/525dacce76429f469762e746a7d4c002d33ea2a2/models/gltf/2.0/SimpleModel3/glTF/";
+const GLTF_MODEL_URL = GLTF_BASE_URL + "SimpleModel3.gltf";
 
 const COMPONENT_TYPES = {
   5120: 1, // BYTE
@@ -106,14 +110,15 @@ let diffuse = [];
 let shininess = 0;
 let specular = [];
 
+//init();
 const vertexShaderWGSL = document.getElementById("vs").textContent;
 const fragmentShaderWGSL = document.getElementById("fs").textContent;
 
 function load() {
-  //          +---------------------------------------------------- accessors[0] : POSITION   (72 bytes = 12 bytes * 6)
-  //          |               +------------------------------------ accessors[1] : NORMAL     (72 bytes = 12 bytes * 6)
-  //          |               |              +--------------------- accessors[2] : COLOR_0    (72 bytes = 12 bytes * 6)
-  //          |               |              |              +------ accessors[3] : TEXCOORD_0 (48 bytes =  8 bytes * 6)
+  //          +---------------------------------------------------- accessors[0] : POSITION   (432 bytes = 12 bytes * 36)
+  //          |               +------------------------------------ accessors[1] : NORMAL     (432 bytes = 12 bytes * 36)
+  //          |               |              +--------------------- accessors[2] : COLOR_0    (432 bytes = 12 bytes * 36)
+  //          |               |              |              +------ accessors[3] : TEXCOORD_0 (228 bytes =  8 bytes * 36)
   //          |               |              |              |
   // +----------------+--------------+--------------+--------------+
   // |  accessors[0]  | accessors[1] | accessors[2] | accessors[3] |
@@ -123,9 +128,9 @@ function load() {
   // |                          buffers[0]                         |
   // +-------------------------------------------------------------+
   //
-  // |[0][1]..[70][71]|[72][73].[143]|[144]....[215]|[216]....[263]|
-  // |<--- 72 bytes ->|<- 72 bytes ->|<- 72 bytes ->|<- 48 bytes ->|
-  // |<------------------------ 264 bytes ------------------------>|
+  // |[0][1].....[431]|[432]....[863]|[864]...[1295]|[1296]..[1583]|
+  // |<-- 432 bytes ->|<- 432 bytes->|<- 432 bytes->|<- 228 bytes->|
+  // |<----------------------- 1584 bytes ------------------------>|
   
   // <componentType>
   // 5123 ... gl.UNSIGNED_SHORT
@@ -135,7 +140,7 @@ function load() {
   //     {
   //       "bufferView": 0,
   //       "componentType": 5126,
-  //       "count": 6,
+  //       "count": 36,
   //       "max": [0.5, 0.5, 0],
   //       "min": [-0.5,-0.5, 0],
   //       "type": "VEC3"
@@ -187,7 +192,7 @@ function load() {
   }, function(error) {
     console.error("Failed!", error);
   });
-  
+
   let promise3 = ajax(colorUri).then(function(response) {
     colors = response;
   }, function(error) {
@@ -207,7 +212,11 @@ async function init() {
     const c = document.getElementById("c");
     c.width = window.innerWidth;
     c.height = window.innerHeight;
-    
+
+    const aspect = Math.abs(c.width / c.height);
+    let projectionMatrix = mat4.create();
+    mat4.perspective(projectionMatrix, 45, aspect, 0.1, 100.0);
+
     const ctx = c.getContext("webgpu");
     const format = ctx.getPreferredFormat(device.adapter);
     ctx.configure({device: device, format: format});
@@ -231,7 +240,7 @@ async function init() {
                             shaderLocation: 0,
                             offset: 0,
                             format: "float32x3"
-                        },
+                        }
                     ]
                 },
                 {
@@ -254,35 +263,88 @@ async function init() {
                 {
                     format: format
                 }
-            ],
+            ]
         },
         primitive: {
-            topology: "triangle-strip",
-            stripIndexFormat: "uint32"
+            topology: "triangle-list"
+        },
+        depthStencil: {
+            depthWriteEnabled: true,
+            depthCompare: "less",
+            format: "depth24plus-stencil8"
         }
     });
 
+    const uniformBufferSize = 4 * 16; // 4x4 matrix
+
+    const uniformBuffer = device.createBuffer({
+        size: uniformBufferSize,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+    const uniformBindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [{
+            binding: 0,
+            resource: {
+                buffer: uniformBuffer,
+            },
+        }],
+    });
+    
+    let rad = 0;
+    function getTransformationMatrix() {
+        rad += Math.PI * 1.0 / 180.0;
+        let viewMatrix = mat4.create();
+        mat4.translate(viewMatrix, viewMatrix, vec3.fromValues(0, 0, -3));
+        let now = Date.now() / 1000;
+        mat4.rotate(viewMatrix, viewMatrix, rad, [1, 1, 1]);
+
+        let modelViewProjectionMatrix = mat4.create();
+        mat4.multiply(modelViewProjectionMatrix, projectionMatrix, viewMatrix);
+
+        return modelViewProjectionMatrix;
+    }
+
+    const depthTexture = device.createTexture({
+        size: {
+            width: c.width,
+            height: c.height,
+            depthOrArrayLayers: 1
+        },
+        format: "depth24plus-stencil8",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT
+    });
     let render =  function () {
         const commandEncoder = device.createCommandEncoder();
+        const { uploadBuffer } = updateBufferData(device, uniformBuffer, 0, getTransformationMatrix(), commandEncoder);
         const textureView = ctx.getCurrentTexture().createView();
         const renderPassDescriptor = {
             colorAttachments: [{
                 view: textureView,
                 loadValue: {r: 1, g: 1, b: 1, a: 1},
                 storeOp: "store"
-            }]
+            }],
+            depthStencilAttachment: {
+                view: depthTexture.createView(),
+                depthLoadValue: 1.0,
+                depthStoreOp: "store",
+                stencilLoadValue: 0,
+                stencilStoreOp: "store"
+            }
         };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+        passEncoder.setPipeline(pipeline);
         passEncoder.setVertexBuffer(0, vertexBuffer);
         passEncoder.setVertexBuffer(1, colorBuffer);
-        passEncoder.setPipeline(pipeline);
+        passEncoder.setBindGroup(0, uniformBindGroup);
         passEncoder.draw(positionAccessorCount, 1, 0, 0);
         passEncoder.endPass();
         device.queue.submit([commandEncoder.finish()]);
+        uploadBuffer.destroy();
         requestAnimationFrame(render);
     }
     requestAnimationFrame(render);
-
 }
 
 function makeShaderModule_WGSL(device, source) {
@@ -297,11 +359,39 @@ function makeVertexBuffer(device, data) {
     const verticesBuffer = device.createBuffer({
         size: data.byteLength,
         usage: GPUBufferUsage.VERTEX,
-        mappedAtCreation: true,
+        mappedAtCreation: true
     });
     new Float32Array(verticesBuffer.getMappedRange()).set(data);
     verticesBuffer.unmap();
     return verticesBuffer;
+}
+
+function makeIndexBuffer(device, data) {
+    const indicesBuffer = device.createBuffer({
+        size: data.byteLength,
+        usage: GPUBufferUsage.INDEX,
+        mappedAtCreation: true
+    });
+    new Uint32Array(indicesBuffer.getMappedRange()).set(data);
+    indicesBuffer.pointNum = data.length;
+    indicesBuffer.unmap();
+    return indicesBuffer;
+}
+
+function updateBufferData(device, dst, dstOffset, src, commandEncoder) {
+    const uploadBuffer = device.createBuffer({
+        size: src.byteLength,
+        usage: GPUBufferUsage.COPY_SRC,
+        mappedAtCreation: true
+    });
+
+    new src.constructor(uploadBuffer.getMappedRange()).set(src);
+    uploadBuffer.unmap();
+
+    commandEncoder = commandEncoder || device.createCommandEncoder();
+    commandEncoder.copyBufferToBuffer(uploadBuffer, 0, dst, dstOffset, src.byteLength);
+
+    return { commandEncoder, uploadBuffer };
 }
 
 function ajax(url, responseType) {
@@ -347,7 +437,6 @@ function ajax(url, responseType) {
       req.send();
     });
   }
-
 }
 
 $.getJSON(GLTF_MODEL_URL, function (data) {
@@ -356,6 +445,6 @@ $.getJSON(GLTF_MODEL_URL, function (data) {
 });
 
 </script>
-<a href="https://github.com/cx20/hello/blob/master/html5/webgpu/4-2.gltf_square.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
+<a href="https://github.com/cx20/hello/blob/master/html5/webgpu/4-3.gltf_cube.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
 </body>
 </html>
