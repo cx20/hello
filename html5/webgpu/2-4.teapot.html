@@ -157,7 +157,6 @@ async function init() {
         let viewMatrix = mat4.create();
         mat4.translate(viewMatrix, viewMatrix, vec3.fromValues(0, 0, -35));
         let now = Date.now() / 1000;
-        //mat4.rotate(viewMatrix, viewMatrix, 1, vec3.fromValues(Math.sin(now), Math.cos(now), 0));
         mat4.rotate(viewMatrix, viewMatrix, rad, [0, 1, 0]);
 
         let modelViewProjectionMatrix = mat4.create();
