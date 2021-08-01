@@ -450,6 +450,7 @@ function updateBufferData(device, dst, dstOffset, src, commandEncoder) {
 async function createTextureFromImage(device, src, usage) {
     const img = document.createElement("img");
     img.src = src;
+    img.crossOrigin = 'anonymous'; 
     await img.decode();
     const imageBitmap = await createImageBitmap(img);
 
