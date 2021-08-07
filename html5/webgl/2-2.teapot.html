@@ -93,8 +93,22 @@ function initBuffers() {
 }
 
 let rad = 0;
+let time = 0;
+let timeRatio = 1;
+
+// https://ics.media/entry/12930/
+function updateTimeRatio() {
+    const lastTime = time;
+    if (lastTime > 0) {
+        const FPS = 1000 / 60;
+        const dTime = new Date().getTime() - lastTime;
+        timeRatio = dTime / FPS;
+    }
+    time = new Date().getTime();
+}
+
 function draw() {
-    rad += Math.PI * 1.0 / 180.0;
+    rad += Math.PI * 1.0 / 180.0 * timeRatio;
     mat4.perspective(pMatrix, 45, c.width / c.height, 0.1, 1000.0);
     mat4.identity(mvMatrix);
     let translation = vec3.create();
@@ -114,6 +128,7 @@ function draw() {
 }
 
 function animate() {
+    updateTimeRatio();
     draw();
     requestAnimationFrame(animate);
 }

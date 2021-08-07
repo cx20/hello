@@ -134,8 +134,22 @@ async function init() {
     });
     
     let rad = 0;
+    let time = 0;
+    let timeRatio = 1;
+
+    // https://ics.media/entry/12930/
+    function updateTimeRatio() {
+        const lastTime = time;
+        if (lastTime > 0) {
+            const FPS = 1000 / 60;
+            const dTime = new Date().getTime() - lastTime;
+            timeRatio = dTime / FPS;
+        }
+        time = new Date().getTime();
+    }
+
     function getTransformationMatrix() {
-        rad += Math.PI * 1.0 / 180.0;
+        rad += Math.PI * 1.0 / 180.0 * timeRatio;
         let viewMatrix = mat4.create();
         mat4.translate(viewMatrix, viewMatrix, vec3.fromValues(0, 0, -35));
         let now = Date.now() / 1000;
@@ -158,7 +172,7 @@ async function init() {
     });
 
     let render =  function () {
-
+        updateTimeRatio();
         const commandEncoder = device.createCommandEncoder();
         const { uploadBuffer } = updateBufferData(device, uniformBuffer, 0, getTransformationMatrix(), commandEncoder);
         const textureView = ctx.getCurrentTexture().createView();
