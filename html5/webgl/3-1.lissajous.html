@@ -131,8 +131,9 @@ function initBuffers() {
     gl.vertexAttribPointer(aLoc[1], 3, gl.FLOAT, false, 0, 0);
 }
 
-function render(){
-    rad += Math.PI * 1.0 / 180.0;
+function render(timestamp){
+    //rad += Math.PI * 1.0 / 180.0;
+    rad = timestamp / 1000; // Seconds since the first requestAnimationFrame (ms)
 
     mat4.perspective(pMatrix, 45, window.innerWidth / window.innerHeight, 0.1, 100.0);
     mat4.identity(mvMatrix);

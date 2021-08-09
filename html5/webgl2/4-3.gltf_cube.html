@@ -272,14 +272,15 @@ function load() {
   });
 }
 
-function animate() {
-  render();
+function animate(timestamp) {
+  render(timestamp);
   requestAnimationFrame(animate);
 }
 
 let rad = 0;
-function render() {
-  rad += Math.PI * 1.0 / 180.0;
+function render(timestamp) {
+  //rad += Math.PI * 1.0 / 180.0;
+  rad = timestamp / 1000; // Seconds since the first requestAnimationFrame (ms)
   mat3.identity(nMatrix);
   mat4.perspective(pMatrix, 45, c.width / c.height, 0.1, 100.0);
   mat4.identity(mvMatrix);
