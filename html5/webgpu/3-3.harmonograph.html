@@ -183,8 +183,9 @@ async function init() {
     });
     
     let rad = 0;
-    function getTransformationMatrix() {
-        rad += Math.PI * 1.0 / 180.0;
+    function getTransformationMatrix(timestamp) {
+        //rad += Math.PI * 1.0 / 180.0;
+        rad = timestamp / 1000; // Seconds since the first requestAnimationFrame (ms)
         let viewMatrix = mat4.create();
         mat4.translate(viewMatrix, viewMatrix, vec3.fromValues(0, 0, -2));
         let now = Date.now() / 1000;
@@ -205,7 +206,7 @@ async function init() {
         format: "depth24plus-stencil8",
         usage: GPUTextureUsage.RENDER_ATTACHMENT
     });
-    let render =  function () {
+    let render =  function (timestamp) {
         // uniform float time 
         time = (+new Date - baseTime) / 1000;
 
@@ -216,7 +217,7 @@ async function init() {
         f4 = (f4 + Math.random() / 40) % 10;
 
         const commandEncoder = device.createCommandEncoder();
-        const { uploadBuffer: buffer0 } = updateBufferData(device, uniformBuffer, 0, getTransformationMatrix(), commandEncoder);
+        const { uploadBuffer: buffer0 } = updateBufferData(device, uniformBuffer, 0, getTransformationMatrix(timestamp), commandEncoder);
         const { uploadBuffer: buffer1 } = updateBufferData(device, uniformBuffer, 4 * 16 +  0, new Float32Array([time]), commandEncoder);
         const { uploadBuffer: buffer2 } = updateBufferData(device, uniformBuffer, 4 * 16 +  4, new Float32Array([f1]), commandEncoder);
         const { uploadBuffer: buffer3 } = updateBufferData(device, uniformBuffer, 4 * 16 +  8, new Float32Array([f2]), commandEncoder);
