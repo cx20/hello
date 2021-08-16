@@ -231,7 +231,7 @@ async function init() {
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    const cubeTexture = await createTextureFromImage(device, 'https://cx20.github.io/webgl-test/assets/textures/frog.jpg', GPUTextureUsage.SAMPLED);
+    const cubeTexture = await createTextureFromImage(device, 'https://cx20.github.io/webgl-test/assets/textures/frog.jpg', GPUTextureUsage.TEXTURE_BINDING);
     
     const sampler = device.createSampler({
         magFilter: "linear",
