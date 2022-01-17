@@ -242,7 +242,6 @@ void EnableOpenGL(HWND hwnd, HDC* hDC, HGLRC* hRC)
     wglDeleteContext(hGLRC_old);
 
     const GLubyte * strShaderLanguageVersion = glGetString (GL_SHADING_LANGUAGE_VERSION);
-    MessageBoxA(NULL, NULL, (LPCSTR)strShaderLanguageVersion, MB_OK);
 }
 
 void DisableOpenGL (HWND hwnd, HDC hDC, HGLRC hRC)
