@@ -1,6 +1,5 @@
 #include <windows.h>
 #include <gl/gl.h>
-#include <gl/glu.h>
 
 #ifndef APIENTRY
 #define APIENTRY
@@ -84,18 +83,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     MSG msg;
     BOOL bQuit = FALSE;
 
-    wcex.cbSize = sizeof(WNDCLASSEX);
-    wcex.style = CS_OWNDC;
-    wcex.lpfnWndProc = WindowProc;
-    wcex.cbClsExtra = 0;
-    wcex.cbWndExtra = 0;
-    wcex.hInstance = hInstance;
-    wcex.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-    wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wcex.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
-    wcex.lpszMenuName = NULL;
-    wcex.lpszClassName = "WindowClass";
-    wcex.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
+    wcex.cbSize         = sizeof(WNDCLASSEX);
+    wcex.style          = CS_OWNDC;
+    wcex.lpfnWndProc    = WindowProc;
+    wcex.cbClsExtra     = 0;
+    wcex.cbWndExtra     = 0;
+    wcex.hInstance      = hInstance;
+    wcex.hIcon          = LoadIcon(NULL, IDI_APPLICATION);
+    wcex.hCursor        = LoadCursor(NULL, IDC_ARROW);
+    wcex.hbrBackground  = (HBRUSH)GetStockObject(BLACK_BRUSH);
+    wcex.lpszMenuName   = NULL;
+    wcex.lpszClassName  = "WindowClass";
+    wcex.hIconSm        = LoadIcon(NULL, IDI_APPLICATION);
 
     if (!RegisterClassEx(&wcex))
         return 0;
