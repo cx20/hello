@@ -1,7 +1,8 @@
 #include <windows.h>
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-void DrawTriangle(HWND hwnd);
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+void OnPaint(HDC hdc);
+void DrawTriangle(HDC hdc);
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -64,8 +65,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     return msg.wParam;
 }
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+    HDC hdc;
+    PAINTSTRUCT ps;
     switch (uMsg)
     {
         case WM_CLOSE:
@@ -76,23 +79,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             return 0;
 
         case WM_PAINT:
-            DrawTriangle(hwnd);
+            hdc = BeginPaint(hWnd, &ps);
+            OnPaint(hdc);
+            EndPaint(hWnd, &ps);
             break;
          default:
-            return DefWindowProc(hwnd, uMsg, wParam, lParam);
+            return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
 
     return 0;
 }
 
-void DrawTriangle(HWND hwnd)
+void OnPaint(HDC hdc)
 {
-    HDC hdc;
-    PAINTSTRUCT ps;
+    DrawTriangle(hdc);
+}
+
+void DrawTriangle(HDC hdc)
+{
     int WIDTH  = 640;
     int HEIGHT = 480;
-
-    hdc = BeginPaint(hwnd, &ps);
 
     TRIVERTEX vertex[3];
     vertex[0].x     = WIDTH/2;
@@ -122,5 +128,4 @@ void DrawTriangle(HWND hwnd)
     gTriangle.Vertex3 = 2;
 
     GradientFill(hdc, vertex, 3, &gTriangle, 1, GRADIENT_FILL_TRIANGLE);
-    EndPaint(hwnd, &ps);
 }
