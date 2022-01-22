@@ -9,9 +9,9 @@ class HelloForm : Form
     {
         this.Size = new Size( 640, 480 );
         this.Text = "Hello, World!";
-        this.Paint += new System.Windows.Forms.PaintEventHandler(this.HelloForm_Paint);
+        //this.Paint += new System.Windows.Forms.PaintEventHandler(this.HelloForm_Paint);
     }
-    private void HelloForm_Paint(object sender, PaintEventArgs e) 
+    protected override void OnPaint(PaintEventArgs e)
     {
         int WIDTH  = 640;
         int HEIGHT = 480;
