@@ -8,13 +8,13 @@ typedef struct _GdiplusStartupInput
     BOOL SuppressExternalCodecs;
 } GdiplusStartupInput;
 
-typedef float REAL;
+typedef int INT;
 
-typedef struct _GpPointF
+typedef struct _GpPoint
 {
-    REAL x;
-    REAL y;
-} GpPointF;
+    INT x;
+    INT y;
+} GpPoint;
 
 int WINAPI GdiplusStartup(int* token, GdiplusStartupInput *input, int *output);
 void WINAPI GdiplusShutdown(int token);
@@ -23,24 +23,17 @@ int WINAPI GdipDeleteGraphics(int graphics);
 
 int WINAPI GdipCreatePath(int brushMode, int** path);
 int WINAPI GdipDeletePath(int* path);
-int WINAPI GdipAddPathLine2(int* path, const GpPointF* points, int count);
+int WINAPI GdipAddPathLine2I(int* path, const GpPoint* points, int count);
 
 int WINAPI GdipCreatePathGradientFromPath(const int* path, int** polyGradient);
 int WINAPI GdipSetPathGradientCenterColor(int *brush, unsigned int argb_colors);
 int WINAPI GdipSetPathGradientSurroundColorsWithCount( int *brush, unsigned int* argb_color, int* count);
 
-/*
-int WINAPI GdipCreatePen1(unsigned int argb_color, float width, int unit, int** pen);
-int WINAPI GdipDeletePen(int* pen);
-int WINAPI GdipDrawRectangle(int graphics, int* pen, float x, float y, float width, float height);
-int WINAPI GdipDrawLine(int graphics, int* pen, float x1, float y1, float x2, float y2);
-*/
 int WINAPI GdipFillPath(int graphics, int* brush, int* path);
 
 int token;
 int* path;
 int* brush;
-//int* pen;
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void OnPaint(HDC hdc);
@@ -151,13 +144,13 @@ void DrawTriangle(HDC hdc)
 
     GdipCreatePath(0, &path);
 
-    GpPointF points[] = {
-        {WIDTH*1/2, HEIGHT*1/4},
-        {WIDTH*3/4, HEIGHT*3/4},
-        {WIDTH*1/4, HEIGHT*3/4}
+    GpPoint points[] = {
+        {WIDTH * 1 / 2, HEIGHT * 1 / 4},
+        {WIDTH * 3 / 4, HEIGHT * 3 / 4},
+        {WIDTH * 1 / 4, HEIGHT * 3 / 4}
     };
 
-    GdipAddPathLine2(path, points, 3);
+    GdipAddPathLine2I(path, points, 3);
     
     GdipCreatePathGradientFromPath(path, &brush);
 

@@ -111,9 +111,9 @@ void DrawTriangle(HDC hdc)
     Graphics graphics(hdc);
 
     Point points[] = {
-        Point(WIDTH*1/2, HEIGHT*1/4),
-        Point(WIDTH*3/4, HEIGHT*3/4),
-        Point(WIDTH*1/4, HEIGHT*3/4)
+        Point(WIDTH * 1 / 2, HEIGHT * 1 / 4),
+        Point(WIDTH * 3 / 4, HEIGHT * 3 / 4),
+        Point(WIDTH * 1 / 4, HEIGHT * 3 / 4)
     };
 
     GraphicsPath path;

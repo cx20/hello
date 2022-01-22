@@ -101,22 +101,22 @@ void DrawTriangle(HDC hdc)
     int HEIGHT = 480;
 
     TRIVERTEX vertex[3];
-    vertex[0].x     = WIDTH/2;
-    vertex[0].y     = HEIGHT*1/4;
+    vertex[0].x     = WIDTH  * 1 / 2;
+    vertex[0].y     = HEIGHT * 1 / 4;
     vertex[0].Red   = 0xffff;
     vertex[0].Green = 0x0000;
     vertex[0].Blue  = 0x0000;
     vertex[0].Alpha = 0x0000;
 
-    vertex[1].x     = WIDTH*3/4;
-    vertex[1].y     = HEIGHT*3/4;
+    vertex[1].x     = WIDTH  * 3 / 4;
+    vertex[1].y     = HEIGHT * 3 / 4;
     vertex[1].Red   = 0x0000;
     vertex[1].Green = 0xffff;
     vertex[1].Blue  = 0x0000;
     vertex[1].Alpha = 0x0000;
 
-    vertex[2].x     = WIDTH*1/4;
-    vertex[2].y     = HEIGHT*3/4; 
+    vertex[2].x     = WIDTH  * 1 / 4;
+    vertex[2].y     = HEIGHT * 3 / 4;
     vertex[2].Red   = 0x0000;
     vertex[2].Green = 0x0000;
     vertex[2].Blue  = 0xffff;
