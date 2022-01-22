@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <tchar.h>
 #include <gdiplus.h>
 
 using namespace Gdiplus;
@@ -10,7 +11,7 @@ void DrawTriangle(HDC hdc);
 GdiplusStartupInput gdiSI;
 ULONG_PTR           gdiToken;
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
 {
     WNDCLASSEX wcex;
     HWND hwnd;
@@ -31,15 +32,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     wcex.hCursor        = LoadCursor(NULL, IDC_ARROW);
     wcex.hbrBackground  = (HBRUSH)GetStockObject(BLACK_BRUSH);
     wcex.lpszMenuName   = NULL;
-    wcex.lpszClassName  = "WindowClass";
+    wcex.lpszClassName  = _T("WindowClass");
     wcex.hIconSm        = LoadIcon(NULL, IDI_APPLICATION);
 
     if (!RegisterClassEx(&wcex))
         return 0;
 
     hwnd = CreateWindowEx(0,
-                          "WindowClass",
-                          "Hello, World!",
+                          _T("WindowClass"),
+                          _T("Hello, World!"),
                           WS_OVERLAPPEDWINDOW,
                           CW_USEDEFAULT,
                           CW_USEDEFAULT,

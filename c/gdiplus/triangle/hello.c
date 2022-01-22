@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <tchar.h>
 
 typedef struct _GdiplusStartupInput
 {
@@ -39,7 +40,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void OnPaint(HDC hdc);
 void DrawTriangle(HDC hdc);
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     GdiplusStartupInput StartupInput = { 0 };
     StartupInput.GdiplusVersion = 1;
