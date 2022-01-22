@@ -7,6 +7,7 @@ C:\> SET LIB=%DXSDK_DIR%\Lib\x86;%LIB%
 C:\> cl hello.cpp ^
          /link ^
          user32.lib ^
+         d3d9.lib ^
          /SUBSYSTEM:WINDOWS
 ```
 Result:

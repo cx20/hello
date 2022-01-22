@@ -8,10 +8,74 @@ LPDIRECT3DDEVICE9   g_pd3dDevice = NULL;
 LPD3DXFONT          g_pd3dFont   = NULL;
 RECT                g_rect       = { 0, 0, 0, 0 };
 
+LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam );
 HRESULT InitD3D( HWND hWnd );
 HRESULT InitFont();
 VOID Cleanup();
 VOID Render();
+
+int WINAPI _tWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow )
+{
+    LPCTSTR lpszClassName = _T("helloWindow");
+    LPCTSTR lpszWindowName = _T("Hello, World!");
+    MSG msg;
+    HWND hWnd;
+
+    WNDCLASSEX wcex;
+    wcex.cbSize = sizeof(WNDCLASSEX);
+    wcex.style          = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc    = WndProc;
+    wcex.cbClsExtra     = 0;
+    wcex.cbWndExtra     = 0;
+    wcex.hInstance      = hInstance;
+    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
+    wcex.hCursor        = LoadCursor(NULL, IDC_ARROW);
+    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
+    wcex.lpszMenuName   = NULL;
+    wcex.lpszClassName  = lpszClassName;
+    wcex.hIconSm        = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
+
+    RegisterClassEx(&wcex);
+    hWnd = CreateWindow(
+        lpszClassName,
+        lpszWindowName,
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT, 640, 480,
+        NULL, NULL, hInstance, NULL
+    );
+
+    InitD3D( hWnd );
+    InitFont();
+
+    ShowWindow( hWnd, SW_SHOWDEFAULT );
+    UpdateWindow( hWnd );
+
+    while( GetMessage( &msg, NULL, 0, 0 ) )
+    {
+        TranslateMessage( &msg );
+        DispatchMessage( &msg );
+    }
+
+    return 0;
+}
+
+LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
+{
+    switch( message )
+    {
+        case WM_DESTROY:
+            Cleanup();
+            PostQuitMessage( 0 );
+            return 0;
+
+        case WM_PAINT:
+            Render();
+            ValidateRect( hWnd, NULL );
+            return 0;
+    }
+
+    return DefWindowProc( hWnd, message, wParam, lParam );
+}
 
 HRESULT InitD3D( HWND hWnd )
 {
@@ -154,67 +218,4 @@ VOID Render()
     }
 
     g_pd3dDevice->lpVtbl->Present( g_pd3dDevice, NULL, NULL, NULL, NULL );
-}
-
-LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
-{
-    switch( message )
-    {
-        case WM_DESTROY:
-            Cleanup();
-            PostQuitMessage( 0 );
-            return 0;
-
-        case WM_PAINT:
-            Render();
-            ValidateRect( hWnd, NULL );
-            return 0;
-    }
-
-    return DefWindowProc( hWnd, message, wParam, lParam );
-}
-
-int APIENTRY _tWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow )
-{
-    LPCTSTR lpszClassName = _T("helloWindow");
-    LPCTSTR lpszWindowName = _T("Hello, World!");
-    MSG msg;
-    HWND hWnd;
-
-    WNDCLASSEX wcex;
-    wcex.cbSize = sizeof(WNDCLASSEX);
-    wcex.style          = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc    = WndProc;
-    wcex.cbClsExtra     = 0;
-    wcex.cbWndExtra     = 0;
-    wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
-    wcex.hCursor        = LoadCursor(NULL, IDC_ARROW);
-    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = NULL;
-    wcex.lpszClassName  = lpszClassName;
-    wcex.hIconSm        = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
-
-    RegisterClassEx(&wcex);
-    hWnd = CreateWindow(
-        lpszClassName,
-        lpszWindowName,
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 640, 480,
-        NULL, NULL, hInstance, NULL
-    );
-
-    InitD3D( hWnd );
-    InitFont();
-
-    ShowWindow( hWnd, SW_SHOWDEFAULT );
-    UpdateWindow( hWnd );
-
-    while( GetMessage( &msg, NULL, 0, 0 ) )
-    {
-        TranslateMessage( &msg );
-        DispatchMessage( &msg );
-    }
-
-    return 0;
 }

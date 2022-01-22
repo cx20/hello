@@ -1,11 +1,9 @@
 #include <windows.h>
+#include <tchar.h>
 #include <d3d11.h>
 #include <d3dx11.h>
 #include <d3dcompiler.h>
 #include <xnamath.h>
-
-#pragma comment (lib, "d3d11.lib")
-#pragma comment (lib, "d3dx11.lib")
 
 struct VERTEX
 {
@@ -26,11 +24,67 @@ ID3D11PixelShader*      g_pPixelShader = NULL;
 ID3D11InputLayout*      g_pVertexLayout = NULL;
 ID3D11Buffer*           g_pVertexBuffer = NULL;
 
+LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 HRESULT InitDevice();
 void CleanupDevice();
-LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
 void Render();
+
+int WINAPI _tWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow )
+{
+    UNREFERENCED_PARAMETER( hPrevInstance );
+    UNREFERENCED_PARAMETER( lpCmdLine );
+
+    if( FAILED( InitWindow( hInstance, nCmdShow ) ) )
+        return 0;
+
+    if( FAILED( InitDevice() ) )
+    {
+        CleanupDevice();
+        return 0;
+    }
+
+    MSG msg = {0};
+    while( WM_QUIT != msg.message )
+    {
+        if( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) )
+        {
+            TranslateMessage( &msg );
+            DispatchMessage( &msg );
+        }
+        else
+        {
+            Render();
+        }
+    }
+
+    CleanupDevice();
+
+    return ( int )msg.wParam;
+}
+
+LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
+{
+    PAINTSTRUCT ps;
+    HDC hdc;
+
+    switch( message )
+    {
+        case WM_PAINT:
+            hdc = BeginPaint( hWnd, &ps );
+            EndPaint( hWnd, &ps );
+            break;
+
+        case WM_DESTROY:
+            PostQuitMessage( 0 );
+            break;
+
+        default:
+            return DefWindowProc( hWnd, message, wParam, lParam );
+    }
+
+    return 0;
+}
 
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
 {
@@ -44,14 +98,14 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
     wcex.hCursor       = LoadCursor( NULL, IDC_ARROW );
     wcex.hbrBackground = ( HBRUSH )( COLOR_WINDOW + 1 );
     wcex.lpszMenuName  = NULL;
-    wcex.lpszClassName = L"WindowClass";
+    wcex.lpszClassName = _T("WindowClass");
     if( !RegisterClassEx( &wcex ) )
         return E_FAIL;
 
     g_hInst = hInstance;
     RECT rc = { 0, 0, 640, 480 };
     AdjustWindowRect( &rc, WS_OVERLAPPEDWINDOW, FALSE );
-    g_hWnd = CreateWindow( L"WindowClass", L"Hello, World!",
+    g_hWnd = CreateWindow( _T("WindowClass"), _T("Hello, World!"),
                            WS_OVERLAPPEDWINDOW,
                            CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, NULL, NULL, hInstance,
                            NULL );
@@ -64,7 +118,7 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
 }
 
 
-HRESULT CompileShaderFromFile( WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut )
+HRESULT CompileShaderFromFile( TCHAR* szFileName, LPCTSTR szEntryPoint, LPCTSTR szShaderModel, ID3DBlob** ppBlobOut )
 {
     HRESULT hr = S_OK;
 
@@ -154,7 +208,7 @@ HRESULT InitDevice()
     g_pImmediateContext->RSSetViewports( 1, &vp );
 
     ID3DBlob* pVSBlob = NULL;
-    hr = CompileShaderFromFile( L"hello.fx", "VS", "vs_4_0", &pVSBlob );
+    hr = CompileShaderFromFile( _T("hello.fx"), _T("VS"), _T("vs_4_0"), &pVSBlob );
     if( FAILED( hr ) )
         return hr;
 
@@ -181,7 +235,7 @@ HRESULT InitDevice()
     g_pImmediateContext->IASetInputLayout( g_pVertexLayout );
 
     ID3DBlob* pPSBlob = NULL;
-    hr = CompileShaderFromFile( L"hello.fx", "PS", "ps_4_0", &pPSBlob );
+    hr = CompileShaderFromFile( _T("hello.fx"), _T("PS"), _T("ps_4_0"), &pPSBlob );
     if( FAILED( hr ) )
         return hr;
 
@@ -230,29 +284,6 @@ void CleanupDevice()
     if( g_pd3dDevice ) g_pd3dDevice->Release();
 }
 
-LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
-{
-    PAINTSTRUCT ps;
-    HDC hdc;
-
-    switch( message )
-    {
-        case WM_PAINT:
-            hdc = BeginPaint( hWnd, &ps );
-            EndPaint( hWnd, &ps );
-            break;
-
-        case WM_DESTROY:
-            PostQuitMessage( 0 );
-            break;
-
-        default:
-            return DefWindowProc( hWnd, message, wParam, lParam );
-    }
-
-    return 0;
-}
-
 void Render()
 {
     float ClearColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -265,35 +296,3 @@ void Render()
     g_pSwapChain->Present( 0, 0 );
 }
 
-int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow )
-{
-    UNREFERENCED_PARAMETER( hPrevInstance );
-    UNREFERENCED_PARAMETER( lpCmdLine );
-
-    if( FAILED( InitWindow( hInstance, nCmdShow ) ) )
-        return 0;
-
-    if( FAILED( InitDevice() ) )
-    {
-        CleanupDevice();
-        return 0;
-    }
-
-    MSG msg = {0};
-    while( WM_QUIT != msg.message )
-    {
-        if( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) )
-        {
-            TranslateMessage( &msg );
-            DispatchMessage( &msg );
-        }
-        else
-        {
-            Render();
-        }
-    }
-
-    CleanupDevice();
-
-    return ( int )msg.wParam;
-}

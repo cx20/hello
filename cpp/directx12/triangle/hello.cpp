@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <tchar.h>
 #include <wrl.h>
 
 #include <d3d12.h>
@@ -23,6 +24,7 @@ struct VERTEX
     XMFLOAT4 color;
 };
 
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam);
 HRESULT OnInit(HWND hWnd);
 HRESULT InitDevice(HWND hWnd);
 HRESULT InitView();
@@ -33,7 +35,6 @@ HRESULT InitFence();
 void OnRender();
 void WaitForPreviousFrame();
 void OnDestroy();
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam);
 
 static const UINT   g_frameCount = 2;
 
@@ -58,6 +59,68 @@ static UINT64       g_fenceValue;
 
 ComPtr<ID3D12Resource>              g_vertexBuffer;
 static D3D12_VERTEX_BUFFER_VIEW     g_vertexBufferView;
+
+int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE, LPTSTR, int nCmdShow)
+{
+    WNDCLASSEX  windowClass = {};
+    windowClass.cbSize        = sizeof(WNDCLASSEX);
+    windowClass.style         = CS_HREDRAW | CS_VREDRAW;
+    windowClass.lpfnWndProc   = WindowProc;
+    windowClass.hInstance     = hInstance;
+    windowClass.hCursor       = LoadCursor(NULL, IDC_ARROW);
+    windowClass.lpszClassName = _T("windowClass");
+    RegisterClassEx(&windowClass);
+
+    RECT windowRect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
+    AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
+
+    HWND hWnd = CreateWindow(
+        _T("windowClass"),
+        _T("Hello, World!"),
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        windowRect.right - windowRect.left,
+        windowRect.bottom - windowRect.top,
+        nullptr,
+        nullptr,
+        hInstance,
+        nullptr);
+
+    MSG msg = {};
+    if (SUCCEEDED(OnInit(hWnd)))
+    {
+        ShowWindow(hWnd, SW_SHOW);
+
+        while (msg.message != WM_QUIT)
+        {
+            if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+            {
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
+            }
+            else
+            {
+                OnRender();
+            }
+        }
+    }
+
+    return static_cast<int>(msg.wParam);
+}
+
+
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam)
+{
+    switch (nMsg) {
+    case WM_DESTROY:
+        OnDestroy();
+        PostQuitMessage(0);
+        return 0;
+    }
+
+    return DefWindowProc(hWnd, nMsg, wParam, lParam);
+}
 
 HRESULT OnInit(HWND hWnd)
 {
@@ -370,63 +433,3 @@ void OnDestroy()
     CloseHandle(g_fenceEvent);
 }
 
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam)
-{
-    switch (nMsg) {
-    case WM_DESTROY:
-        OnDestroy();
-        PostQuitMessage(0);
-        return 0;
-    }
-
-    return DefWindowProc(hWnd, nMsg, wParam, lParam);
-}
-
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
-{
-    WNDCLASSEX  windowClass = {};
-    windowClass.cbSize        = sizeof(WNDCLASSEX);
-    windowClass.style         = CS_HREDRAW | CS_VREDRAW;
-    windowClass.lpfnWndProc   = WindowProc;
-    windowClass.hInstance     = hInstance;
-    windowClass.hCursor       = LoadCursor(NULL, IDC_ARROW);
-    windowClass.lpszClassName = L"windowClass";
-    RegisterClassEx(&windowClass);
-
-    RECT windowRect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
-    AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
-
-    HWND hWnd = CreateWindow(
-        L"windowClass",
-        L"Hello, World!",
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        windowRect.right - windowRect.left,
-        windowRect.bottom - windowRect.top,
-        nullptr,
-        nullptr,
-        hInstance,
-        nullptr);
-
-    MSG msg = {};
-    if (SUCCEEDED(OnInit(hWnd)))
-    {
-        ShowWindow(hWnd, SW_SHOW);
-
-        while (msg.message != WM_QUIT)
-        {
-            if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-            {
-                TranslateMessage(&msg);
-                DispatchMessage(&msg);
-            }
-            else
-            {
-                OnRender();
-            }
-        }
-    }
-
-    return static_cast<int>(msg.wParam);
-}

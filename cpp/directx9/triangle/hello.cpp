@@ -1,8 +1,6 @@
 #include <tchar.h>
 #include <d3d9.h>
 
-#pragma comment (lib, "d3d9.lib")
-
 struct VERTEX
 {
     FLOAT x, y, z, rhw;
@@ -14,6 +12,83 @@ LPDIRECT3DDEVICE9       g_pd3dDevice = NULL;
 LPDIRECT3DVERTEXBUFFER9 g_pVB = NULL;
 
 #define D3DFVF_VERTEX (D3DFVF_XYZRHW | D3DFVF_DIFFUSE)
+
+LRESULT WINAPI WndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
+HRESULT InitD3D( HWND hWnd );
+HRESULT InitVB();
+void Cleanup();
+void Render();
+
+int WINAPI _tWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow )
+{
+    UNREFERENCED_PARAMETER( hPrevInstance );
+    UNREFERENCED_PARAMETER( lpCmdLine );
+
+    LPCTSTR lpszClassName = _T("helloWindow");
+    LPCTSTR lpszWindowName = _T("Hello, World!");
+
+    WNDCLASSEX wcex = { 0 };
+    wcex.cbSize         = sizeof(WNDCLASSEX);
+    wcex.style          = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc    = WndProc;
+    wcex.cbClsExtra     = 0;
+    wcex.cbWndExtra     = 0;
+    wcex.hInstance      = hInstance;
+    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
+    wcex.hCursor        = LoadCursor(NULL, IDC_ARROW);
+    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
+    wcex.lpszMenuName   = NULL;
+    wcex.lpszClassName  = lpszClassName;
+    wcex.hIconSm        = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
+    RegisterClassEx( &wcex );
+
+    HWND hWnd = CreateWindow(
+        lpszClassName,
+        lpszWindowName,
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT, 640, 480,
+        NULL, NULL, hInstance, NULL
+    );
+
+    if( FAILED( InitD3D( hWnd ) ) )
+        return 0;
+
+    if( FAILED( InitVB() ) )
+        return 0;
+
+    ShowWindow( hWnd, SW_SHOWDEFAULT );
+    UpdateWindow( hWnd );
+
+    MSG msg = { 0 };
+    while( msg.message != WM_QUIT )
+    {
+        if( PeekMessage( &msg, NULL, 0U, 0U, PM_REMOVE ) )
+        {
+            TranslateMessage( &msg );
+            DispatchMessage( &msg );
+        }
+        else
+        {
+            Render();
+        }
+    }
+
+    UnregisterClass( lpszClassName, wcex.hInstance );
+    return 0;
+}
+
+LRESULT WINAPI WndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+    switch( msg )
+    {
+        case WM_DESTROY:
+            Cleanup();
+            PostQuitMessage( 0 );
+            return 0;
+    }
+
+    return DefWindowProc( hWnd, msg, wParam, lParam );
+}
 
 HRESULT InitD3D( HWND hWnd )
 {
@@ -72,19 +147,6 @@ void Cleanup()
         g_pD3D->Release();
 }
 
-LRESULT WINAPI WndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
-{
-    switch( msg )
-    {
-        case WM_DESTROY:
-            Cleanup();
-            PostQuitMessage( 0 );
-            return 0;
-    }
-
-    return DefWindowProc( hWnd, msg, wParam, lParam );
-}
-
 void Render()
 {
     g_pd3dDevice->Clear( 0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB( 255, 255, 255 ), 1.0f, 0 );
@@ -99,62 +161,4 @@ void Render()
     }
 
     g_pd3dDevice->Present( NULL, NULL, NULL, NULL );
-}
-
-int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow )
-{
-    UNREFERENCED_PARAMETER( hPrevInstance );
-    UNREFERENCED_PARAMETER( lpCmdLine );
-
-    LPCTSTR lpszClassName = _T("helloWindow");
-    LPCTSTR lpszWindowName = _T("Hello, World!");
-
-    WNDCLASSEX wcex = { 0 };
-    wcex.cbSize         = sizeof(WNDCLASSEX);
-    wcex.style          = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc    = WndProc;
-    wcex.cbClsExtra     = 0;
-    wcex.cbWndExtra     = 0;
-    wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
-    wcex.hCursor        = LoadCursor(NULL, IDC_ARROW);
-    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = NULL;
-    wcex.lpszClassName  = lpszClassName;
-    wcex.hIconSm        = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
-    RegisterClassEx( &wcex );
-
-    HWND hWnd = CreateWindow(
-        lpszClassName,
-        lpszWindowName,
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 640, 480,
-        NULL, NULL, hInstance, NULL
-    );
-
-    if( FAILED( InitD3D( hWnd ) ) )
-        return 0;
-
-    if( FAILED( InitVB() ) )
-        return 0;
-
-    ShowWindow( hWnd, SW_SHOWDEFAULT );
-    UpdateWindow( hWnd );
-
-    MSG msg = { 0 };
-    while( msg.message != WM_QUIT )
-    {
-        if( PeekMessage( &msg, NULL, 0U, 0U, PM_REMOVE ) )
-        {
-            TranslateMessage( &msg );
-            DispatchMessage( &msg );
-        }
-        else
-        {
-            Render();
-        }
-    }
-
-    UnregisterClass( lpszClassName, wcex.hInstance );
-    return 0;
 }

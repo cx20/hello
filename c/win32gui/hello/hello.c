@@ -1,31 +1,9 @@
 #include <windows.h>
 #include <tchar.h>
- 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    PAINTSTRUCT ps;
-    HDC hdc;
-    LPCTSTR lpszMessage = _T("Hello, Win32 GUI World!");
- 
-    switch (message)
-    {
-    case WM_PAINT:
-        hdc = BeginPaint( hWnd, &ps );
-        TextOut( hdc, 0, 0, lpszMessage, lstrlen(lpszMessage) );
-        EndPaint( hWnd, &ps );
-        break;
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        break;
-    default:
-        return DefWindowProc(hWnd, message, wParam, lParam);
-        break;
-    }
- 
-    return 0;
-}
- 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+
+int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
 {
     LPCTSTR lpszClassName = _T("helloWindow");
     LPCTSTR lpszWindowName = _T("Hello, World!");
@@ -65,4 +43,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
  
     return (int)msg.wParam;
+}
+
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    PAINTSTRUCT ps;
+    HDC hdc;
+    LPCTSTR lpszMessage = _T("Hello, Win32 GUI World!");
+ 
+    switch (message)
+    {
+    case WM_PAINT:
+        hdc = BeginPaint( hWnd, &ps );
+        TextOut( hdc, 0, 0, lpszMessage, lstrlen(lpszMessage) );
+        EndPaint( hWnd, &ps );
+        break;
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        break;
+    default:
+        return DefWindowProc(hWnd, message, wParam, lParam);
+        break;
+    }
+ 
+    return 0;
 }

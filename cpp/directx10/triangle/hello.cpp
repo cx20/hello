@@ -3,9 +3,6 @@
 #include <d3d10.h>
 #include <d3dx10.h>
 
-#pragma comment (lib, "d3d10.lib")
-#pragma comment (lib, "d3dx10.lib")
-
 struct VERTEX
 {
     D3DXVECTOR3 Pos;
@@ -23,11 +20,64 @@ ID3D10EffectTechnique*  g_pTechnique = NULL;
 ID3D10InputLayout*      g_pVertexLayout = NULL;
 ID3D10Buffer*           g_pVertexBuffer = NULL;
 
+LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 HRESULT InitDevice();
 void CleanupDevice();
-LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
 void Render();
+
+int WINAPI _tWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow )
+{
+    if( FAILED( InitWindow( hInstance, nCmdShow ) ) )
+        return 0;
+
+    if( FAILED( InitDevice() ) )
+    {
+        CleanupDevice();
+        return 0;
+    }
+
+    MSG msg = { 0 };
+    while( WM_QUIT != msg.message )
+    {
+        if( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) )
+        {
+            TranslateMessage( &msg );
+            DispatchMessage( &msg );
+        }
+        else
+        {
+            Render();
+        }
+    }
+
+    CleanupDevice();
+
+    return ( int )msg.wParam;
+}
+
+LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
+{
+    PAINTSTRUCT ps;
+    HDC hdc;
+
+    switch( message )
+    {
+        case WM_PAINT:
+            hdc = BeginPaint( hWnd, &ps );
+            EndPaint( hWnd, &ps );
+            break;
+
+        case WM_DESTROY:
+            PostQuitMessage( 0 );
+            break;
+
+        default:
+            return DefWindowProc( hWnd, message, wParam, lParam );
+    }
+
+    return 0;
+}
 
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
 {
@@ -41,14 +91,15 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
     wcex.hCursor       = LoadCursor( NULL, IDC_ARROW );
     wcex.hbrBackground = ( HBRUSH )( COLOR_WINDOW + 1 );
     wcex.lpszMenuName  = NULL;
-    wcex.lpszClassName = L"WindowClass";
+    wcex.lpszClassName = _T("WindowClass");
     if( !RegisterClassEx( &wcex ) )
         return E_FAIL;
 
     g_hInst = hInstance;
     RECT rc = { 0, 0, 640, 480 };
     AdjustWindowRect( &rc, WS_OVERLAPPEDWINDOW, FALSE );
-    g_hWnd = CreateWindow( L"WindowClass", L"Hello, World!",
+    g_hWnd = CreateWindow( _T("WindowClass"), 
+                           _T("Hello, World!"),
                            WS_OVERLAPPEDWINDOW,
                            CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, NULL, NULL, hInstance,
                            NULL );
@@ -124,7 +175,7 @@ HRESULT InitDevice()
     g_pd3dDevice->RSSetViewports( 1, &vp );
 
     DWORD dwShaderFlags = D3D10_SHADER_ENABLE_STRICTNESS;
-    hr = D3DX10CreateEffectFromFile( L"hello.fx", NULL, NULL, "fx_4_0", dwShaderFlags, 0,
+    hr = D3DX10CreateEffectFromFile( _T("hello.fx"), NULL, NULL, _T("fx_4_0"), dwShaderFlags, 0,
                                          g_pd3dDevice, NULL, NULL, &g_pEffect, NULL, NULL );
     if( FAILED( hr ) )
         return hr;
@@ -184,29 +235,6 @@ void CleanupDevice()
     if( g_pd3dDevice ) g_pd3dDevice->Release();
 }
 
-LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
-{
-    PAINTSTRUCT ps;
-    HDC hdc;
-
-    switch( message )
-    {
-        case WM_PAINT:
-            hdc = BeginPaint( hWnd, &ps );
-            EndPaint( hWnd, &ps );
-            break;
-
-        case WM_DESTROY:
-            PostQuitMessage( 0 );
-            break;
-
-        default:
-            return DefWindowProc( hWnd, message, wParam, lParam );
-    }
-
-    return 0;
-}
-
 void Render()
 {
     float ClearColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -223,33 +251,3 @@ void Render()
     g_pSwapChain->Present( 0, 0 );
 }
 
-
-int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow )
-{
-    if( FAILED( InitWindow( hInstance, nCmdShow ) ) )
-        return 0;
-
-    if( FAILED( InitDevice() ) )
-    {
-        CleanupDevice();
-        return 0;
-    }
-
-    MSG msg = { 0 };
-    while( WM_QUIT != msg.message )
-    {
-        if( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) )
-        {
-            TranslateMessage( &msg );
-            DispatchMessage( &msg );
-        }
-        else
-        {
-            Render();
-        }
-    }
-
-    CleanupDevice();
-
-    return ( int )msg.wParam;
-}
