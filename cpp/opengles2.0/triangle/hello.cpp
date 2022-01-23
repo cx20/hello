@@ -86,7 +86,7 @@ GLuint vbo[2];
 GLint posAttrib;
 GLint colAttrib;
 
-int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
+int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
 {
     WNDCLASSEX wcex;
     HWND hwnd;

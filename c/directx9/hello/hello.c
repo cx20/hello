@@ -14,7 +14,7 @@ HRESULT InitFont();
 VOID Cleanup();
 VOID Render();
 
-int WINAPI _tWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow )
+int APIENTRY _tWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow )
 {
     LPCTSTR lpszClassName = _T("helloWindow");
     LPCTSTR lpszWindowName = _T("Hello, World!");
@@ -134,7 +134,7 @@ HRESULT InitFont()
     lf.OutputPrecision = OUT_TT_ONLY_PRECIS;
     lf.Quality         = PROOF_QUALITY;
     lf.PitchAndFamily  = FIXED_PITCH | FF_MODERN;
-    lstrcpy( lf.FaceName, _T("‚l‚r ƒSƒVƒbƒN") );
+    lstrcpy( lf.FaceName, _T("ï¿½lï¿½r ï¿½Sï¿½Vï¿½bï¿½N") );
 
     hr = D3DXCreateFontIndirect( g_pd3dDevice, &lf, &g_pd3dFont );
     if ( FAILED( hr ) )

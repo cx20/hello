@@ -11,7 +11,7 @@ void DrawTriangle(HDC hdc);
 GdiplusStartupInput gdiSI;
 ULONG_PTR           gdiToken;
 
-int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
+int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
 {
     WNDCLASSEX wcex;
     HWND hwnd;
