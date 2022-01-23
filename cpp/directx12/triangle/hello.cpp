@@ -60,7 +60,7 @@ static UINT64       g_fenceValue;
 ComPtr<ID3D12Resource>              g_vertexBuffer;
 static D3D12_VERTEX_BUFFER_VIEW     g_vertexBufferView;
 
-int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE, LPTSTR, int nCmdShow)
+int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE, LPTSTR, int nCmdShow)
 {
     WNDCLASSEX  windowClass = {};
     windowClass.cbSize        = sizeof(WNDCLASSEX);

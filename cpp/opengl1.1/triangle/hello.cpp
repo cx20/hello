@@ -7,7 +7,7 @@ void EnableOpenGL(HWND hwnd, HDC* hDC, HGLRC* hRC);
 void DisableOpenGL (HWND hwnd, HDC hDC, HGLRC hRC);
 void DrawTriangle();
 
-int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
+int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
 {
     WNDCLASSEX wcex;
     HWND hwnd;

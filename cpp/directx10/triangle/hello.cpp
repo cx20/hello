@@ -26,7 +26,7 @@ HRESULT InitDevice();
 void CleanupDevice();
 void Render();
 
-int WINAPI _tWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow )
+int APIENTRY _tWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow )
 {
     if( FAILED( InitWindow( hInstance, nCmdShow ) ) )
         return 0;
