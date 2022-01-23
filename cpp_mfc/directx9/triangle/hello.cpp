@@ -83,6 +83,8 @@ BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 
 void CMainFrame::OnPaint()
 {
+    CPaintDC dc(this);
+
     Render();
 }
 
