@@ -28,45 +28,45 @@ public:
     ~CMainFrame();
     BOOL PreCreateWindow(CREATESTRUCT& cs);
 
-	HRESULT OnInit();
-	HRESULT InitDevice();
-	HRESULT InitView();
-	HRESULT InitTraffic();
-	HRESULT InitShader();
-	HRESULT InitBuffer();
-	HRESULT InitFence();
-	void Render();
-	void WaitForPreviousFrame();
+    HRESULT OnInit();
+    HRESULT InitDevice();
+    HRESULT InitView();
+    HRESULT InitTraffic();
+    HRESULT InitShader();
+    HRESULT InitBuffer();
+    HRESULT InitFence();
+    void Render();
+    void WaitForPreviousFrame();
 protected:
-	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
+    afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
     afx_msg void OnPaint();
-	afx_msg void OnDestroy();
+    afx_msg void OnDestroy();
     DECLARE_MESSAGE_MAP()
 
 private:
-	static const UINT                   m_frameCount = 2;
+    static const UINT                   m_frameCount = 2;
 
-	ComPtr<ID3D12Device>                m_device;
-	ComPtr<IDXGISwapChain3>             m_swapChain;
-	ComPtr<ID3D12Resource>              m_renderTargets[m_frameCount];
-	ComPtr<ID3D12CommandAllocator>      m_commandAllocator;
-	ComPtr<ID3D12CommandQueue>          m_commandQueue;
-	ComPtr<ID3D12RootSignature>         m_rootSignature;
-	ComPtr<ID3D12DescriptorHeap>        m_rtvHeap;
-	ComPtr<ID3D12PipelineState>         m_pipelineState;
-	ComPtr<ID3D12GraphicsCommandList>   m_commandList;
-	UINT                                m_rtvDescriptorSize;
+    ComPtr<ID3D12Device>                m_device;
+    ComPtr<IDXGISwapChain3>             m_swapChain;
+    ComPtr<ID3D12Resource>              m_renderTargets[m_frameCount];
+    ComPtr<ID3D12CommandAllocator>      m_commandAllocator;
+    ComPtr<ID3D12CommandQueue>          m_commandQueue;
+    ComPtr<ID3D12RootSignature>         m_rootSignature;
+    ComPtr<ID3D12DescriptorHeap>        m_rtvHeap;
+    ComPtr<ID3D12PipelineState>         m_pipelineState;
+    ComPtr<ID3D12GraphicsCommandList>   m_commandList;
+    UINT                                m_rtvDescriptorSize;
 
     CD3DX12_VIEWPORT                    m_viewport;
     CD3DX12_RECT                        m_scissorRect;
     
-	UINT                                m_frameIndex;
-	HANDLE                              m_fenceEvent;
-	ComPtr<ID3D12Fence>                 m_fence;
-	UINT64                              m_fenceValue;
+    UINT                                m_frameIndex;
+    HANDLE                              m_fenceEvent;
+    ComPtr<ID3D12Fence>                 m_fence;
+    UINT64                              m_fenceValue;
 
-	ComPtr<ID3D12Resource>              m_vertexBuffer;
-	D3D12_VERTEX_BUFFER_VIEW            m_vertexBufferView;
+    ComPtr<ID3D12Resource>              m_vertexBuffer;
+    D3D12_VERTEX_BUFFER_VIEW            m_vertexBufferView;
 };
 
 class CHelloApp : public CWinApp
@@ -441,7 +441,7 @@ void CMainFrame::WaitForPreviousFrame()
 
 void CMainFrame::OnDestroy()
 {
-	CFrameWnd::OnDestroy();
+    CFrameWnd::OnDestroy();
 
     WaitForPreviousFrame();
     CloseHandle(m_fenceEvent);
