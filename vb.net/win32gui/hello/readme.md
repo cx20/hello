@@ -1,6 +1,6 @@
 compile:
 ```
-C:\> csc /target:winexe Hello.cs
+C:\> vbc /target:winexe Hello.vb
 ```
 Result:
 ```
