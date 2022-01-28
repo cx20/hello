@@ -46,8 +46,8 @@ Triangle test for each graphics library
 
 |Library    |Java VM Assembler                                                         |Java                                                                      |
 |:----------|:------------------------------------------------------------------------:|:------------------------------------------------------------------------:|
-|AWT        |                                                                          |                                                                          |
-|Swing      |                                                                          |                                                                          |
+|AWT        |                                                                          |[Link](https://github.com/cx20/hello/tree/master/java/awt/hello)          |
+|Swing      |                                                                          |[Link](https://github.com/cx20/hello/tree/master/java/swing/hello)        |
 |SWT        |                                                                          |                                                                          |
 |JavaFX     |                                                                          |                                                                          |
 |Java2D     |                                                                          |                                                                          |
