@@ -56,11 +56,11 @@ Triangle test for each graphics library
 ## Web Browser
 
 |Library    |WASM(C++)                                                                 |WASM(Rust)                                                                |JavaScript                                                                      |
-|:----------|--------------------------------------------------------------------------|--------------------------------------------------------------------------|--------------------------------------------------------------------------------|
+|:----------|:------------------------------------------------------------------------:|:------------------------------------------------------------------------:|:------------------------------------------------------------------------------:|
 |Canvas     |                                                                          |                                                                          |                                                                                |
 |WebGL      |                                                                          |                                                                          |[Link](https://github.com/cx20/hello/tree/master/javascript/webgl1/triangle)    |
 |WebGL2     |                                                                          |                                                                          |[Link](https://github.com/cx20/hello/tree/master/javascript/webgl2/triangle)    |
-|WebGPU     |                                                                          |                                                                          |                                                                                |
+|WebGPU     |                                                                          |                                                                          |[Link](https://github.com/cx20/hello/tree/master/javascript/webgpu/triangle)    |
 |CSS        |                                                                          |                                                                          |                                                                                |
 |SVG        |                                                                          |                                                                          |                                                                                |
 
