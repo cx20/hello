@@ -57,9 +57,9 @@ PFNGLVERTEXATTRIBPOINTERPROC      glVertexAttribPointer;
 
 PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-void EnableOpenGL(HWND hwnd, HDC* hDC, HGLRC* hRC);
-void DisableOpenGL (HWND hwnd, HDC hDC, HGLRC hRC);
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+HGLRC EnableOpenGL(HDC hDC);
+void DisableOpenGL(HWND hWnd, HDC hDC, HGLRC hRC);
 void InitOpenGLFunc();
 void InitShader();
 void DrawTriangle();
@@ -92,7 +92,7 @@ GLint colAttrib;
 int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
 {
     WNDCLASSEX wcex;
-    HWND hwnd;
+    HWND hWnd;
     HDC hDC;
     HGLRC hRC;
     MSG msg;
@@ -114,7 +114,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
     if (!RegisterClassEx(&wcex))
         return 0;
 
-    hwnd = CreateWindowEx(0,
+    hWnd = CreateWindowEx(0,
                           _T("WindowClass"),
                           _T("Hello, World!"),
                           WS_OVERLAPPEDWINDOW,
@@ -127,9 +127,10 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
                           hInstance,
                           NULL);
 
-    ShowWindow(hwnd, nCmdShow);
+    ShowWindow(hWnd, nCmdShow);
 
-    EnableOpenGL(hwnd, &hDC, &hRC);
+    hDC = GetDC(hWnd);
+    hRC = EnableOpenGL(hDC);
     
     InitOpenGLFunc();
 
@@ -162,13 +163,13 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
         }
     }
 
-    DisableOpenGL(hwnd, hDC, hRC);
-    DestroyWindow(hwnd);
+    DisableOpenGL(hWnd, hDC, hRC);
+    DestroyWindow(hWnd);
 
     return msg.wParam;
 }
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)
     {
@@ -180,7 +181,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             return 0;
 
         default:
-            return DefWindowProc(hwnd, uMsg, wParam, lParam);
+            return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
 
     return 0;
@@ -205,13 +206,13 @@ void InitOpenGLFunc()
     wglCreateContextAttribsARB= (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress("wglCreateContextAttribsARB");
 }
 
-void EnableOpenGL(HWND hwnd, HDC* hDC, HGLRC* hRC)
+HGLRC EnableOpenGL(HDC hDC)
 {
+    HGLRC hRC = NULL;
+    
     PIXELFORMATDESCRIPTOR pfd;
 
     int iFormat;
-
-    *hDC = GetDC(hwnd);
 
     ZeroMemory(&pfd, sizeof(pfd));
 
@@ -223,12 +224,12 @@ void EnableOpenGL(HWND hwnd, HDC* hDC, HGLRC* hRC)
     pfd.cDepthBits = 16;
     pfd.iLayerType = PFD_MAIN_PLANE;
 
-    iFormat = ChoosePixelFormat(*hDC, &pfd);
+    iFormat = ChoosePixelFormat(hDC, &pfd);
 
-    SetPixelFormat(*hDC, iFormat, &pfd);
+    SetPixelFormat(hDC, iFormat, &pfd);
 
-    HGLRC hGLRC_old = wglCreateContext(*hDC);
-    wglMakeCurrent(*hDC, hGLRC_old);
+    HGLRC hGLRC_old = wglCreateContext(hDC);
+    wglMakeCurrent(hDC, hGLRC_old);
 
     wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress("wglCreateContextAttribsARB");
 
@@ -239,19 +240,21 @@ void EnableOpenGL(HWND hwnd, HDC* hDC, HGLRC* hRC)
       WGL_CONTEXT_PROFILE_MASK_ARB,    WGL_CONTEXT_ES2_PROFILE_BIT_EXT,
       0,
     };
-    *hRC = wglCreateContextAttribsARB(*hDC, 0, opengl_es20 );
+    hRC = wglCreateContextAttribsARB(hDC, 0, opengl_es20 );
 
-    wglMakeCurrent(*hDC, *hRC);
+    wglMakeCurrent(hDC, hRC);
     wglDeleteContext(hGLRC_old);
 
     const GLubyte * strShaderLanguageVersion = glGetString (GL_SHADING_LANGUAGE_VERSION);
+    
+    return hRC;
 }
 
-void DisableOpenGL (HWND hwnd, HDC hDC, HGLRC hRC)
+void DisableOpenGL(HWND hWnd, HDC hDC, HGLRC hRC)
 {
     wglMakeCurrent(NULL, NULL);
     wglDeleteContext(hRC);
-    ReleaseDC(hwnd, hDC);
+    ReleaseDC(hWnd, hDC);
 }
 
 void InitShader()

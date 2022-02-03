@@ -2,15 +2,15 @@
 #include <tchar.h>
 #include <gl/gl.h>
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-void EnableOpenGL(HWND hwnd, HDC* hDC, HGLRC* hRC);
-void DisableOpenGL (HWND hwnd, HDC hDC, HGLRC hRC);
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+HGLRC EnableOpenGL(HDC hDC);
+void DisableOpenGL(HWND hWnd, HDC hDC, HGLRC hRC);
 void DrawTriangle();
 
 int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
 {
     WNDCLASSEX wcex;
-    HWND hwnd;
+    HWND hWnd;
     HDC hDC;
     HGLRC hRC;
     MSG msg;
@@ -32,7 +32,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
     if (!RegisterClassEx(&wcex))
         return 0;
 
-    hwnd = CreateWindowEx(0,
+    hWnd = CreateWindowEx(0,
                           _T("WindowClass"),
                           _T("Hello, World!"),
                           WS_OVERLAPPEDWINDOW,
@@ -45,9 +45,10 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
                           hInstance,
                           NULL);
 
-    ShowWindow(hwnd, nCmdShow);
+    ShowWindow(hWnd, nCmdShow);
 
-    EnableOpenGL(hwnd, &hDC, &hRC);
+    hDC = GetDC(hWnd);
+    hRC = EnableOpenGL(hDC);
 
     while (!bQuit)
     {
@@ -76,13 +77,13 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
         }
     }
 
-    DisableOpenGL(hwnd, hDC, hRC);
-    DestroyWindow(hwnd);
+    DisableOpenGL(hWnd, hDC, hRC);
+    DestroyWindow(hWnd);
 
     return msg.wParam;
 }
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)
     {
@@ -94,19 +95,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             return 0;
 
         default:
-            return DefWindowProc(hwnd, uMsg, wParam, lParam);
+            return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
 
     return 0;
 }
 
-void EnableOpenGL(HWND hwnd, HDC* hDC, HGLRC* hRC)
+HGLRC EnableOpenGL(HDC hDC)
 {
+    HGLRC hRC = NULL;
+    
     PIXELFORMATDESCRIPTOR pfd;
 
     int iFormat;
-
-    *hDC = GetDC(hwnd);
 
     ZeroMemory(&pfd, sizeof(pfd));
 
@@ -118,19 +119,21 @@ void EnableOpenGL(HWND hwnd, HDC* hDC, HGLRC* hRC)
     pfd.cDepthBits = 16;
     pfd.iLayerType = PFD_MAIN_PLANE;
 
-    iFormat = ChoosePixelFormat(*hDC, &pfd);
+    iFormat = ChoosePixelFormat(hDC, &pfd);
 
-    SetPixelFormat(*hDC, iFormat, &pfd);
+    SetPixelFormat(hDC, iFormat, &pfd);
 
-    *hRC = wglCreateContext(*hDC);
-    wglMakeCurrent(*hDC, *hRC);
+    hRC = wglCreateContext(hDC);
+    wglMakeCurrent(hDC, hRC);
+    
+    return hRC;
 }
 
-void DisableOpenGL (HWND hwnd, HDC hDC, HGLRC hRC)
+void DisableOpenGL(HWND hWnd, HDC hDC, HGLRC hRC)
 {
     wglMakeCurrent(NULL, NULL);
     wglDeleteContext(hRC);
-    ReleaseDC(hwnd, hDC);
+    ReleaseDC(hWnd, hDC);
 }
 
 void DrawTriangle()
