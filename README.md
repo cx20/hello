@@ -55,12 +55,11 @@ Triangle test for each graphics library
 
 ## Web Browser
 
-|Library    |WASM(C++)                                                                  |WASM(Rust)                                                                |JavaScript                                                                      |
-|:----------|:-------------------------------------------------------------------------:|:------------------------------------------------------------------------:|:------------------------------------------------------------------------------:|
-|Canvas     |                                                                           |                                                                          |                                                                                |
-|WebGL      |[Link](https://github.com/cx20/hello/tree/master/wasm_cpp/webgl1/triangle) |                                                                          |[Link](https://github.com/cx20/hello/tree/master/javascript/webgl1/triangle)    |
-|WebGL2     |[Link](https://github.com/cx20/hello/tree/master/wasm_cpp/webgl2/triangle) |                                                                          |[Link](https://github.com/cx20/hello/tree/master/javascript/webgl2/triangle)    |
-|WebGPU     |                                                                           |                                                                          |[Link](https://github.com/cx20/hello/tree/master/javascript/webgpu/triangle)    |
-|CSS        |                                                                           |                                                                          |                                                                                |
-|SVG        |                                                                           |                                                                          |                                                                                |
-
+|Library    |WASM(C++)                                                                  |WASM(Rust)                                                                 |JavaScript                                                                      |
+|:----------|:-------------------------------------------------------------------------:|:-------------------------------------------------------------------------:|:------------------------------------------------------------------------------:|
+|Canvas     |                                                                           |                                                                           |                                                                                |
+|WebGL      |[Link](https://github.com/cx20/hello/tree/master/wasm_cpp/webgl1/triangle) |[Link](https://github.com/cx20/hello/tree/master/wasm_rust/webgl1/triangle)|[Link](https://github.com/cx20/hello/tree/master/javascript/webgl1/triangle)    |
+|WebGL2     |[Link](https://github.com/cx20/hello/tree/master/wasm_cpp/webgl2/triangle) |[Link](https://github.com/cx20/hello/tree/master/wasm_rust/webgl2/triangle)|[Link](https://github.com/cx20/hello/tree/master/javascript/webgl2/triangle)    |
+|WebGPU     |                                                                           |                                                                           |[Link](https://github.com/cx20/hello/tree/master/javascript/webgpu/triangle)    |
+|CSS        |                                                                           |                                                                           |                                                                                |
+|SVG        |                                                                           |                                                                           |                                                                                |

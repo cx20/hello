@@ -1,0 +1,10 @@
+[package]
+name = "hello"
+version = "0.0.1"
+authors = ["cx20"]
+license = "CC0"
+
+[dependencies]
+
+[lib]
+crate-type = ["cdylib"]
