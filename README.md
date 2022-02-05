@@ -65,7 +65,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 
 |Library    |Java VM Assembler                                                         |Java                                                                      |
 |:----------|:------------------------------------------------------------------------:|:------------------------------------------------------------------------:|
-|Console    |                                                                          |                                                                          |
+|Console    |                                                                          |[Link](https://github.com/cx20/hello/tree/master/java/console/hello)      |
 |AWT        |                                                                          |[Link](https://github.com/cx20/hello/tree/master/java/awt/hello)          |
 |Swing      |                                                                          |[Link](https://github.com/cx20/hello/tree/master/java/swing/hello)        |
 |SWT        |                                                                          |                                                                          |
