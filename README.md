@@ -24,28 +24,6 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 +------------------------------------------+
 ```
 
-## Test Environment
-
-|Platform   |Version |
-|:----------|:------:|
-|Windows    |   10   |
-
-|Browser    |Version |
-|:----------|:------:|
-|Chrome     |   97   |
-
-|Language   |Version |Remarks                                     |
-|:----------|:------:|:-------------------------------------------|
-|C/C++      |19.30   |Visual Studio 2022 Developer Command Prompt |
-|C#         | 4.0    |Visual Studio 2022 Developer Command Prompt |
-|VB.NET     | 4.0    |Visual Studio 2022 Developer Command Prompt |
-|JScript.NET|14.0    |Visual Studio 2022 Developer Command Prompt |
-|D          | 2.0098 |                                            |
-|Go         | 1.17.1 |                                            |
-|Rust       | 1.60   |                                            |
-|Java       | 1.8.0  |                                            |
-|Emscripten | 2.0.27 |emsdk\emcmdprompt.bat                       |
-
 ## Native Languages
 
 |Library    |MASM                                                                      |C                                                                       |C++                                                                       |C++ (ATL)                                                                  |C++ (MFC)                                                                     |C++ (WTL)                                                                  |D                                                                          |Go                                                                         |Rust                                                                       |
@@ -106,3 +84,26 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |WebGPU     |                                                                           |                                                                           |[Link](https://github.com/cx20/hello/tree/master/javascript/webgpu/triangle)    |
 |CSS        |                                                                           |                                                                           |                                                                                |
 |SVG        |                                                                           |                                                                           |                                                                                |
+
+## Test Environment
+
+|Platform   |Version |
+|:----------|:------:|
+|Windows    |   10   |
+
+|Browser    |Version |
+|:----------|:------:|
+|Chrome     |   97   |
+
+|Language   |Version |Remarks                                     |
+|:----------|:------:|:-------------------------------------------|
+|C/C++      |19.30   |Visual Studio 2022 Developer Command Prompt |
+|C#         | 4.0    |Visual Studio 2022 Developer Command Prompt |
+|VB.NET     | 4.0    |Visual Studio 2022 Developer Command Prompt |
+|JScript.NET|14.0    |Visual Studio 2022 Developer Command Prompt |
+|D          | 2.0098 |                                            |
+|Go         | 1.17.1 |                                            |
+|Rust       | 1.60   |                                            |
+|Java       | 1.8.0  |                                            |
+|Emscripten | 2.0.27 |emsdk\emcmdprompt.bat                       |
+
