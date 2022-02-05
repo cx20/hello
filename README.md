@@ -7,6 +7,23 @@ This repository is cx20's Hello World.
 
 If it is a graphics library, it will display a triangle, otherwise it will display "Hello, World!".
 
+```
++------------------------------------------+
+|Hello, World!                    [_][~][X]|
++------------------------------------------+
+|                                          |
+|                   / \                    |
+|                 /     \                  |
+|               /         \                |
+|             /             \              |
+|           /                 \            |
+|         /                     \          |
+|       /                         \        |
+|     /                             \      |
+|    - - - - - - - - - - - - - - - - -     |
++------------------------------------------+
+```
+
 ## Native Languages
 
 |Library    |MASM                                                                      |C                                                                       |C++                                                                       |C++ (ATL)                                                                  |C++ (MFC)                                                                     |C++ (WTL)                                                                  |D                                                                          |Go                                                                         |Rust                                                                       |
