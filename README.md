@@ -22,6 +22,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |     /                             \      |
 |    - - - - - - - - - - - - - - - - -     |
 +------------------------------------------+
+```
 
 ## Test Environment
 
@@ -44,8 +45,6 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |Rust       | 1.60   |                                            |
 |Java       | 1.8.0  |                                            |
 |Emscripten | 2.0.27 |emsdk\emcmdprompt.bat                       |
-
-```
 
 ## Native Languages
 
