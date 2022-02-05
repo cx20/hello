@@ -22,6 +22,29 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |     /                             \      |
 |    - - - - - - - - - - - - - - - - -     |
 +------------------------------------------+
+
+## Test Environment
+
+|Platform   |Version |
+|:----------|:------:|
+|Windows    |   10   |
+
+|Browser    |Version |
+|:----------|:------:|
+|Chrome     |   97   |
+
+|Language   |Version |Remarks                                     |
+|:----------|:------:|:-------------------------------------------|
+|C/C++      |19.30   |Visual Studio 2022 Developer Command Prompt |
+|C#         | 4.0    |Visual Studio 2022 Developer Command Prompt |
+|VB.NET     | 4.0    |Visual Studio 2022 Developer Command Prompt |
+|JScript.NET|14.0    |Visual Studio 2022 Developer Command Prompt |
+|D          | 2.0098 |                                            |
+|Go         | 1.17.1 |                                            |
+|Rust       | 1.60   |                                            |
+|Java       | 1.8.0  |                                            |
+|Emscripten | 2.0.27 |emsdk\emcmdprompt.bat                       |
+
 ```
 
 ## Native Languages
@@ -66,8 +89,8 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |Library    |Java VM Assembler                                                         |Java                                                                      |
 |:----------|:------------------------------------------------------------------------:|:------------------------------------------------------------------------:|
 |Console    |[Link](https://github.com/cx20/hello/tree/master/jasmin/console/hello)    |[Link](https://github.com/cx20/hello/tree/master/java/console/hello)      |
-|AWT        |                                                                          |[Link](https://github.com/cx20/hello/tree/master/java/awt/hello)          |
-|Swing      |                                                                          |[Link](https://github.com/cx20/hello/tree/master/java/swing/hello)        |
+|AWT        |[Link](https://github.com/cx20/hello/tree/master/jasmin/awt/hello)        |[Link](https://github.com/cx20/hello/tree/master/java/awt/hello)          |
+|Swing      |[Link](https://github.com/cx20/hello/tree/master/jasmin/swing/hello)      |[Link](https://github.com/cx20/hello/tree/master/java/swing/hello)        |
 |SWT        |                                                                          |                                                                          |
 |JavaFX     |                                                                          |                                                                          |
 |Java2D     |                                                                          |                                                                          |
