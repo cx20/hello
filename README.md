@@ -105,5 +105,5 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |Go         | 1.17.1 |                                            |
 |Rust       | 1.60   |                                            |
 |Java       | 1.8.0  |                                            |
-|Emscripten | 2.0.27 |emsdk\emcmdprompt.bat                       |
+|Emscripten | 3.1.3  |emsdk\emcmdprompt.bat                       |
 

@@ -29,3 +29,9 @@ Result:
 |    - - - - - - - - - - - - - - - - -     |
 +------------------------------------------+
 ```
+
+Caution:
+
+> Use Emscripten 3.1.3 or higher to compile.
+> 
+> These samples run in [Chrome Canary](http://chrome.com/canary) and [Edge Canary](https://www.microsoftedgeinsider.com/en-us/download) behind the flag `--enable-unsafe-webgpu`.
