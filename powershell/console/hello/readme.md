@@ -1,0 +1,21 @@
+run:
+```
+C:\> PowerShell -File hello.ps1
+```
+Result:
+```
++------------------------------------------+
+|Command Prompt                   [_][~][X]|
++------------------------------------------+
+|C:\hello\powershell\console\hello> run.bat|
+|Hello, PowerShell World!                  |
+|                                          |
+|                                          |
+|                                          |
+|                                          |
+|                                          |
+|                                          |
+|                                          |
+|                                          |
++------------------------------------------+
+```
