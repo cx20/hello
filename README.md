@@ -3,9 +3,9 @@ hello
 
 This repository is cx20's Hello World.
 
-# Hello, Triangle World!
+# Hello, World!
 
-Triangle test for each graphics library
+If it is a graphics library, it will display a triangle, otherwise it will display "Hello, World!".
 
 ## Native Languages
 
@@ -36,7 +36,7 @@ Triangle test for each graphics library
 
 |Library    |MSIL                                                                      |C++/CLI                                                                   |C#                                                                        |VB.NET                                                                    |JScript.NET                                                                  |PowerShell                                                                   |
 |:----------|:------------------------------------------------------------------------:|:------------------------------------------------------------------------:|:------------------------------------------------------------------------:|:------------------------------------------------------------------------:|:---------------------------------------------------------------------------:|:---------------------------------------------------------------------------:|
-|Console    |                                                                          |                                                                          |[Link](https://github.com/cx20/hello/tree/master/csharp/console/hello)    |                                                                          |                                                                             |                                                                             |
+|Console    |[Link](https://github.com/cx20/hello/tree/master/msil/console/hello)      |                                                                          |[Link](https://github.com/cx20/hello/tree/master/csharp/console/hello)    |                                                                          |                                                                             |                                                                             |
 |Win32 GUI  |[Link](https://github.com/cx20/hello/tree/master/msil/win32gui/hello)     |[Link](https://github.com/cx20/hello/tree/master/cpp_cli/win32gui/hello)  |[Link](https://github.com/cx20/hello/tree/master/csharp/win32gui/hello)   |[Link](https://github.com/cx20/hello/tree/master/vb.net/win32gui/hello)   |                                                                             |[Link](https://github.com/cx20/hello/tree/master/powershell/win32gui/hello)  |
 |WinForms   |                                                                          |[Link](https://github.com/cx20/hello/tree/master/cpp_cli/winforms/hello)  |[Link](https://github.com/cx20/hello/tree/master/csharp/winforms/hello)   |[Link](https://github.com/cx20/hello/tree/master/vb.net/winforms/hello)   |[Link](https://github.com/cx20/hello/tree/master/jscript.net/win32gui/hello) |[Link](https://github.com/cx20/hello/tree/master/powershell/winforms/hello)  |
 |WPF        |                                                                          |                                                                          |[Link](https://github.com/cx20/hello/tree/master/csharp/wpf/hello)        |[Link](https://github.com/cx20/hello/tree/master/vb.net/wpf/hello)        |                                                                             |[Link](https://github.com/cx20/hello/tree/master/powershell/wpf/hello)       |
