@@ -70,7 +70,7 @@ const GLchar* vertexSource =
     "}                                            \n";
 const GLchar* fragmentSource =
     "#version 300 es                              \n"
-    "precision mediump float;\n"
+    "precision mediump float;                     \n"
     "in  vec4 vColor;                             \n"
     "out vec4 outColor;                           \n"
     "void main()                                  \n"
