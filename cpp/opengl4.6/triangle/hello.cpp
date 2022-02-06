@@ -240,7 +240,7 @@ HGLRC EnableOpenGL(HDC hDC)
       0,
     };
 */
-    // TODO: OpenGL 3.3 profile selection does not work and needs to be investigated.
+    // TODO: OpenGL 4.6 profile selection does not work and needs to be investigated.
     //hRC = wglCreateContextAttribsARB(hDC, 0, opengl_gl46);
     hRC = wglCreateContextAttribsARB(hDC, 0, NULL);
 
