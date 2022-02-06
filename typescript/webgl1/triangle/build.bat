@@ -1,2 +1,2 @@
-npm install
-npm start
+CALL npm install
+CALL npm start
