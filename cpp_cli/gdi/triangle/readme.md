@@ -1,6 +1,8 @@
 compile:
 ```
-C:\> cl hello.cpp ^
+C:\> cl ^
+         /clr ^
+         hello.cpp ^
          /link ^
          user32.lib ^
          gdi32.lib ^
