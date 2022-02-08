@@ -19,14 +19,6 @@ class CHelloWindow : public CWindowImpl<CHelloWindow>
  
 LRESULT CHelloWindow::OnPaint( UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled )
 {
-/*
-    PAINTSTRUCT ps;
-    HDC hDC = GetDC();
-    LPCTSTR lpszMessage = _T("Hello, Win32 GUI(C++) World!");
-    BeginPaint( &ps );
-    TextOut( hDC, 0, 0, lpszMessage, lstrlen(lpszMessage) );
-    EndPaint( &ps );
-*/
     HDC hDC = GetDC();
     DrawTriangle(hDC);
     return 0;
