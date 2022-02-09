@@ -54,7 +54,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |Library    |Perl                                                                      |PHP                                                                       |Python                                                                    |Ruby                                                                      |
 |:----------|:------------------------------------------------------------------------:|:------------------------------------------------------------------------:|:------------------------------------------------------------------------:|:------------------------------------------------------------------------:|
 |Console    |[Link](https://github.com/cx20/hello/tree/master/perl/console/hello)      |[Link](https://github.com/cx20/hello/tree/master/php/console/hello)       |[Link](https://github.com/cx20/hello/tree/master/python/console/hello)    |[Link](https://github.com/cx20/hello/tree/master/ruby/console/hello)      |
-|Win32 GUI  |[Link](https://github.com/cx20/hello/tree/master/perl/win32gui/hello)     |                                                                          |                                                                          |                                                                          |
+|Win32 GUI  |[Link](https://github.com/cx20/hello/tree/master/perl/win32gui/hello)     |                                                                          |[Link](https://github.com/cx20/hello/tree/master/python/win32gui/hello)   |                                                                          |
 
 ## .NET Languages
 
