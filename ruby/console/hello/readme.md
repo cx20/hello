@@ -1,4 +1,4 @@
-compile:
+run:
 ```
 C:\> ruby hello.rb
 ```
