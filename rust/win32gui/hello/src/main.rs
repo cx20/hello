@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use windows::{
     core::*, Win32::Foundation::*,
     Win32::Graphics::Gdi::*,
