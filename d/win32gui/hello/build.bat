@@ -1,1 +1,1 @@
-dmd hello.d gdi32 hello.def
+dmd hello.d gdi32.lib hello.def
