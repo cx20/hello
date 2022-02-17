@@ -60,6 +60,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |COM (late bind) |[Link](https://github.com/cx20/hello/tree/master/perl/com_latebind/hello) |                                                                          |[Link](https://github.com/cx20/hello/tree/master/python/com_latebind/hello) |[Link](https://github.com/cx20/hello/tree/master/ruby/com_latebind/hello) |
 |Win32 API       |[Link](https://github.com/cx20/hello/tree/master/perl/win32api/hello)     |                                                                          |[Link](https://github.com/cx20/hello/tree/master/python/win32api/hello)     |[Link](https://github.com/cx20/hello/tree/master/ruby/win32api/hello)     |
 |Win32 GUI       |[Link](https://github.com/cx20/hello/tree/master/perl/win32gui/hello)     |                                                                          |[Link](https://github.com/cx20/hello/tree/master/python/win32gui/hello)     |                                                                          |
+|OpenGL1.0       |[Link](https://github.com/cx20/hello/tree/master/perl/opengl1.0/triangle) |                                                                          |                                                                            |                                                                          |
 
 ## .NET Languages
 
