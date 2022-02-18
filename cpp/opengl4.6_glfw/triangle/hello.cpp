@@ -1,3 +1,7 @@
+#include <windows.h>
+#include <tchar.h>
+
+#define GLEW_STATIC
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <stdio.h>
@@ -8,18 +12,6 @@ GLuint vao;
 GLuint vbo[2];
 GLint posAttrib;
 GLint colAttrib;
-
-GLfloat vertices[] = {
-      0.0f,  0.5f, 0.0f, 
-      0.5f, -0.5f, 0.0f, 
-     -0.5f, -0.5f, 0.0f
-};
-
-GLfloat colors[] = {
-     1.0f,  0.0f,  0.0f,
-     0.0f,  1.0f,  0.0f,
-     0.0f,  0.0f,  1.0f
-};
 
 // Shader sources
 const GLchar* vertexSource =
@@ -42,8 +34,31 @@ const GLchar* fragmentSource =
     "  outColor = vColor;                         \n"
     "}                                            \n";
 
+void InitOpenGL();
+void InitShader();
+void InitBuffer();
 
-void InitOpenGL() {
+int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
+{
+    InitOpenGL();
+    InitShader();
+    InitBuffer();
+
+    while ( !glfwWindowShouldClose( window ) ) {
+        glBindVertexArray( vao );
+
+        glDrawArrays( GL_TRIANGLES, 0, 3 );
+
+        glfwPollEvents();
+        glfwSwapBuffers( window );
+    }
+
+    glfwTerminate();
+    return 0;
+}
+
+void InitOpenGL()
+{
     glfwInit();
 
     glfwWindowHint( GLFW_CONTEXT_VERSION_MAJOR, 4 );
@@ -57,7 +72,8 @@ void InitOpenGL() {
     glewInit();
 }
 
-void InitShader() {
+void InitShader()
+{
     GLuint vs;
     GLuint fs;
 
@@ -83,7 +99,20 @@ void InitShader() {
     glEnableVertexAttribArray(colAttrib);
 }
 
-void InitBuffer() {
+void InitBuffer()
+{
+    GLfloat vertices[] = {
+          0.0f,  0.5f, 0.0f,
+          0.5f, -0.5f, 0.0f,
+         -0.5f, -0.5f, 0.0f
+    };
+
+    GLfloat colors[] = {
+         1.0f,  0.0f,  0.0f,
+         0.0f,  1.0f,  0.0f,
+         0.0f,  0.0f,  1.0f
+    };
+
     glGenVertexArrays(1, &vao);
 
     glBindVertexArray(vao);
@@ -100,22 +129,4 @@ void InitBuffer() {
     glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
     glBindVertexArray(0);
-}
-
-int main() {
-    InitOpenGL();
-    InitShader();
-    InitBuffer();
-
-    while ( !glfwWindowShouldClose( window ) ) {
-        glBindVertexArray( vao );
-
-        glDrawArrays( GL_TRIANGLES, 0, 3 );
-
-        glfwPollEvents();
-        glfwSwapBuffers( window );
-    }
-
-    glfwTerminate();
-    return 0;
 }
