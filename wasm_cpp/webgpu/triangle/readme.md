@@ -1,4 +1,5 @@
 compile:
+
 Please compile from `emsdk\emcmdprompt.bat`.
 ```
 emcc ^
@@ -29,6 +30,8 @@ Result:
 |    - - - - - - - - - - - - - - - - -     |
 +------------------------------------------+
 ```
+
+[Live Demo](https://cx20.github.io/hello/wasm_cpp/webgpu/triangle/)
 
 Caution:
 

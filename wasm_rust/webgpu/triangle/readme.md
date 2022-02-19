@@ -23,3 +23,4 @@ Result:
 |    - - - - - - - - - - - - - - - - -     |
 +------------------------------------------+
 ```
+[Live Demo](https://cx20.github.io/hello/wasm_rust/webgpu/triangle/)
