@@ -1,6 +1,10 @@
+install:
+```
+dotnet add package OpenTK --version 4.7.1
+```
 compile:
 ```
-C:\> dotnet build Hello.csproj /p:Configuration=Release
+dotnet build Hello.csproj /p:Configuration=Release
 ```
 Result:
 ```
