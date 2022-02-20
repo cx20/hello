@@ -11,23 +11,13 @@ environment:
 ```
 compile:
 ```
-javac -cp ^
-    lwjgl.jar; ^
-    lwjgl-opengl.jar; ^
-    lwjgl-glfw.jar; ^
-    . ^
-    Hello.java
+SET LWJGL_CLASSPATH=lwjgl.jar;lwjgl-opengl.jar;lwjgl-glfw.jar
+javac -cp %LWJGL_CLASSPATH%;. Hello.java
 ```
 run:
 ```
-java -cp ^
-    lwjgl.jar; ^
-    lwjgl-opengl.jar; ^
-    lwjgl-glfw.jar; ^
-    lwjgl-natives-windows.jar; ^
-    lwjgl-opengl-natives-windows.jar; ^
-    . ^
-    Hello
+SET LWJGL_CLASSPATH=lwjgl.jar;lwjgl-opengl.jar;lwjgl-glfw.jar;lwjgl-natives-windows.jar;lwjgl-opengl-natives-windows.jar
+java -cp %LWJGL_CLASSPATH%;. Hello
 ```
 Result:
 ```
