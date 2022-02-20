@@ -26,7 +26,7 @@ static COLOR_DATA: [GLfloat;9] = [
 
 // Shader sources
 static VS_SRC: &'static str =
-   "#version 330 core                            \n\
+   "#version 460 core                            \n\
     layout(location = 0) in  vec3 position;      \n\
     layout(location = 1) in  vec3 color;         \n\
     out vec4 vColor;                             \n\
@@ -36,7 +36,7 @@ static VS_SRC: &'static str =
     }";
 
 static FS_SRC: &'static str =
-   "#version 330 core                            \n\
+   "#version 460 core                            \n\
     precision mediump float;                     \n\
     in  vec4 vColor;                             \n\
     out vec4 outColor;                           \n\
