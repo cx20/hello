@@ -1,4 +1,5 @@
 ﻿using OpenTK.Graphics.OpenGL4;
+using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using OpenTK.Windowing.Desktop;
@@ -102,6 +103,8 @@ public class HelloWindow : GameWindow
     public HelloWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings)
         : base(gameWindowSettings, nativeWindowSettings)
     {
+        _vbo = new int[2];
+        _shader = new Shader();
     }
 
     protected override void OnLoad()
@@ -113,7 +116,6 @@ public class HelloWindow : GameWindow
         _vao = GL.GenVertexArray();
         GL.BindVertexArray(_vao);
 
-        _vbo = new int[2];
         GL.GenBuffers(2, _vbo);
 
         GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo[0]);
@@ -128,7 +130,6 @@ public class HelloWindow : GameWindow
 
         GL.BindVertexArray(0);
 
-        _shader = new Shader();
         _shader.Use();
     }
 
@@ -168,6 +169,7 @@ class Program
     {
         var nativeWindowSettings = new NativeWindowSettings()
         {
+            Size = new Vector2i(640, 480),
             Title = "Hello, World!",
         };
 
