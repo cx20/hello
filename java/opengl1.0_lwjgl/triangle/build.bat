@@ -1,6 +1,6 @@
 javac -cp ^
-    lwjgl-glfw.jar;^
-    lwjgl-opengl.jar;^
-    lwjgl.jar;^
+    lwjgl.jar; ^
+    lwjgl-opengl.jar; ^
+    lwjgl-glfw.jar; ^
     . ^
     Hello.java
