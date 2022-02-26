@@ -173,7 +173,7 @@ impl Window {
             let wc = WNDCLASSA {
                 hCursor: LoadCursorW(None, IDC_HAND),
                 hInstance: instance,
-                lpszClassName: PSTR(b"window\0".as_ptr()),
+                lpszClassName: PCSTR(b"window\0".as_ptr()),
 
                 style: CS_HREDRAW | CS_VREDRAW,
                 lpfnWndProc: Some(Self::wndproc),
@@ -185,8 +185,8 @@ impl Window {
 
             let handle = CreateWindowExA(
                 Default::default(), 
-                PSTR(b"window\0".as_ptr()), 
-                PSTR(b"Hello, World!\0".as_ptr()), 
+                PCSTR(b"window\0".as_ptr()), 
+                PCSTR(b"Hello, World!\0".as_ptr()), 
                 WS_OVERLAPPEDWINDOW | WS_VISIBLE, 
                 CW_USEDEFAULT, 
                 CW_USEDEFAULT, 
