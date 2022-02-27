@@ -26,8 +26,6 @@ static class Program
 
         using (GameForm form = new GameForm())
         {
-            form.Size = new Size( 640, 480 );
-            form.Text = "Hello, World!";
             form.Exec();
             form.Close();
         }
@@ -36,21 +34,20 @@ static class Program
     
 public class GameForm : Form, IDisposable
 {
-    public SharpDX.Direct3D11.Device Device { get { return _device; } }
-    private SharpDX.Direct3D11.Device _device = null;
+    SharpDX.Direct3D11.Device Device { get { return _device; } }
+    SharpDX.Direct3D11.Device _device = null;
 
     SwapChain _SwapChain;
     Texture2D _BackBuffer;
 
-    private RenderTargetView _RenderTarget3D;
-    protected IntPtr DisplayHandle { get { return Handle; } }
+    RenderTargetView _RenderTarget3D;
+    IntPtr DisplayHandle { get { return Handle; } }
 
     public GameForm()
     {
-        SetStyle(ControlStyles.AllPaintingInWmPaint |// ちらつき抑える
-            ControlStyles.Opaque, true);            // 背景は描画しない
-
         MaximizeBox = false;
+        Size = new Size( 640, 480 );
+        Text = "Hello, World!";
     }
 
     public void Exec()
@@ -98,46 +95,37 @@ public class GameForm : Form, IDisposable
     {
         _RenderTarget3D = new RenderTargetView(_device, _BackBuffer);
 
-		const string shaderSource = "struct VS_IN\n" + 
-"{\n" + 
-"    float4 pos : POSITION;\n" + 
-"    float4 col : COLOR;\n" + 
-"};\n" + 
-"\n" + 
-"struct PS_IN\n" + 
-"{\n" + 
-"    float4 pos : SV_POSITION;\n" + 
-"    float4 col : COLOR;\n" + 
-"};\n" + 
-"\n" + 
-"PS_IN VS( VS_IN input )\n" + 
-"{\n" + 
-"    PS_IN output = (PS_IN)0;\n" + 
-"    \n" + 
-"    output.pos = input.pos;\n" + 
-"    output.col = input.col;\n" + 
-"    \n" + 
-"    return output;\n" + 
-"}\n" + 
-"\n" + 
-"float4 PS( PS_IN input ) : SV_Target\n" + 
-"{\n" + 
-"    return input.col;\n" + 
-"}\n" + 
-"\n" + 
-"technique10 Render\n" + 
-"{\n" + 
-"    pass P0\n" + 
-"    {\n" + 
-"        SetGeometryShader( 0 );\n" + 
-"        SetVertexShader( CompileShader( vs_4_0, VS() ) );\n" + 
-"        SetPixelShader( CompileShader( ps_4_0, PS() ) );\n" + 
-"    }\n" + 
-"}\n";
-
+        const string shaderSource = 
+            "struct VS_IN                         \n" + 
+            "{                                    \n" + 
+            "    float4 pos : POSITION;           \n" + 
+            "    float4 col : COLOR;              \n" + 
+            "};                                   \n" + 
+            "                                     \n" + 
+            "struct PS_IN                         \n" + 
+            "{                                    \n" + 
+            "    float4 pos : SV_POSITION;        \n" + 
+            "    float4 col : COLOR;              \n" + 
+            "};                                   \n" + 
+            "                                     \n" + 
+            "PS_IN VS( VS_IN input )              \n" + 
+            "{                                    \n" + 
+            "    PS_IN output = (PS_IN)0;         \n" + 
+            "                                     \n" + 
+            "    output.pos = input.pos;          \n" + 
+            "    output.col = input.col;          \n" + 
+            "                                     \n" + 
+            "    return output;                   \n" + 
+            "}                                    \n" + 
+            "                                     \n" + 
+            "float4 PS( PS_IN input ) : SV_Target \n" + 
+            "{                                    \n" + 
+            "    return input.col;                \n" + 
+            "}                                    \n";
 
         var vertexShaderByteCode = ShaderBytecode.Compile(shaderSource, "VS", "vs_4_0", ShaderFlags.None, EffectFlags.None);
         var vertexShader = new VertexShader(_device, vertexShaderByteCode);
+        
         var pixelShaderByteCode = ShaderBytecode.Compile(shaderSource, "PS", "ps_4_0", ShaderFlags.None, EffectFlags.None);
         var pixelShader = new PixelShader(_device, pixelShaderByteCode);
 
@@ -152,14 +140,10 @@ public class GameForm : Form, IDisposable
 
         var context = _device.ImmediateContext;
         context.InputAssembler.InputLayout = layout;
-
         context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
-
         context.VertexShader.Set(vertexShader);
         context.PixelShader.Set(pixelShader);
-
         context.Rasterizer.SetViewport(new Viewport(0, 0, ClientSize.Width, ClientSize.Height, 0.0f, 1.0f));
-
         context.OutputMerger.SetTargets(_RenderTarget3D);
 
         var vertices = SharpDX.Direct3D11.Buffer.Create(_device, BindFlags.VertexBuffer, new[]
@@ -178,7 +162,7 @@ public class GameForm : Form, IDisposable
         context.Draw(3, 0);
         _SwapChain.Present(0, PresentFlags.None);
     }
-
+/*
     public void Dispose()
     {
         var context = _device?.ImmediateContext;
@@ -193,4 +177,5 @@ public class GameForm : Form, IDisposable
 
         base.Dispose();
     }
+*/
 }
