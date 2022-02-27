@@ -2,9 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net6.0-windows</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <TargetFramework>net48-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
 
@@ -17,8 +15,8 @@
 
   <ItemGroup>
     <PackageReference Include="SharpDX" Version="4.2" />
+    <PackageReference Include="SharpDX.Desktop" Version="4.2" />
     <PackageReference Include="SharpDX.Direct3D11" Version="4.2" />
-    <PackageReference Include="SharpDX.Direct2D1" Version="4.2" />
     <PackageReference Include="SharpDX.Mathematics" Version="4.2" />
     <PackageReference Include="SharpDX.D3DCompiler" Version="4.2" />
     <PackageReference Include="Microsoft.Windows.Compatibility" Version="6.0.0" />

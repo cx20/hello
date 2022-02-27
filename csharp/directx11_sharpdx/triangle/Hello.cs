@@ -1,95 +1,45 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Threading;
+﻿// forked from https://github.com/sharpdx/SharpDX-Samples/blob/master/Desktop/Direct3D11/MiniTri/Program.cs
 
+using System;
 using SharpDX;
-using SharpDX.DXGI;
+using SharpDX.D3DCompiler;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
-using SharpDX.D3DCompiler;
+using SharpDX.DXGI;
+using SharpDX.Windows;
+using Buffer = SharpDX.Direct3D11.Buffer;
+using Device = SharpDX.Direct3D11.Device;
 
-static class Program
+namespace MiniTri
 {
-    [STAThread]
-    static void Main()
+    internal static class Program
     {
-        using (GameForm form = new GameForm())
+        [STAThread]
+        private static void Main()
         {
-            form.Exec();
-            form.Close();
-        }
-    }
-}
+            var form = new RenderForm("Hello, World!");
 
-public class GameForm : Form, IDisposable
-{
-    SharpDX.Direct3D11.Device Device { get { return _device; } }
-    SharpDX.Direct3D11.Device _device = null;
+            var desc = new SwapChainDescription()
+               {
+                   BufferCount = 1,
+                   ModeDescription= new ModeDescription(640, 480, new Rational(60, 1), Format.R8G8B8A8_UNorm),
+                   IsWindowed = true,
+                   OutputHandle = form.Handle,
+                   SampleDescription = new SampleDescription(1, 0),
+                   SwapEffect = SwapEffect.Discard,
+                   Usage = Usage.RenderTargetOutput
+               };
 
-    SwapChain _SwapChain;
-    Texture2D _BackBuffer;
+            Device device;
+            SwapChain swapChain;
+            Device.CreateWithSwapChain(DriverType.Hardware, DeviceCreationFlags.None, desc, out device, out swapChain);
+            var context = device.ImmediateContext;
 
-    RenderTargetView _RenderTarget3D;
-    IntPtr DisplayHandle { get { return Handle; } }
+            var factory = swapChain.GetParent<Factory>();
+            factory.MakeWindowAssociation(form.Handle, WindowAssociationFlags.IgnoreAll);
 
-    public GameForm()
-    {
-        MaximizeBox = false;
-        Size = new Size( 640, 480 );
-        Text = "Hello, World!";
-    }
-
-    public void Exec()
-    {
-        Initialize();
-
-        Show();
-        while (Created)
-        {
-            MainLoop();
-            Application.DoEvents();
-            Thread.Sleep(16);
-        }
-    }
-
-    public void Initialize()
-    {
-        var desc = new SwapChainDescription()
-        {
-            BufferCount = 1,
-            ModeDescription = new ModeDescription(ClientSize.Width, ClientSize.Height, new Rational(60, 1), Format.R8G8B8A8_UNorm),
-            IsWindowed = true,
-            OutputHandle = DisplayHandle,
-            SampleDescription = new SampleDescription(1, 0),
-            SwapEffect = SwapEffect.Discard,
-            Usage = Usage.RenderTargetOutput
-        };
-
-        SharpDX.Direct3D11.Device.CreateWithSwapChain(
-            DriverType.Hardware,
-            DeviceCreationFlags.BgraSupport,
-            new[] { SharpDX.Direct3D.FeatureLevel.Level_11_0 },
-            desc,
-            out _device, out _SwapChain);
-
-        var factory = _SwapChain.GetParent<SharpDX.DXGI.Factory>();
-        factory.MakeWindowAssociation(DisplayHandle, WindowAssociationFlags.IgnoreAll);
-
-        _BackBuffer = Texture2D.FromSwapChain<Texture2D>(_SwapChain, 0);
-
-        InitializeDirect3D();
-    }
-
-    public void InitializeDirect3D()
-    {
-        _RenderTarget3D = new RenderTargetView(_device, _BackBuffer);
+            var backBuffer = Texture2D.FromSwapChain<Texture2D>(swapChain, 0);
+            var renderView = new RenderTargetView(device, backBuffer);
 
         const string shaderSource = 
             "struct VS_IN                         \n" + 
@@ -119,42 +69,58 @@ public class GameForm : Form, IDisposable
             "    return input.col;                \n" + 
             "}                                    \n";
 
-        var vertexShaderByteCode = ShaderBytecode.Compile(shaderSource, "VS", "vs_4_0", ShaderFlags.None, EffectFlags.None);
-        var vertexShader = new VertexShader(_device, vertexShaderByteCode);
-        
-        var pixelShaderByteCode = ShaderBytecode.Compile(shaderSource, "PS", "ps_4_0", ShaderFlags.None, EffectFlags.None);
-        var pixelShader = new PixelShader(_device, pixelShaderByteCode);
+            var vertexShaderByteCode = ShaderBytecode.Compile(shaderSource, "VS", "vs_4_0", ShaderFlags.None, EffectFlags.None);
+            var vertexShader = new VertexShader(device, vertexShaderByteCode);
 
-        var layout = new InputLayout(
-            _device,
-            ShaderSignature.GetInputSignature(vertexShaderByteCode),
-                new[] {
-                    new InputElement("POSITION", 0, Format.R32G32B32A32_Float, 0, 0),
+            var pixelShaderByteCode = ShaderBytecode.Compile(shaderSource, "PS", "ps_4_0", ShaderFlags.None, EffectFlags.None);
+            var pixelShader = new PixelShader(device, pixelShaderByteCode);
+
+            var layout = new InputLayout(
+                device,
+                ShaderSignature.GetInputSignature(vertexShaderByteCode),
+                new[]
+                {
+                    new InputElement("POSITION", 0, Format.R32G32B32A32_Float,  0, 0),
                     new InputElement("COLOR",    0, Format.R32G32B32A32_Float, 16, 0)
                 });
 
-        var context = _device.ImmediateContext;
-        context.InputAssembler.InputLayout = layout;
-        context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
-        context.VertexShader.Set(vertexShader);
-        context.PixelShader.Set(pixelShader);
-        context.Rasterizer.SetViewport(new Viewport(0, 0, ClientSize.Width, ClientSize.Height, 0.0f, 1.0f));
-        context.OutputMerger.SetTargets(_RenderTarget3D);
+            var vertices = Buffer.Create(device, BindFlags.VertexBuffer, 
+                new[]
+                {
+                    new Vector4( 0.0f,  0.5f, 0.5f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
+                    new Vector4( 0.5f, -0.5f, 0.5f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
+                    new Vector4(-0.5f, -0.5f, 0.5f, 1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f)
+                });
 
-        var vertices = SharpDX.Direct3D11.Buffer.Create(_device, BindFlags.VertexBuffer, 
-            new[] {
-                new Vector4( 0.0f,  0.5f, 0.5f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-                new Vector4( 0.5f, -0.5f, 0.5f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-                new Vector4(-0.5f, -0.5f, 0.5f, 1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f)
-            });
-        context.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(vertices, Utilities.SizeOf<Vector4>() * 2, 0));
-    }
+            context.InputAssembler.InputLayout = layout;
+            context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
+            context.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(vertices, 32, 0));
+            context.VertexShader.Set(vertexShader);
+            context.Rasterizer.SetViewport(new Viewport(0, 0, 640, 480, 0.0f, 1.0f));
+            context.PixelShader.Set(pixelShader);
+            context.OutputMerger.SetTargets(renderView);
 
-    public void MainLoop()
-    {
-        var context = _device.ImmediateContext;
-        context.ClearRenderTargetView(_RenderTarget3D, SharpDX.Color.Black);
-        context.Draw(3, 0);
-        _SwapChain.Present(0, PresentFlags.None);
+            RenderLoop.Run(form, () =>
+              {
+                  context.ClearRenderTargetView(renderView, Color.Black);
+                  context.Draw(3, 0);
+                  swapChain.Present(0, PresentFlags.None);
+              });
+
+            vertexShaderByteCode.Dispose();
+            vertexShader.Dispose();
+            pixelShaderByteCode.Dispose();
+            pixelShader.Dispose();
+            vertices.Dispose();
+            layout.Dispose();
+            renderView.Dispose();
+            backBuffer.Dispose();
+            context.ClearState();
+            context.Flush();
+            device.Dispose();
+            context.Dispose();
+            swapChain.Dispose();
+            factory.Dispose();
+        }
     }
 }

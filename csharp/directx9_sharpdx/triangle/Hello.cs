@@ -1,4 +1,6 @@
-﻿using System;
+﻿// forked from https://github.com/sharpdx/SharpDX-Samples/blob/master/Desktop/Direct3D9/MiniTri/Program.cs
+
+using System;
 using System.Runtime.InteropServices;
 using SharpDX;
 using SharpDX.Direct3D9;

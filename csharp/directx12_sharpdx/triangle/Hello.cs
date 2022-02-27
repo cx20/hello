@@ -1,4 +1,6 @@
-﻿using System;
+﻿// forked from https://github.com/sharpdx/SharpDX-Samples/blob/master/Desktop/Direct3D12/HelloTriangle/HelloTriangle.cs
+
+using System;
 using System.Threading;
 
 using SharpDX;
@@ -126,7 +128,6 @@ public class HelloTriangle : IDisposable
             "    return input.color;                                             \n" + 
             "}                                                                   \n";
 
-
         var vertexShader = new ShaderBytecode(SharpDX.D3DCompiler.ShaderBytecode.Compile(shaderSource, "VSMain", "vs_5_0"));
         var pixelShader  = new ShaderBytecode(SharpDX.D3DCompiler.ShaderBytecode.Compile(shaderSource, "PSMain", "ps_5_0"));
 
@@ -164,7 +165,7 @@ public class HelloTriangle : IDisposable
         var triangleVertices = new []
         {
                 new Vertex() {Position=new Vector3( 0.0f,  0.5f * aspectRatio, 0.0f), Color=new Vector4(1.0f, 0.0f, 0.0f, 1.0f ) },
-                new Vertex() {Position=new Vector3( 0.5f, -0.5f * aspectRatio, 0.0f), Color=new Vector4(0.0f, 1.0f, 0.0f, 1.0f) },
+                new Vertex() {Position=new Vector3( 0.5f, -0.5f * aspectRatio, 0.0f), Color=new Vector4(0.0f, 1.0f, 0.0f, 1.0f ) },
                 new Vertex() {Position=new Vector3(-0.5f, -0.5f * aspectRatio, 0.0f), Color=new Vector4(0.0f, 0.0f, 1.0f, 1.0f ) },
         };
 
@@ -265,7 +266,6 @@ public class HelloTriangle : IDisposable
         swapChain.Dispose();
         device.Dispose();
     }
-
 
     struct Vertex
     {
