@@ -1,0 +1,9 @@
+del SharpDX.Mathematics.dll
+del Hello.dll
+del Hello.exe
+del Hello.runtimeconfig.json
+del SharpDX.D3DCompiler.dll
+del SharpDX.Direct2D1.dll
+del SharpDX.Direct3D11.dll
+del SharpDX.dll
+del SharpDX.DXGI.dll
