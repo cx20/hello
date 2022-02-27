@@ -30,30 +30,30 @@ public:
     VOID Render();
 
 private:
-	D3D_DRIVER_TYPE         m_driverType;
-	D3D_FEATURE_LEVEL       m_featureLevel;
-	ID3D11Device*           m_pd3dDevice;
-	ID3D11DeviceContext*    m_pImmediateContext;
-	IDXGISwapChain*         m_pSwapChain;
-	ID3D11RenderTargetView* m_pRenderTargetView;
-	ID3D11VertexShader*     m_pVertexShader;
-	ID3D11PixelShader*      m_pPixelShader;
-	ID3D11InputLayout*      m_pVertexLayout;
-	ID3D11Buffer*           m_pVertexBuffer;
+    D3D_DRIVER_TYPE         m_driverType;
+    D3D_FEATURE_LEVEL       m_featureLevel;
+    ID3D11Device*           m_pd3dDevice;
+    ID3D11DeviceContext*    m_pImmediateContext;
+    IDXGISwapChain*         m_pSwapChain;
+    ID3D11RenderTargetView* m_pRenderTargetView;
+    ID3D11VertexShader*     m_pVertexShader;
+    ID3D11PixelShader*      m_pPixelShader;
+    ID3D11InputLayout*      m_pVertexLayout;
+    ID3D11Buffer*           m_pVertexBuffer;
 };
 
 CHelloWindow::CHelloWindow()
 {
-	m_driverType = D3D_DRIVER_TYPE_NULL;
-	m_featureLevel = D3D_FEATURE_LEVEL_11_0;
-	m_pd3dDevice = NULL;
-	m_pImmediateContext = NULL;
-	m_pSwapChain = NULL;
-	m_pRenderTargetView = NULL;
-	m_pVertexShader = NULL;
-	m_pPixelShader = NULL;
-	m_pVertexLayout = NULL;
-	m_pVertexBuffer = NULL;
+    m_driverType = D3D_DRIVER_TYPE_NULL;
+    m_featureLevel = D3D_FEATURE_LEVEL_11_0;
+    m_pd3dDevice = NULL;
+    m_pImmediateContext = NULL;
+    m_pSwapChain = NULL;
+    m_pRenderTargetView = NULL;
+    m_pVertexShader = NULL;
+    m_pPixelShader = NULL;
+    m_pVertexLayout = NULL;
+    m_pVertexBuffer = NULL;
 }
 
 LRESULT CHelloWindow::OnPaint( UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled )

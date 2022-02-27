@@ -47,15 +47,15 @@ public:
 private:
     static const UINT                   m_frameCount = 2;
 
-    CComPtr<ID3D12Device>                m_device;
-    CComPtr<IDXGISwapChain3>             m_swapChain;
-    CComPtr<ID3D12Resource>              m_renderTargets[m_frameCount];
-    CComPtr<ID3D12CommandAllocator>      m_commandAllocator;
-    CComPtr<ID3D12CommandQueue>          m_commandQueue;
-    CComPtr<ID3D12RootSignature>         m_rootSignature;
-    CComPtr<ID3D12DescriptorHeap>        m_rtvHeap;
-    CComPtr<ID3D12PipelineState>         m_pipelineState;
-    CComPtr<ID3D12GraphicsCommandList>   m_commandList;
+    CComPtr<ID3D12Device>               m_device;
+    CComPtr<IDXGISwapChain3>            m_swapChain;
+    CComPtr<ID3D12Resource>             m_renderTargets[m_frameCount];
+    CComPtr<ID3D12CommandAllocator>     m_commandAllocator;
+    CComPtr<ID3D12CommandQueue>         m_commandQueue;
+    CComPtr<ID3D12RootSignature>        m_rootSignature;
+    CComPtr<ID3D12DescriptorHeap>       m_rtvHeap;
+    CComPtr<ID3D12PipelineState>        m_pipelineState;
+    CComPtr<ID3D12GraphicsCommandList>  m_commandList;
     UINT                                m_rtvDescriptorSize;
 
     CD3DX12_VIEWPORT                    m_viewport;
@@ -63,10 +63,10 @@ private:
     
     UINT                                m_frameIndex;
     HANDLE                              m_fenceEvent;
-    CComPtr<ID3D12Fence>                 m_fence;
+    CComPtr<ID3D12Fence>                m_fence;
     UINT64                              m_fenceValue;
 
-    CComPtr<ID3D12Resource>              m_vertexBuffer;
+    CComPtr<ID3D12Resource>             m_vertexBuffer;
     D3D12_VERTEX_BUFFER_VIEW            m_vertexBufferView;
 };
 
