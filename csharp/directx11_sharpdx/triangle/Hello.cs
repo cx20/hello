@@ -13,7 +13,6 @@ using SharpDX;
 using SharpDX.DXGI;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
-
 using SharpDX.D3DCompiler;
 
 static class Program
@@ -21,9 +20,6 @@ static class Program
     [STAThread]
     static void Main()
     {
-        Application.EnableVisualStyles();
-        Application.SetCompatibleTextRenderingDefault(false);
-
         using (GameForm form = new GameForm())
         {
             form.Exec();
@@ -31,7 +27,7 @@ static class Program
         }
     }
 }
-    
+
 public class GameForm : Form, IDisposable
 {
     SharpDX.Direct3D11.Device Device { get { return _device; } }
@@ -132,10 +128,9 @@ public class GameForm : Form, IDisposable
         var layout = new InputLayout(
             _device,
             ShaderSignature.GetInputSignature(vertexShaderByteCode),
-            new[]
-                {
+                new[] {
                     new InputElement("POSITION", 0, Format.R32G32B32A32_Float, 0, 0),
-                    new InputElement("COLOR", 0, Format.R32G32B32A32_Float, 16, 0)
+                    new InputElement("COLOR",    0, Format.R32G32B32A32_Float, 16, 0)
                 });
 
         var context = _device.ImmediateContext;
@@ -146,12 +141,12 @@ public class GameForm : Form, IDisposable
         context.Rasterizer.SetViewport(new Viewport(0, 0, ClientSize.Width, ClientSize.Height, 0.0f, 1.0f));
         context.OutputMerger.SetTargets(_RenderTarget3D);
 
-        var vertices = SharpDX.Direct3D11.Buffer.Create(_device, BindFlags.VertexBuffer, new[]
-                              {
-                                  new Vector4( 0.0f,  0.5f, 0.5f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-                                  new Vector4( 0.5f, -0.5f, 0.5f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-                                  new Vector4(-0.5f, -0.5f, 0.5f, 1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f)
-                              });
+        var vertices = SharpDX.Direct3D11.Buffer.Create(_device, BindFlags.VertexBuffer, 
+            new[] {
+                new Vector4( 0.0f,  0.5f, 0.5f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
+                new Vector4( 0.5f, -0.5f, 0.5f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
+                new Vector4(-0.5f, -0.5f, 0.5f, 1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f)
+            });
         context.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(vertices, Utilities.SizeOf<Vector4>() * 2, 0));
     }
 
@@ -162,20 +157,4 @@ public class GameForm : Form, IDisposable
         context.Draw(3, 0);
         _SwapChain.Present(0, PresentFlags.None);
     }
-/*
-    public void Dispose()
-    {
-        var context = _device?.ImmediateContext;
-        
-        _RenderTarget3D?.Dispose();
-        _BackBuffer?.Dispose();
-        context?.ClearState();
-        context?.Flush();
-        _device?.Dispose();
-        context?.Dispose();
-        _SwapChain?.Dispose();
-
-        base.Dispose();
-    }
-*/
 }
