@@ -24,6 +24,7 @@ private:
     HGLRC m_hRC;
 };
 
+
 LRESULT CHelloWindow::OnCreate(LPCREATESTRUCT lpcs)
 {
     EnableOpenGL();
@@ -89,13 +90,24 @@ void CHelloWindow::DisableOpenGL()
 
 void CHelloWindow::DrawTriangle()
 {
-    glBegin(GL_TRIANGLES);
+    glEnableClientState(GL_COLOR_ARRAY);
+    glEnableClientState(GL_VERTEX_ARRAY);
 
-    glColor3f(1.0f, 0.0f, 0.0f);   glVertex2f( 0.0f,  0.50f);
-    glColor3f(0.0f, 1.0f, 0.0f);   glVertex2f( 0.5f, -0.50f);
-    glColor3f(0.0f, 0.0f, 1.0f);   glVertex2f(-0.5f, -0.50f);
+    GLfloat colors[] = {
+         1.0f,  0.0f,  0.0f,
+         0.0f,  1.0f,  0.0f,
+         0.0f,  0.0f,  1.0f
+    };
+    GLfloat vertices[] = {
+         0.0f,  0.5f,
+         0.5f, -0.5f,
+        -0.5f, -0.5f,
+    };
 
-    glEnd();
+    glColorPointer(3, GL_FLOAT, 0, colors);
+    glVertexPointer(2, GL_FLOAT, 0, vertices);
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 3);
 }
 
 CAppModule _Module;
