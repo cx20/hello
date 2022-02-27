@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpDX" Version="4.2" />
+    <PackageReference Include="SharpDX.DXGI" Version="4.2" />
+    <PackageReference Include="SharpDX.Desktop" Version="4.2" />
+    <PackageReference Include="SharpDX.Direct3D12" Version="4.2" />
+    <PackageReference Include="SharpDX.D3DCompiler" Version="4.2" />
+    <PackageReference Include="SharpDX.Mathematics" Version="4.2" />
+    <PackageReference Include="Microsoft.Windows.Compatibility" Version="6.0.0" />
+  </ItemGroup>
+
+</Project>
