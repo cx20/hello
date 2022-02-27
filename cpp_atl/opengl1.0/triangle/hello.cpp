@@ -15,8 +15,8 @@ class CHelloWindow : public CWindowImpl<CHelloWindow>
     LRESULT OnDestroy( UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled );
     
 public:
-    HGLRC EnableOpenGL(HDC hDC);
-    void DisableOpenGL(HWND hWnd, HDC hDC, HGLRC hRC);
+    void EnableOpenGL();
+    void DisableOpenGL();
     void DrawTriangle();
 
 private:
@@ -27,8 +27,7 @@ private:
 
 LRESULT CHelloWindow::OnCreate( UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled )
 {
-    m_hDC = GetDC();
-    m_hRC = EnableOpenGL( m_hDC );
+    EnableOpenGL();
     
     ResizeClient( 640, 480 );
     glViewport( 0, 0, 640, 480 );
@@ -52,15 +51,14 @@ LRESULT CHelloWindow::OnDestroy( UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& 
 {
     PostQuitMessage( 0 );
 
-    DisableOpenGL( m_hWnd, m_hDC, m_hRC);
+    DisableOpenGL();
 
     return 0;
 }
 
-HGLRC CHelloWindow::EnableOpenGL(HDC hDC)
+void CHelloWindow::EnableOpenGL()
 {
-    HGLRC hRC = NULL;
-    
+    m_hDC = GetDC();
     PIXELFORMATDESCRIPTOR pfd;
 
     int iFormat;
@@ -75,20 +73,18 @@ HGLRC CHelloWindow::EnableOpenGL(HDC hDC)
     pfd.cDepthBits = 16;
     pfd.iLayerType = PFD_MAIN_PLANE;
 
-    iFormat = ChoosePixelFormat(hDC, &pfd);
+    iFormat = ChoosePixelFormat(m_hDC, &pfd);
 
-    SetPixelFormat(hDC, iFormat, &pfd);
+    SetPixelFormat(m_hDC, iFormat, &pfd);
 
-    hRC = wglCreateContext(hDC);
-    wglMakeCurrent(hDC, hRC);
-    
-    return  hRC;
+    m_hRC = wglCreateContext(m_hDC);
+    wglMakeCurrent(m_hDC, m_hRC);
 }
 
-void CHelloWindow::DisableOpenGL(HWND hWnd, HDC hDC, HGLRC hRC)
+void CHelloWindow::DisableOpenGL()
 {
     wglMakeCurrent(NULL, NULL);
-    wglDeleteContext(hRC);
+    wglDeleteContext(m_hRC);
     ReleaseDC(m_hDC);
 }
 
