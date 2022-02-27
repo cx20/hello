@@ -10,8 +10,9 @@ SET LIB=%LIB%;%DXSDK_DIR%\Lib\x86
 
 cl hello.cpp ^
          /link ^
-         d3d10.lib ^
-         d3dx10.lib
+         dxguid.lib ^
+         d3d11.lib ^
+         d3dx11.lib
 ```
 Result:
 ```
