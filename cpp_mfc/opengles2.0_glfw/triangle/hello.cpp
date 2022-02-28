@@ -40,6 +40,8 @@ private:
     void InitBuffer();
 
     GLFWwindow* m_window;
+    HWND m_hwNative;
+    
     GLuint m_shaderProgram;
     GLuint m_vao;
     GLuint m_vbo[2];
@@ -102,10 +104,9 @@ void CMainFrame::InitOpenGL()
     glfwMakeContextCurrent( m_window );
     glfwSetWindowPos(m_window, 0, 0);
 
-    HWND hwNative = glfwGetWin32Window(m_window);
-    ::ShowWindow(hwNative, SW_SHOW);
-    ::SetParent(hwNative, m_hWnd);
-
+    m_hwNative = glfwGetWin32Window(m_window);
+    ::SetParent(m_hwNative, m_hWnd);
+    
     glewInit();
 }
 
@@ -169,6 +170,8 @@ void CMainFrame::OnPaint()
 {
     CPaintDC dc(this);
     
+    ::UpdateWindow( m_hwNative ); // TODO: This is a tentative fix. Needs investigate the right way.
+
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
