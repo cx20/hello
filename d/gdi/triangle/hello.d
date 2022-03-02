@@ -7,8 +7,6 @@ auto toUTF16z(S)(S s)
     return toUTFz!(const(wchar)*)(s);
 }
 
-//pragma(lib, "gdi32.lib");
-
 import core.sys.windows.windef;
 import core.sys.windows.winuser;
 import core.sys.windows.wingdi;
@@ -110,10 +108,6 @@ void OnPaint(HDC hdc) {
 
 void DrawTriangle(HDC hdc)
 {
-/*
-    string strMessage = "Hello, Win32 GUI(D) World!";
-    TextOut(hdc, 0, 0, strMessage.toUTF16z, strMessage.length);
-*/
     int WIDTH  = 640;
     int HEIGHT = 480;
 
