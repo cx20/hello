@@ -1,6 +1,6 @@
 compile:
 ```
-dub build --arch=x86_mscoff
+dub build
 ```
 Result:
 ```
