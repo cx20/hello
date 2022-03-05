@@ -1,0 +1,12 @@
+{
+	"name": "hello",
+	"description": "hello",
+	"targetType": "executable",
+	"authors": [ "cx20" ],
+	"libs": [ "ole32", "user32", "d3dcompiler", "d2d1", "dxgi", "d3d12" ],
+	"mainSourceFile": "source/hello.d",
+	"dependencies": {
+                "directx-d": {"version": "~master"}
+	},
+	"targetType": "executable"
+}
