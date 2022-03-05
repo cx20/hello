@@ -1,7 +1,8 @@
 #![windows_subsystem = "windows"]
 
 use windows::{
-    core::*, Win32::Foundation::*,
+    core::*,
+    Win32::Foundation::*,
     Win32::Graphics::Gdi::*,
     Win32::Graphics::OpenGL::*,
     Win32::System::LibraryLoader::GetModuleHandleA,
