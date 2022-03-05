@@ -1,6 +1,6 @@
 compile:
 ```
-fpc hello.pas
+fpc hello.pas -WG
 ```
 Result:
 ```
