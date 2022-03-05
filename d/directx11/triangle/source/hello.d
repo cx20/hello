@@ -1,4 +1,4 @@
-// forked from https://raw.githubusercontent.com/evilrat666/directx-d/master/examples/2_d3d11_triangle/source/d3d11_triangle.d
+// forked from https://github.com/evilrat666/directx-d/blob/master/examples/2_d3d11_triangle/source/d3d11_triangle.d
 
 import core.runtime;
 import std.string : toStringz;
