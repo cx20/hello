@@ -21,32 +21,14 @@ type
   { GLvoid     = void; }        PGLvoid     = Pointer;
                                 PPGLvoid    = ^PGLvoid;
 
-    TglClear              = procedure(mask: GLbitfield); stdcall;
-    TglClearColor         = procedure(red, green, blue, alpha: GLclampf); stdcall;
-    TglBegin              = procedure(mode: GLenum); stdcall;
-    TglEnd                = procedure; stdcall;
-    TglColor3f            = procedure(red, green, blue: GLfloat); stdcall;
-    TglVertex2f           = procedure(x, y: GLfloat); stdcall;
-
-    TglVertexPointer      = procedure  (size: GLint; atype: GLenum; stride: GLsizei; data: pointer); stdcall;
-    TglColorPointer       = procedure (size: GLint; atype: GLenum; stride: GLsizei; data: pointer); stdcall;
-    TglDrawArrays         = procedure (mode: GLenum; first: GLint; count: GLsizei); stdcall;
-    TglEnableClientState  = procedure (aarray: GLenum); stdcall;
-    TglDisableClientState = procedure (aarray: GLenum); stdcall;
-
 var
-    glClear              : TglClear;
-    glClearColor         : TglClearColor;
-    glBegin              : TglBegin;
-    glEnd                : TglEnd;
-    glColor3f            : TglColor3f;
-    glVertex2f           : TglVertex2f;
+    glClear              : procedure(mask: GLbitfield); stdcall;
+    glClearColor         : procedure(red, green, blue, alpha: GLclampf); stdcall;
 
-    glVertexPointer      : TglVertexPointer;
-    glColorPointer       : TglColorPointer;
-    glDrawArrays         : TglDrawArrays;
-    glEnableClientState  : TglEnableClientState;
-    glDisableClientState : TglDisableClientState;
+    glVertexPointer      : procedure  (size: GLint; atype: GLenum; stride: GLsizei; data: pointer); stdcall;
+    glColorPointer       : procedure (size: GLint; atype: GLenum; stride: GLsizei; data: pointer); stdcall;
+    glDrawArrays         : procedure (mode: GLenum; first: GLint; count: GLsizei); stdcall;
+    glEnableClientState  : procedure (aarray: GLenum); stdcall;
 
 const
     PFD_TYPE_RGBA        = 0;
@@ -160,16 +142,10 @@ begin
     LibHandle := LoadLibrary(PChar('opengl32.dll'));
     Pointer(glClear)              := GetProcAddress(LibHandle, 'glClear');
     Pointer(glClearColor)         := GetProcAddress(LibHandle, 'glClearColor');
-    Pointer(glBegin)              := GetProcAddress(LibHandle, 'glBegin');
-    Pointer(glEnd)                := GetProcAddress(LibHandle, 'glEnd');
-    Pointer(glColor3f)            := GetProcAddress(LibHandle, 'glColor3f');
-    Pointer(glVertex2f)           := GetProcAddress(LibHandle, 'glVertex2f');
-
     Pointer(glVertexPointer)      := GetProcAddress(LibHandle, 'glVertexPointer');
     Pointer(glColorPointer)       := GetProcAddress(LibHandle, 'glColorPointer');
     Pointer(glDrawArrays)         := GetProcAddress(LibHandle, 'glDrawArrays');
     Pointer(glEnableClientState)  := GetProcAddress(LibHandle, 'glEnableClientState');
-    Pointer(glDisableClientState) := GetProcAddress(LibHandle, 'glDisableClientState');
     
     wcex.cbSize         := SizeOf(TWndclassEx);
     wcex.style          := CS_HREDRAW or CS_VREDRAW;
@@ -231,16 +207,10 @@ begin
 
     glClear              := nil;
     glClearColor         := nil;
-    glBegin              := nil;
-    glEnd                := nil;
-    glColor3f            := nil;
-    glVertex2f           := nil;
-
     glVertexPointer      := nil;
     glColorPointer       := nil;
     glDrawArrays         := nil;
     glEnableClientState  := nil;
-    glDisableClientState := nil;
 
     FreeLibrary(LibHandle);
 

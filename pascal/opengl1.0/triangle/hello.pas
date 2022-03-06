@@ -21,20 +21,13 @@ type
   { GLvoid     = void; }        PGLvoid     = Pointer;
                                 PPGLvoid    = ^PGLvoid;
 
-    TglClear      = procedure(mask: GLbitfield); stdcall;
-    TglClearColor = procedure(red, green, blue, alpha: GLclampf); stdcall;
-    TglBegin      = procedure(mode: GLenum); stdcall;
-    TglEnd        = procedure; stdcall;
-    TglColor3f    = procedure(red, green, blue: GLfloat); stdcall;
-    TglVertex2f   = procedure(x, y: GLfloat); stdcall;
-
 var
-    glClear:      TglClear;
-    glClearColor: TglClearColor;
-    glBegin:      TglBegin;
-    glEnd:        TglEnd;
-    glColor3f:    TglColor3f;
-    glVertex2f:   TglVertex2f;
+    glClear      : procedure(mask: GLbitfield); stdcall;
+    glClearColor : procedure(red, green, blue, alpha: GLclampf); stdcall;
+    glBegin      : procedure(mode: GLenum); stdcall;
+    glEnd        : procedure; stdcall;
+    glColor3f    : procedure(red, green, blue: GLfloat); stdcall;
+    glVertex2f   : procedure(x, y: GLfloat); stdcall;
 
 const
     PFD_TYPE_RGBA           = 0;
