@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <SDL.h>
 #include <SDL_opengl.h>
+#include <SDL_opengl_glext.h>
 #include <tchar.h>
 
+/*
 #ifndef APIENTRY
 #define APIENTRY
 #endif
@@ -37,6 +39,7 @@ typedef void (APIENTRYP PFNGLUSEPROGRAMPROC) (GLuint program);
 typedef GLint (APIENTRYP PFNGLGETATTRIBLOCATIONPROC) (GLuint program, const GLchar *name);
 typedef void (APIENTRYP PFNGLENABLEVERTEXATTRIBARRAYPROC) (GLuint index);
 typedef void (APIENTRYP PFNGLVERTEXATTRIBPOINTERPROC) (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer);
+*/
 
 PFNGLGENBUFFERSPROC               glGenBuffers;
 PFNGLBINDBUFFERPROC               glBindBuffer;
