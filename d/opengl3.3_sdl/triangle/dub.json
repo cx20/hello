@@ -10,7 +10,7 @@
 		"bindbc-opengl": "~>0.12.0"
 	},
 	"versions": [
-		"GL_20",
+		"GL_33",
 		"SDL_2010",
 		"GL_AllowDeprecated"
 	]

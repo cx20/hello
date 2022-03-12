@@ -12,22 +12,23 @@ SDL_Window* window;
 SDL_GLContext glContext;
 
 // Shader sources
-immutable string vertexSource = `
-attribute vec3 position;
-attribute vec3 color;
-varying   vec4 vColor;
+immutable string vertexSource = `#version 330 core
+layout(location = 0) in  vec3 position;
+layout(location = 1) in  vec3 color;
+out vec4 vColor;
 void main()
 {
     vColor = vec4(color, 1.0);
     gl_Position = vec4(position, 1.0);
 }`;
 
-immutable string fragmentSource = `
+immutable string fragmentSource = `#version 330 core 
 precision mediump float;
-varying   vec4 vColor;
+in  vec4 vColor;
+out vec4 outColor;
 void main()
 {
-    gl_FragColor = vColor;
+    outColor = vColor;
 }`;
 
 extern(Windows)
