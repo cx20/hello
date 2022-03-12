@@ -1,0 +1,16 @@
+{
+	"name": "hello",
+	"description": "hello",
+	"targetType": "executable",
+	"authors": [ "cx20" ],
+	"libs": [ "ole32", "user32", "opengl32", "gdi32" ],
+	"mainSourceFile": "source/hello.d",
+	"dependencies": {
+		"bindbc-sdl": "~>0.16.0",
+		"bindbc-opengl": "~>0.12.0"
+	},
+	"versions": [
+		"SDL_2010",
+		"GL_AllowDeprecated"
+	]
+}
