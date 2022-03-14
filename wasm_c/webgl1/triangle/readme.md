@@ -21,3 +21,4 @@ Result:
 |    - - - - - - - - - - - - - - - - -     |
 +------------------------------------------+
 ```
+[Live Demo](https://cx20.github.io/hello/wasm_c/webgl1/triangle/)
