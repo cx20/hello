@@ -81,7 +81,8 @@ async function init() {
         const renderPassDescriptor = {
             colorAttachments: [{
                 view: textureView,
-                loadValue: {r: 1, g: 1, b: 1, a: 1},
+                loadOp: "clear",
+                clearValue: {r: 1, g: 1, b: 1, a: 1},
                 storeOp: "store"
             }]
         };
@@ -90,7 +91,7 @@ async function init() {
         passEncoder.setVertexBuffer(0, vertexBuffer);
         passEncoder.setVertexBuffer(1, colorBuffer);
         passEncoder.draw(3, 1, 0, 0);
-        passEncoder.endPass();
+        passEncoder.end();
         device.queue.submit([commandEncoder.finish()]);
         requestAnimationFrame(render);
     }
