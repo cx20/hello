@@ -15,3 +15,4 @@ Result:
 |    - - - - - - - - - - - - - - - - -     |
 +------------------------------------------+
 ```
+[Live Demo](https://cx20.github.io/hello/javascript/webgl2/triangle/)
