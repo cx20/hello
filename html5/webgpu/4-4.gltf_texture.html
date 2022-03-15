@@ -7,22 +7,22 @@
 </head>
 <body>
 <script id="vs" type="x-shader/x-vertex">
-[[block]] struct Uniforms {
+struct Uniforms {
     modelViewProjectionMatrix : mat4x4<f32>;
 };
-[[binding(0), group(0)]] var<uniform> uniforms : Uniforms;
+@binding(0) @group(0) var<uniform> uniforms : Uniforms;
 
 struct VertexInput {
-    [[location(0)]] position : vec3<f32>;
-    [[location(1)]] textureCoord : vec2<f32>;
+    @location(0) position : vec3<f32>;
+    @location(1) textureCoord : vec2<f32>;
 };
 
 struct VertexOutput {
-    [[builtin(position)]] Position : vec4<f32>;
-    [[location(0)]] vTextureCoord : vec2<f32>;
+    @builtin(position) Position : vec4<f32>;
+    @location(0) vTextureCoord : vec2<f32>;
 };
 
-[[stage(vertex)]]
+@stage(vertex)
 fn main(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
     output.vTextureCoord = input.textureCoord;
@@ -32,18 +32,18 @@ fn main(input : VertexInput) -> VertexOutput {
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
-[[binding(1), group(0)]] var mySampler: sampler;
-[[binding(2), group(0)]] var myTexture: texture_2d<f32>;
+@binding(1) @group(0) var mySampler: sampler;
+@binding(2) @group(0) var myTexture: texture_2d<f32>;
 
 struct FragmentInput {
-    [[location(0)]] vTextureCoord: vec2<f32>;
+    @location(0) vTextureCoord: vec2<f32>;
 };
 
 struct FragmentOutput {
-    [[location(0)]] outColor : vec4<f32>;
+    @location(0) outColor : vec4<f32>;
 };
 
-[[stage(fragment)]]
+@stage(fragment)
 fn main(input : FragmentInput) -> FragmentOutput {
     var output : FragmentOutput;
     output.outColor =  textureSample(myTexture, mySampler, input.vTextureCoord);
@@ -374,14 +374,17 @@ async function init() {
         const renderPassDescriptor = {
             colorAttachments: [{
                 view: textureView,
-                loadValue: {r: 1, g: 1, b: 1, a: 1},
+                loadOp: "clear",
+                clearValue: {r: 1, g: 1, b: 1, a: 1},
                 storeOp: "store"
             }],
             depthStencilAttachment: {
                 view: depthTexture.createView(),
-                depthLoadValue: 1.0,
+                depthClearValue: 1.0,
+                depthLoadOp: 'clear',
                 depthStoreOp: "store",
-                stencilLoadValue: 0,
+                stencilClearValue: 0,
+                stencilLoadOp: 'clear',
                 stencilStoreOp: "store"
             }
         };
@@ -391,7 +394,7 @@ async function init() {
         passEncoder.setVertexBuffer(1, coordBuffer);
         passEncoder.setBindGroup(0, uniformBindGroup);
         passEncoder.draw(positionAccessorCount, 1, 0, 0);
-        passEncoder.endPass();
+        passEncoder.end();
         device.queue.submit([commandEncoder.finish()]);
         uploadBuffer.destroy();
         requestAnimationFrame(render);

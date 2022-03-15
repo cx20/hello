@@ -7,22 +7,22 @@
 </head>
 <body>
 <script id="vs" type="x-shader/x-vertex">
-[[block]] struct Uniform {
+struct Uniform {
     modelViewProjectionMatrix : mat4x4<f32>;
     theta : f32;
 };
-[[binding(0), group(0)]] var<uniform> uniforms : Uniform;
+@binding(0) @group(0) var<uniform> uniforms : Uniform;
 
 struct VertexInput {
-    [[location(0)]] position : vec3<f32>;
+    @location(0) position : vec3<f32>;
 };
 
 struct VertexOutput {
-    [[builtin(position)]] Position : vec4<f32>;
-    [[location(0)]] fragColor : vec4<f32>;
+    @builtin(position) Position : vec4<f32>;
+    @location(0) fragColor : vec4<f32>;
 };
 
-[[stage(vertex)]]
+@stage(vertex)
 fn main(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
     var p : vec3<f32> = input.position;
@@ -49,14 +49,14 @@ fn main(input : VertexInput) -> VertexOutput {
 
 <script id="fs" type="x-shader/x-fragment">
 struct FragmentInput {
-    [[location(0)]] fragColor : vec4<f32>;
+    @location(0) fragColor : vec4<f32>;
 };
 
 struct FragmentOutput {
-    [[location(0)]] outColor : vec4<f32>;
+    @location(0) outColor : vec4<f32>;
 };
 
-[[stage(fragment)]]
+@stage(fragment)
 fn main(input : FragmentInput) -> FragmentOutput {
     var output : FragmentOutput;
     output.outColor = input.fragColor;
@@ -186,14 +186,17 @@ async function init() {
         const renderPassDescriptor = {
             colorAttachments: [{
                 view: textureView,
-                loadValue: {r: 0, g: 0, b: 0, a: 0},
+                loadOp: "clear",
+                clearValue: {r: 0, g: 0, b: 0, a: 0},
                 storeOp: "store"
             }],
             depthStencilAttachment: {
                 view: depthTexture.createView(),
-                depthLoadValue: 1.0,
+                depthClearValue: 1.0,
+                depthLoadOp: 'clear',
                 depthStoreOp: "store",
-                stencilLoadValue: 0,
+                stencilClearValue: 0,
+                stencilLoadOp: 'clear',
                 stencilStoreOp: "store"
             }
         };
@@ -202,7 +205,7 @@ async function init() {
         passEncoder.setVertexBuffer(0, vertexBuffer);
         passEncoder.setBindGroup(0, uniformBindGroup);
         passEncoder.draw(positions.length / 3, 1, 0, 0);
-        passEncoder.endPass();
+        passEncoder.end();
         device.queue.submit([commandEncoder.finish()]);
         buffer1.destroy();
         buffer2.destroy();
