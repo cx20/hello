@@ -4,4 +4,5 @@ fsc ^
     /r:%REFPATH%\WPF\PresentationFramework.dll ^
     /r:%REFPATH%\WPF\WindowsBase.dll ^
     /r:%REFPATH%\System.Xaml.dll ^
+    /target:winexe ^
     Hello.fs
