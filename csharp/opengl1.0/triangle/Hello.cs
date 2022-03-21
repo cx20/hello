@@ -59,17 +59,17 @@ class HelloForm : Form
     [DllImport("gdi32.dll")]
     static extern bool SwapBuffers(IntPtr hDC);
     
-    [DllImport("opengl32")]
+    [DllImport("opengl32.dll")]
     static extern uint wglCreateContext( uint hdc );
-    [DllImport("opengl32")]
+    [DllImport("opengl32.dll")]
     static extern int wglMakeCurrent( uint hdc, uint hglrc );
-    [DllImport("opengl32")]
+    [DllImport("opengl32.dll")]
     static extern int wglDeleteContext( uint hglrc );
-    [DllImport("opengl32")]
+    [DllImport("opengl32.dll")]
     static extern void glClearColor(float red, float green, float blue, float alpha);
-    [DllImport("opengl32")]
+    [DllImport("opengl32.dll")]
     static extern void glClear(uint mask);
-    [DllImport("opengl32")]
+    [DllImport("opengl32.dll")]
     static extern void glBegin(GLenum mode);
     [DllImport("opengl32.dll")]
     static extern void glColor3f(GLfloat red, GLfloat green, GLfloat blue);
