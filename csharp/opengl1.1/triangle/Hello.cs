@@ -67,11 +67,11 @@ class HelloForm : Form
     static extern bool SwapBuffers(IntPtr hDC);
     
     [DllImport("opengl32.dll")]
-    static extern uint wglCreateContext( uint hdc );
+    static extern IntPtr wglCreateContext( IntPtr hdc );
     [DllImport("opengl32.dll")]
-    static extern int wglMakeCurrent( uint hdc, uint hglrc );
+    static extern int wglMakeCurrent( IntPtr hdc, IntPtr hglrc );
     [DllImport("opengl32.dll")]
-    static extern int wglDeleteContext( uint hglrc );
+    static extern int wglDeleteContext( IntPtr hglrc );
     [DllImport("opengl32.dll")]
     static extern void glClearColor(float red, float green, float blue, float alpha);
     [DllImport("opengl32.dll")]
@@ -116,8 +116,8 @@ class HelloForm : Form
         int format = ChoosePixelFormat(hDC, ref pfd);
         
         SetPixelFormat(hDC, format, ref pfd);
-        this.hGLRC = (IntPtr)wglCreateContext( (uint)this.hDC );
-        wglMakeCurrent((uint)this.hDC, (uint)this.hGLRC);
+        this.hGLRC = wglCreateContext( this.hDC );
+        wglMakeCurrent(this.hDC, this.hGLRC);
     }
     
     protected override void OnPaint(PaintEventArgs e) {  
