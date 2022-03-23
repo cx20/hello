@@ -19,8 +19,3 @@ Result:
 |    - - - - - - - - - - - - - - - - -     |
 +------------------------------------------+
 ```
-
-Caution:
-
-> This sample sometimes fails with GetDC.
-> Currently under investigation.
