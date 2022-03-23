@@ -51,9 +51,9 @@ Friend Class HelloForm
     Declare Function ChoosePixelFormat Lib "gdi32.dll" (hdc As IntPtr, ByRef pfd As PIXELFORMATDESCRIPTOR) As Integer
     Declare Function SetPixelFormat Lib "gdi32.dll" (hdc As IntPtr, format As Integer, ByRef pfd As PIXELFORMATDESCRIPTOR) As Boolean
     Declare Function SwapBuffers Lib "gdi32.dll" (hDC As IntPtr) As Boolean
-    Declare Function wglCreateContext Lib "opengl32" (hdc As UInteger) As UInteger
-    Declare Function wglMakeCurrent Lib "opengl32" (hdc As UInteger, hglrc As UInteger) As Integer
-    Declare Function wglDeleteContext Lib "opengl32" (hglrc As UInteger) As Integer
+    Declare Function wglCreateContext Lib "opengl32" (hdc As IntPtr) As IntPtr
+    Declare Function wglMakeCurrent Lib "opengl32" (hdc As IntPtr, hglrc As IntPtr) As Integer
+    Declare Function wglDeleteContext Lib "opengl32" (hglrc As IntPtr) As Integer
     Declare Sub glClearColor Lib "opengl32" (red As Single, green As Single, blue As Single, alpha As Single)
     Declare Sub glClear Lib "opengl32" (mask As UInteger)
     Declare Sub glBegin Lib "opengl32" (mode As UInteger)
@@ -75,9 +75,8 @@ Friend Class HelloForm
         pfd.cColorBits = 32
         pfd.cAlphaBits = 8
         pfd.cDepthBits = 24
-        
-        ' TODO : GetDC has failed in some cases, so this needs to be investigated.
-        Me.hDC = GetDC(Handle)
+
+        Me.hDC = GetDC(Me.Handle)
         Dim format As Integer = ChoosePixelFormat(Me.hDC, pfd)
         SetPixelFormat(Me.hDC, format, pfd)
 
