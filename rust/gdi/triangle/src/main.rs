@@ -85,6 +85,6 @@ fn draw_triangle(_hdc: HDC) {
 
         let mut _gradient_triangle = GRADIENT_TRIANGLE { Vertex1: 0, Vertex2: 1, Vertex3: 2 };
         let raw_gradient_triangle: *mut GRADIENT_TRIANGLE = &mut _gradient_triangle;
-        GradientFill(_hdc, _vertex.as_ptr(), 3, raw_gradient_triangle as *mut c_void, 1, GRADIENT_FILL_TRIANGLE);
+        GradientFill(_hdc, &_vertex, raw_gradient_triangle as *mut c_void, 1, GRADIENT_FILL_TRIANGLE);
     }
 }

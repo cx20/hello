@@ -269,7 +269,7 @@ fn create_factory() -> Result<ID2D1Factory1> {
 fn create_style(factory: &ID2D1Factory1) -> Result<ID2D1StrokeStyle> {
     let props = D2D1_STROKE_STYLE_PROPERTIES { startCap: D2D1_CAP_STYLE_ROUND, endCap: D2D1_CAP_STYLE_TRIANGLE, ..Default::default() };
 
-    unsafe { factory.CreateStrokeStyle(&props, std::ptr::null(), 0) }
+    unsafe { factory.CreateStrokeStyle(&props, &[]) }
 }
 
 fn create_device_with_type(drive_type: D3D_DRIVER_TYPE) -> Result<ID3D11Device> {
@@ -287,11 +287,10 @@ fn create_device_with_type(drive_type: D3D_DRIVER_TYPE) -> Result<ID3D11Device> 
             drive_type, 
             HINSTANCE::default(), 
             flags, 
-            std::ptr::null(), 
-            0, 
+            &[], 
             D3D11_SDK_VERSION, 
             &mut device, 
-            std::ptr::null_mut(),
+            std::ptr::null_mut(), 
             &mut None
         ).map(|()| device.unwrap()) 
     }
