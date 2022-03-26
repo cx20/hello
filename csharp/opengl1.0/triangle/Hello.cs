@@ -89,7 +89,23 @@ class HelloForm : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-
+        
+        EnableOpenGL();
+    }
+    
+    protected override void OnPaint(PaintEventArgs e) {  
+        base.OnPaint(e); 
+        
+        DrawTriangle();
+    }
+    
+    protected override void OnClosed(EventArgs e) {
+        base.OnClosed(e);
+        
+        DisableOpenGL();
+    }
+    
+    void EnableOpenGL() {
         PIXELFORMATDESCRIPTOR pfd = new PIXELFORMATDESCRIPTOR();
         pfd.dwFlags    = PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
         pfd.iPixelType = PFD_TYPE_RGBA;
@@ -105,9 +121,7 @@ class HelloForm : Form
         wglMakeCurrent(this.hDC, this.hGLRC);
     }
     
-    protected override void OnPaint(PaintEventArgs e) {  
-        base.OnPaint(e); 
-
+    void DrawTriangle() {
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         
@@ -118,6 +132,12 @@ class HelloForm : Form
         glEnd();
 
         SwapBuffers(this.hDC);
+    }
+    
+    void DisableOpenGL() {
+        wglMakeCurrent(IntPtr.Zero, IntPtr.Zero);
+        wglDeleteContext(this.hGLRC);
+        ReleaseDC(this.Handle, this.hDC);
     }
     
     [STAThread]

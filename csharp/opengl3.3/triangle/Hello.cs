@@ -73,11 +73,11 @@ class HelloForm : Form
     static extern bool SwapBuffers(IntPtr hDC);
     
     [DllImport("opengl32")]
-    static extern uint wglCreateContext( uint hdc );
+    static extern IntPtr wglCreateContext( IntPtr hdc );
     [DllImport("opengl32")]
-    static extern int wglMakeCurrent( uint hdc, uint hglrc );
+    static extern int wglMakeCurrent( IntPtr hdc, IntPtr hglrc );
     [DllImport("opengl32")]
-    static extern int wglDeleteContext( uint hglrc );
+    static extern int wglDeleteContext( IntPtr hglrc );
     [DllImport("opengl32")]
     static extern void glClearColor(float red, float green, float blue, float alpha);
     [DllImport("opengl32")]
@@ -178,6 +178,12 @@ class HelloForm : Form
         DrawTriangle();
     }
     
+    protected override void OnClosed(EventArgs e) {
+        base.OnClosed(e);
+        
+        DisableOpenGL();
+    }
+
     void EnableOpenGL() {
         PIXELFORMATDESCRIPTOR pfd = new PIXELFORMATDESCRIPTOR();
         pfd.dwFlags    = PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
@@ -191,16 +197,16 @@ class HelloForm : Form
         
         SetPixelFormat(hDC, format, ref pfd);
         
-        IntPtr hGLRC_old = (IntPtr)wglCreateContext( (uint)this.hDC );
-        wglMakeCurrent((uint)this.hDC, (uint)hGLRC_old);
+        IntPtr hGLRC_old = wglCreateContext( this.hDC );
+        wglMakeCurrent(this.hDC, hGLRC_old);
 
         IntPtr wglCreateContextAttribsARBPtr = wglGetProcAddress("wglCreateContextAttribsARB");
         wglCreateContextAttribsARB = Marshal.GetDelegateForFunctionPointer<wglCreateContextAttribsARBDelegate>(wglCreateContextAttribsARBPtr);
 
         this.hGLRC = wglCreateContextAttribsARB(this.hDC, IntPtr.Zero, null);
 
-        wglMakeCurrent((uint)this.hDC, (uint)this.hGLRC);
-        wglDeleteContext((uint)hGLRC_old);
+        wglMakeCurrent(this.hDC, this.hGLRC);
+        wglDeleteContext(hGLRC_old);
     }
     
     void InitOpenGLFunc() {
@@ -299,6 +305,12 @@ class HelloForm : Form
         SwapBuffers(this.hDC);
     }
     
+    void DisableOpenGL() {
+        wglMakeCurrent(IntPtr.Zero, IntPtr.Zero);
+        wglDeleteContext(this.hGLRC);
+        ReleaseDC(this.Handle, this.hDC);
+    }
+
     [STAThread]
     static void Main()
     {
