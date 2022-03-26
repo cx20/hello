@@ -19,7 +19,3 @@ Result:
 |    - - - - - - - - - - - - - - - - -     |
 +------------------------------------------+
 ```
-
-Caution:
-
-> Currently, I'm investigating because the process doesn't end when I close the window.
