@@ -59,7 +59,7 @@ extern "system" fn wndproc(window: HWND, message: u32, wparam: WPARAM, lparam: L
             WM_PAINT => {
                 let mut ps = PAINTSTRUCT::default();
                 let hdc = BeginPaint(window, &mut ps);
-                TextOutA(hdc, 0, 0, "Hello, Win32 GUI(Rust) World!", 29);
+                TextOutA(hdc, 0, 0, "Hello, Win32 GUI(Rust) World!".as_bytes());
                 EndPaint(window, &ps);
                 LRESULT(0)
             }
