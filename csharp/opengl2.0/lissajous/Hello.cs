@@ -1,8 +1,8 @@
 using System;
-using System.Linq;
 using System.Drawing;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
+using System.Collections.Generic;
 
 using GLenum  = System.UInt32;
 using GLint   = System.UInt32;
@@ -287,6 +287,9 @@ class HelloForm : Form
 
         glGenBuffers(2, vbo);
 
+        List<float> vertices_list = new List<float>();
+        List<float> colors_list   = new List<float>();
+
         for ( int i = 0; i <= MAX; i++ ) {
             float x = (float)(0.5 * Math.Cos(2 * Math.PI * i / MAX * A));
             float y = (float)(0.5 * Math.Sin(2 * Math.PI * i / MAX * B));
@@ -294,9 +297,16 @@ class HelloForm : Form
             float r = (float)(x + 0.5);
             float g = (float)(y + 0.5);
             float b = (float)(z + 0.5);
-            vertices = vertices.Concat(new float[]{ x, y, z }).ToArray();
-            colors   = colors.Concat(new float[]{ r, g, b }).ToArray();
+            vertices_list.Add( x );
+            vertices_list.Add( y );
+            vertices_list.Add( z );
+            colors_list.Add( r );
+            colors_list.Add( g );
+            colors_list.Add( b );
         }
+        vertices = vertices_list.ToArray();
+        colors   = colors_list.ToArray();
+        
         glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
         glBufferDataFloat(GL_ARRAY_BUFFER, vertices.Length * sizeof(float), vertices, GL_STATIC_DRAW);
     
