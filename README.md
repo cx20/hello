@@ -74,11 +74,12 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 
 ## Native Languages (for Linux)
 
-|Library                |C++                                                                                |
-|:----------------------|:---------------------------------------------------------------------------------:|
-|OpenGL1.0              |[Link](https://github.com/cx20/hello/tree/master/linux_cpp/opengl1.0/triangle)     |
-|OpenGL1.1              |[Link](https://github.com/cx20/hello/tree/master/linux_cpp/opengl1.1/triangle)     |
-|OpenGL2.0              |[Link](https://github.com/cx20/hello/tree/master/linux_cpp/opengl2.0/triangle)     |
+|Library                |C                                                                                  |C++                                                                                |
+|:----------------------|:---------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------:|
+|X11 GUI                |[Link](https://github.com/cx20/hello/tree/master/linux_c/x11gui/hello)             |                                                                                   |
+|OpenGL1.0              |                                                                                   |[Link](https://github.com/cx20/hello/tree/master/linux_cpp/opengl1.0/triangle)     |
+|OpenGL1.1              |                                                                                   |[Link](https://github.com/cx20/hello/tree/master/linux_cpp/opengl1.1/triangle)     |
+|OpenGL2.0              |                                                                                   |[Link](https://github.com/cx20/hello/tree/master/linux_cpp/opengl2.0/triangle)     |
 
 ## .NET Languages
 
