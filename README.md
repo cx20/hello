@@ -77,6 +77,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |Library                |C++                                                                                |
 |:----------------------|:---------------------------------------------------------------------------------:|
 |OpenGL1.0              |[Link](https://github.com/cx20/hello/tree/master/linux_cpp/opengl1.0/triangle)     |
+|OpenGL1.1              |[Link](https://github.com/cx20/hello/tree/master/linux_cpp/opengl1.1/triangle)     |
 
 ## .NET Languages
 
