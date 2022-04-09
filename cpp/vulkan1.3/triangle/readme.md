@@ -37,7 +37,7 @@ Result:
 ```
 Caution:
 
-> validation layer: setupLoaderTrampPhysDevs:  Failed during dispatch call of 'vkEnumeratePhysicalDevices' to lower layers or loader to get count.
+> validation layer: `setupLoaderTrampPhysDevs`:  Failed during dispatch call of '`vkEnumeratePhysicalDevices`' to lower layers or loader to get count.
 > failed to find GPUs with Vulkan support!
 
 If you get the above error at runtime, you may be able to improve it by setting the following environment variables.
