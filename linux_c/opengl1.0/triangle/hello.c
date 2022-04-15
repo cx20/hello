@@ -23,8 +23,13 @@ int main(int argc, char** argv) {
     Screen* screen;
     int screenId;
     XEvent ev;
-    GLint majorGLX = 0;
-    GLint minorGLX = 0;
+
+    display = XOpenDisplay(NULL);
+    screen = DefaultScreenOfDisplay(display);
+    screenId = DefaultScreen(display);
+    
+    GLint majorGLX, minorGLX = 0;
+    glXQueryVersion(display, &majorGLX, &minorGLX);
 
     GLint glxAttribs[] = {
         GLX_X_RENDERABLE    , True,
@@ -42,33 +47,13 @@ int main(int argc, char** argv) {
     };
     
     int fbcount;
-    GLXFBConfig* fbc;
-    int best_fbc = -1;
-    int worst_fbc = -1;
-    int best_num_samp = -1;
-    int worst_num_samp = 999;
-    int i;
-    
-    XVisualInfo* vi;
-    
-    int samp_buf, samples;
-    
-    GLXFBConfig bestFbc;
-    XVisualInfo* visual;
+    GLXFBConfig* fbc = glXChooseFBConfig(display, screenId, glxAttribs, &fbcount);
 
-    XSetWindowAttributes windowAttribs;
-    GLXContext context = 0;
-
-    display = XOpenDisplay(NULL);
-    screen = DefaultScreenOfDisplay(display);
-    screenId = DefaultScreen(display);
-    
-    glXQueryVersion(display, &majorGLX, &minorGLX);
-    fbc = glXChooseFBConfig(display, screenId, glxAttribs, &fbcount);
-
-    for (i = 0; i < fbcount; ++i) {
-        vi = glXGetVisualFromFBConfig( display, fbc[i] );
+    int best_fbc = -1, worst_fbc = -1, best_num_samp = -1, worst_num_samp = 999;
+    for (int i = 0; i < fbcount; ++i) {
+        XVisualInfo *vi = glXGetVisualFromFBConfig( display, fbc[i] );
         if ( vi != 0) {
+            int samp_buf, samples;
             glXGetFBConfigAttrib( display, fbc[i], GLX_SAMPLE_BUFFERS, &samp_buf );
             glXGetFBConfigAttrib( display, fbc[i], GLX_SAMPLES       , &samples  );
 
@@ -82,11 +67,12 @@ int main(int argc, char** argv) {
         }
         XFree( vi );
     }
-    bestFbc = fbc[ best_fbc ];
+    GLXFBConfig bestFbc = fbc[ best_fbc ];
     XFree( fbc );
 
-    visual = glXGetVisualFromFBConfig( display, bestFbc );
+    XVisualInfo* visual = glXGetVisualFromFBConfig( display, bestFbc );
 
+    XSetWindowAttributes windowAttribs;
     windowAttribs.border_pixel = BlackPixel(display, screenId);
     windowAttribs.background_pixel = WhitePixel(display, screenId);
     windowAttribs.override_redirect = True;
@@ -112,6 +98,7 @@ int main(int argc, char** argv) {
     Atom atomWmDeleteWindow = XInternAtom(display, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(display, window, &atomWmDeleteWindow, 1);
 
+    GLXContext context = 0;
     context = glXCreateNewContext( display, bestFbc, GLX_RGBA_TYPE, 0, True );
     XSync( display, False );
 
