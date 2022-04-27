@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>3D function Using Babylon.js</title>
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <script src="https://cx20.github.io/gltf-test/libs/babylonjs/5.3.0/babylon.js"></script>
+</head>
+<body>
+<script id="vs" type="x-shader/x-vertex">
+attribute vec3 position;
+varying   vec4 vColor;
+uniform mat4 worldViewProjection;
+uniform float theta;
+
+void main() {
+    vec3 p = position;
+
+    float i = floor(p.x / 100.0);
+    float j = p.x - i * 100.0;
+    float i2 = (i - 50.0) * 0.2;
+    float j2 = (j - 50.0) * 0.2;
+    
+    float x = i2;
+    float y = sin(sqrt(i2 * i2 + j2 * j2) + theta)/ sqrt(i2 * i2 + j2 * j2);
+    float z = j2;
+    
+    float x2 = x / 10.0;
+    float y2 = y / 2.0;
+    float z2 = z / 10.0;
+
+    vColor = vec4(x2 + 0.5, y2 + 0.5, z2 + 0.5, 1.0);
+    gl_Position = worldViewProjection * vec4(x2, y2, z2, 1.0);
+    gl_PointSize = 2.0;
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+precision mediump float;
+varying   vec4 vColor;
+
+void main() {
+    gl_FragColor = vColor;
+}
+</script>
+
+<canvas id="c" width="465" height="465"></canvas>
+
+<script>
+function init() {
+    const canvas = document.querySelector("#c");
+    const engine = new BABYLON.Engine(canvas);
+    let mesh;
+    let material;
+	let baseTime = +new Date;
+	let time = 0;
+
+    const createScene = function(engine) {
+        const scene = new BABYLON.Scene(engine);
+        const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -3), scene);
+        mesh = new BABYLON.Mesh('mesh', scene);
+        scene.clearColor = new BABYLON.Color3(0, 0, 0);
+
+        let positions = [];
+        let colors = [];
+        let indices = [];
+        let index = 0;
+
+	    let MAX = 10000;
+	    for ( let i = 0; i < MAX; i++ ) {
+	        let x = i;
+	        let y = 0.0;
+	        let z = 0.0;
+	        positions = positions.concat([x, y, z]);
+	        indices.push(index);
+	        index++;
+	    }
+
+        //mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, positions, true);
+        mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, positions, false);
+        //mesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, colors, true);
+        mesh.position.y = -0.5;
+        mesh.setIndices(indices);
+
+        material = new BABYLON.ShaderMaterial("material", scene, {
+            vertexElement: "vs",
+            fragmentElement: "fs",
+        }, {
+            attributes: ["position"],
+            uniforms: ["worldViewProjection", "theta"]
+        });
+        material.fillMode = BABYLON.Material.PointListDrawMode;
+        
+        mesh.material = material;
+
+        return scene;
+    }
+
+    const scene = createScene();
+
+    engine.runRenderLoop(function () {
+        //rad = timestamp / 1000; // Seconds since the first requestAnimationFrame (ms)
+        time = (+new Date - baseTime) / 1000;
+
+        mesh.rotate(BABYLON.Axis.Y, -Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+        material.setFloat("theta", time);
+        scene.render();
+    });
+}
+
+init();
+</script>
+<a href="https://github.com/cx20/hello/blob/master/html5/babylonjs/3-2.3d_lissajous.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
+</body>
+</html>
