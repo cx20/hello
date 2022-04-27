@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Harmonograph curve Using Babylon.js</title>
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <script src="https://cx20.github.io/gltf-test/libs/babylonjs/5.3.0/babylon.js"></script>
+</head>
+<body>
+<script id="vs" type="x-shader/x-vertex">
+attribute vec3 position;
+varying   vec4 vColor;
+
+uniform mat4 worldViewProjection;
+uniform float time;
+uniform float f1;
+uniform float f2;
+uniform float f3;
+uniform float f4;
+
+float A1 = 0.2, p1 = 1.0/16.0,  d1 = 0.02;
+float A2 = 0.2, p2 = 3.0/2.0,   d2 = 0.0315;
+float A3 = 0.2, p3 = 13.0/15.0, d3 = 0.02;
+float A4 = 0.2, p4 = 1.0,       d4 = 0.02;
+float PI = 3.141592;
+
+void main() {
+    vec3 p = position;
+    p1 = time;
+    
+    float t = ((p.x/360.0) - 0.5)  * 50.0;
+    float x = A1 * sin(f1 * t + PI * p1) * exp(-d1 * t) + A2 * sin(f2 * t + PI * p2) * exp(-d2 * t);
+    float y = A3 * sin(f3 * t + PI * p3) * exp(-d3 * t) + A4 * sin(f4 * t + PI * p4) * exp(-d4 * t);
+    float z = A1 * cos(f1 * t + PI * p1) * exp(-d1 * t) + A2 * cos(f2 * t + PI * p2) * exp(-d2 * t);
+
+    p.x = x;
+    p.y = y;
+    p.z = z;
+
+    vColor = vec4(x + 0.5, y + 0.5, z + 0.5, 1.0);
+    gl_Position = worldViewProjection * vec4(p, 1.0);
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+precision mediump float;
+varying   vec4 vColor;
+
+void main() {
+    gl_FragColor = vColor;
+}
+</script>
+
+<canvas id="c" width="465" height="465"></canvas>
+
+<script>
+function init() {
+    const canvas = document.querySelector("#c");
+    const engine = new BABYLON.Engine(canvas);
+    let mesh;
+    let material;
+
+    let baseTime = +new Date;
+    let time = 0;
+    let f1 = 2;
+    let f2 = 2;
+    let f3 = 2;
+    let f4 = 2;
+
+    const createScene = function(engine) {
+        const scene = new BABYLON.Scene(engine);
+        const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -3), scene);
+        mesh = new BABYLON.Mesh('mesh', scene);
+        scene.clearColor = new BABYLON.Color3(0, 0, 0);
+
+        let positions = [];
+        let colors = [];
+        let indices = [];
+
+        let rad = 0;
+
+        //             1.0 y 
+        //              ^  -1.0 
+        //              | / z
+        //              |/       x
+        // -1.0 -----------------> +1.0
+        //            / |
+        //      +1.0 /  |
+        //           -1.0
+        // 
+        let MAX = 360;
+        let A = 100.0;
+        let B = 99.0;
+        let C = 1.0;
+        let alpha = Math.PI/4;
+        let beta  = Math.PI/3;
+        let theta = 0; // Math.PI/2;
+        let index = 0;
+        for ( let i = 0; i <= MAX; i += 0.1 ) {
+            let x = i;
+            let y = 0.0;
+            let z = 0.0;
+            positions = positions.concat([x, y, z]);
+            indices.push(index);
+            index++;
+        }
+
+        mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, positions, true);
+        mesh.setIndices(indices);
+
+        material = new BABYLON.ShaderMaterial("material", scene, {
+            vertexElement: "vs",
+            fragmentElement: "fs",
+        }, {
+            attributes: ["position"],
+            uniforms: ["worldViewProjection", "time", "f1", "f2", "f3", "f4"]
+        });
+        material.fillMode = BABYLON.Material.LineStripDrawMode;
+        
+        mesh.material = material;
+
+        return scene;
+    }
+
+    const scene = createScene();
+
+    engine.runRenderLoop(function () {
+        mesh.rotate(BABYLON.Axis.Y, -Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+
+        // uniform float time 
+        time = (+new Date - baseTime) / 1000;
+
+        // uniform float f1`f4
+        f1 = (f1 + Math.random() / 40) % 10;
+        f2 = (f2 + Math.random() / 40) % 10;
+        f3 = (f3 + Math.random() / 40) % 10;
+        f4 = (f4 + Math.random() / 40) % 10;
+
+        material.setFloat("time", time);
+        material.setFloat("f1", f1);
+        material.setFloat("f2", f2);
+        material.setFloat("f3", f3);
+        material.setFloat("f4", f4);
+    
+        scene.render();
+    });
+}
+
+init();
+</script>
+<a href="https://github.com/cx20/hello/blob/master/html5/babylonjs/3-3.harmonograph.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
+</body>
+</html>
