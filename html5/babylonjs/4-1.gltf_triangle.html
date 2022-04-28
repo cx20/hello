@@ -23,8 +23,9 @@ let createScene = function(engine) {
         let mesh = newScene.meshes[0];
         mesh.rotate(BABYLON.Axis.Y, Math.PI / 2, BABYLON.Space.LOCAL);
         scene = newScene;
+        scene.clearColor = new BABYLON.Color3.White;
+
         let camera = new BABYLON.ArcRotateCamera("camera", 0, 1, 3, BABYLON.Vector3.Zero(), scene);
-        
         camera.attachControl(canvas, false, false);
         scene.activeCamera = camera;
 
