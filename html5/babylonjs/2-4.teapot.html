@@ -29,74 +29,70 @@ void main() {
 }
 </script>
 
-<canvas id="c" width="465" height="465"></canvas>
+<canvas id="c"></canvas>
 
 <script>
-function init() {
-    const canvas = document.querySelector("#c");
-    const engine = new BABYLON.Engine(canvas);
+const canvas = document.querySelector("#c");
+const engine = new BABYLON.Engine(canvas);
 
-    let teapotMesh;
-    let vertexPositions;
-    let vertexNormals;
-    let indices;
+let teapotMesh;
+let vertexPositions;
+let vertexNormals;
+let indices;
 
-    const createScene = function(engine) {
-        const scene = new BABYLON.Scene(engine);
-        const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -50), scene);
-        scene.clearColor = new BABYLON.Color3(1, 1, 1);
+const createScene = function(engine) {
+    const scene = new BABYLON.Scene(engine);
+    const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -50), scene);
+    scene.clearColor = new BABYLON.Color3(1, 1, 1);
 
-	    let unpackedColors = [];
-	    for (let i=0; i < vertexNormals.length; i += 3) {
-	        let r = vertexNormals[i+0] + 0.5;
-	        let g = vertexNormals[i+1] + 0.5;
-	        let b = vertexNormals[i+2] + 0.5;
-	        let a = 1.0;
-	        unpackedColors.push(r);
-	        unpackedColors.push(g);
-	        unpackedColors.push(b);
-	        unpackedColors.push(a);
-	    }
+    let unpackedColors = [];
+    for (let i=0; i < vertexNormals.length; i += 3) {
+        let r = vertexNormals[i+0] + 0.5;
+        let g = vertexNormals[i+1] + 0.5;
+        let b = vertexNormals[i+2] + 0.5;
+        let a = 1.0;
+        unpackedColors.push(r);
+        unpackedColors.push(g);
+        unpackedColors.push(b);
+        unpackedColors.push(a);
+    }
 
-        teapotMesh = new BABYLON.Mesh("teapot", scene);
-        teapotMesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, vertexPositions, false);
-        teapotMesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, unpackedColors, false);
-        teapotMesh.setIndices(indices);
+    teapotMesh = new BABYLON.Mesh("teapot", scene);
+    teapotMesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, vertexPositions, false);
+    teapotMesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, unpackedColors, false);
+    teapotMesh.setIndices(indices);
 
-        const material = new BABYLON.ShaderMaterial("material", scene, {
-            vertexElement: "vs",
-            fragmentElement: "fs",
-        }, {
-            attributes: ["position", "color"],
-            uniforms: ["worldViewProjection"]
-        });
-        material.fillMode = BABYLON.Material.TriangleFillDrawMode;
-
-        teapotMesh.material = material;
-        teapotMesh.material.backFaceCulling = false;
-
-        return scene;
-    };
-
-    // copy from: https://github.com/gpjt/webgl-lessons/blob/master/lesson14/Teapot.json
-    $.getJSON("https://cx20.github.io/webgl-test/assets/json/teapot.json", function (data) {
-        vertexPositions = data.vertexPositions;
-        vertexNormals = data.vertexNormals;
-        indices = data.indices;
-        const scene = createScene(engine);
-
-        engine.runRenderLoop(function () {
-            teapotMesh.rotate(BABYLON.Axis.Y, -Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
-            scene.render();
-        });
-
-        window.addEventListener('resize', function(){
-            engine.resize();
-        });
+    const material = new BABYLON.ShaderMaterial("material", scene, {
+        vertexElement: "vs",
+        fragmentElement: "fs",
+    }, {
+        attributes: ["position", "color"],
+        uniforms: ["worldViewProjection"]
     });
-}
+    material.fillMode = BABYLON.Material.TriangleFillDrawMode;
 
-init();
+    teapotMesh.material = material;
+    teapotMesh.material.backFaceCulling = false;
+
+    return scene;
+};
+
+// copy from: https://github.com/gpjt/webgl-lessons/blob/master/lesson14/Teapot.json
+$.getJSON("https://cx20.github.io/webgl-test/assets/json/teapot.json", function (data) {
+    vertexPositions = data.vertexPositions;
+    vertexNormals = data.vertexNormals;
+    indices = data.indices;
+    const scene = createScene(engine);
+
+    engine.runRenderLoop(function () {
+        teapotMesh.rotate(BABYLON.Axis.Y, -Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+        scene.render();
+    });
+
+    window.addEventListener('resize', function(){
+        engine.resize();
+    });
+});
 </script>
 <a href="https://github.com/cx20/hello/blob/master/html5/babylonjs/2-4.teapot.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
 </body>

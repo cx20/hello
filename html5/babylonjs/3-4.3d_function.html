@@ -43,71 +43,67 @@ void main() {
 }
 </script>
 
-<canvas id="c" width="465" height="465"></canvas>
+<canvas id="c"></canvas>
 
 <script>
-function init() {
-    const canvas = document.querySelector("#c");
-    const engine = new BABYLON.Engine(canvas);
-    let mesh;
-    let material;
-	let baseTime = +new Date;
-	let time = 0;
+const canvas = document.querySelector("#c");
+const engine = new BABYLON.Engine(canvas);
+let mesh;
+let material;
+let baseTime = +new Date;
+let time = 0;
 
-    const createScene = function(engine) {
-        const scene = new BABYLON.Scene(engine);
-        const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -3), scene);
-        mesh = new BABYLON.Mesh('mesh', scene);
-        scene.clearColor = new BABYLON.Color3(0, 0, 0);
+const createScene = function(engine) {
+    const scene = new BABYLON.Scene(engine);
+    const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -3), scene);
+    mesh = new BABYLON.Mesh('mesh', scene);
+    scene.clearColor = new BABYLON.Color3(0, 0, 0);
 
-        let positions = [];
-        let colors = [];
-        let indices = [];
-        let index = 0;
+    let positions = [];
+    let colors = [];
+    let indices = [];
+    let index = 0;
 
-	    let MAX = 10000;
-	    for ( let i = 0; i < MAX; i++ ) {
-	        let x = i;
-	        let y = 0.0;
-	        let z = 0.0;
-	        positions = positions.concat([x, y, z]);
-	        indices.push(index);
-	        index++;
-	    }
-
-        //mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, positions, true);
-        mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, positions, false);
-        //mesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, colors, true);
-        mesh.position.y = -0.5;
-        mesh.setIndices(indices);
-
-        material = new BABYLON.ShaderMaterial("material", scene, {
-            vertexElement: "vs",
-            fragmentElement: "fs",
-        }, {
-            attributes: ["position"],
-            uniforms: ["worldViewProjection", "theta"]
-        });
-        material.fillMode = BABYLON.Material.PointListDrawMode;
-        
-        mesh.material = material;
-
-        return scene;
+    let MAX = 10000;
+    for ( let i = 0; i < MAX; i++ ) {
+        let x = i;
+        let y = 0.0;
+        let z = 0.0;
+        positions = positions.concat([x, y, z]);
+        indices.push(index);
+        index++;
     }
 
-    const scene = createScene();
+    //mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, positions, true);
+    mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, positions, false);
+    //mesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, colors, true);
+    mesh.position.y = -0.5;
+    mesh.setIndices(indices);
 
-    engine.runRenderLoop(function () {
-        //rad = timestamp / 1000; // Seconds since the first requestAnimationFrame (ms)
-        time = (+new Date - baseTime) / 1000;
-
-        mesh.rotate(BABYLON.Axis.Y, -Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
-        material.setFloat("theta", time);
-        scene.render();
+    material = new BABYLON.ShaderMaterial("material", scene, {
+        vertexElement: "vs",
+        fragmentElement: "fs",
+    }, {
+        attributes: ["position"],
+        uniforms: ["worldViewProjection", "theta"]
     });
+    material.fillMode = BABYLON.Material.PointListDrawMode;
+    
+    mesh.material = material;
+
+    return scene;
 }
 
-init();
+const scene = createScene();
+
+engine.runRenderLoop(function () {
+    //rad = timestamp / 1000; // Seconds since the first requestAnimationFrame (ms)
+    time = (+new Date - baseTime) / 1000;
+
+    mesh.rotate(BABYLON.Axis.Y, -Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+    material.setFloat("theta", time);
+    scene.render();
+});
 </script>
 <a href="https://github.com/cx20/hello/blob/master/html5/babylonjs/3-2.3d_lissajous.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
 </body>

@@ -50,102 +50,98 @@ void main() {
 }
 </script>
 
-<canvas id="c" width="465" height="465"></canvas>
+<canvas id="c"></canvas>
 
 <script>
-function init() {
-    const canvas = document.querySelector("#c");
-    const engine = new BABYLON.Engine(canvas);
-    let mesh;
-    let material;
+const canvas = document.querySelector("#c");
+const engine = new BABYLON.Engine(canvas);
+let mesh;
+let material;
 
-    let baseTime = +new Date;
-    let time = 0;
-    let f1 = 2;
-    let f2 = 2;
-    let f3 = 2;
-    let f4 = 2;
+let baseTime = +new Date;
+let time = 0;
+let f1 = 2;
+let f2 = 2;
+let f3 = 2;
+let f4 = 2;
 
-    const createScene = function(engine) {
-        const scene = new BABYLON.Scene(engine);
-        const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -3), scene);
-        mesh = new BABYLON.Mesh('mesh', scene);
-        scene.clearColor = new BABYLON.Color3(0, 0, 0);
+const createScene = function(engine) {
+    const scene = new BABYLON.Scene(engine);
+    const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -3), scene);
+    mesh = new BABYLON.Mesh('mesh', scene);
+    scene.clearColor = new BABYLON.Color3(0, 0, 0);
 
-        let positions = [];
-        let colors = [];
-        let indices = [];
+    let positions = [];
+    let colors = [];
+    let indices = [];
 
-        let rad = 0;
+    let rad = 0;
 
-        //             1.0 y 
-        //              ^  -1.0 
-        //              | / z
-        //              |/       x
-        // -1.0 -----------------> +1.0
-        //            / |
-        //      +1.0 /  |
-        //           -1.0
-        // 
-        let MAX = 360;
-        let A = 100.0;
-        let B = 99.0;
-        let C = 1.0;
-        let alpha = Math.PI/4;
-        let beta  = Math.PI/3;
-        let theta = 0; // Math.PI/2;
-        let index = 0;
-        for ( let i = 0; i <= MAX; i += 0.1 ) {
-            let x = i;
-            let y = 0.0;
-            let z = 0.0;
-            positions = positions.concat([x, y, z]);
-            indices.push(index);
-            index++;
-        }
-
-        mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, positions, true);
-        mesh.setIndices(indices);
-
-        material = new BABYLON.ShaderMaterial("material", scene, {
-            vertexElement: "vs",
-            fragmentElement: "fs",
-        }, {
-            attributes: ["position"],
-            uniforms: ["worldViewProjection", "time", "f1", "f2", "f3", "f4"]
-        });
-        material.fillMode = BABYLON.Material.LineStripDrawMode;
-        
-        mesh.material = material;
-
-        return scene;
+    //             1.0 y 
+    //              ^  -1.0 
+    //              | / z
+    //              |/       x
+    // -1.0 -----------------> +1.0
+    //            / |
+    //      +1.0 /  |
+    //           -1.0
+    // 
+    let MAX = 360;
+    let A = 100.0;
+    let B = 99.0;
+    let C = 1.0;
+    let alpha = Math.PI/4;
+    let beta  = Math.PI/3;
+    let theta = 0; // Math.PI/2;
+    let index = 0;
+    for ( let i = 0; i <= MAX; i += 0.1 ) {
+        let x = i;
+        let y = 0.0;
+        let z = 0.0;
+        positions = positions.concat([x, y, z]);
+        indices.push(index);
+        index++;
     }
 
-    const scene = createScene();
+    mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, positions, true);
+    mesh.setIndices(indices);
 
-    engine.runRenderLoop(function () {
-        mesh.rotate(BABYLON.Axis.Y, -Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
-
-        // uniform float time 
-        time = (+new Date - baseTime) / 1000;
-
-        // uniform float f1`f4
-        f1 = (f1 + Math.random() / 40) % 10;
-        f2 = (f2 + Math.random() / 40) % 10;
-        f3 = (f3 + Math.random() / 40) % 10;
-        f4 = (f4 + Math.random() / 40) % 10;
-
-        material.setFloat("time", time);
-        material.setFloat("f1", f1);
-        material.setFloat("f2", f2);
-        material.setFloat("f3", f3);
-        material.setFloat("f4", f4);
-    
-        scene.render();
+    material = new BABYLON.ShaderMaterial("material", scene, {
+        vertexElement: "vs",
+        fragmentElement: "fs",
+    }, {
+        attributes: ["position"],
+        uniforms: ["worldViewProjection", "time", "f1", "f2", "f3", "f4"]
     });
+    material.fillMode = BABYLON.Material.LineStripDrawMode;
+    
+    mesh.material = material;
+
+    return scene;
 }
 
-init();
+const scene = createScene();
+
+engine.runRenderLoop(function () {
+    mesh.rotate(BABYLON.Axis.Y, -Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+
+    // uniform float time 
+    time = (+new Date - baseTime) / 1000;
+
+    // uniform float f1ï¿½`f4
+    f1 = (f1 + Math.random() / 40) % 10;
+    f2 = (f2 + Math.random() / 40) % 10;
+    f3 = (f3 + Math.random() / 40) % 10;
+    f4 = (f4 + Math.random() / 40) % 10;
+
+    material.setFloat("time", time);
+    material.setFloat("f1", f1);
+    material.setFloat("f2", f2);
+    material.setFloat("f3", f3);
+    material.setFloat("f4", f4);
+
+    scene.render();
+});
 </script>
 <a href="https://github.com/cx20/hello/blob/master/html5/babylonjs/3-3.harmonograph.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
 </body>
