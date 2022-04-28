@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Testing glTF Square model Using Babylon.js</title>
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <script src="https://cx20.github.io/gltf-test/libs/babylonjs/5.3.0/babylon.js"></script>
+  <script src="https://cx20.github.io/gltf-test/libs/babylonjs/5.3.0/babylonjs.loaders.js"></script>
+</head>
+<body>
+
+<canvas id="c" width="465" height="465"></canvas>
+
+<script>
+const GLTF_BASE_URL = "https://rawcdn.githack.com/cx20/jsdo-static-contents/525dacce76429f469762e746a7d4c002d33ea2a2/models/gltf/2.0/SimpleModel3/glTF/";
+const GLTF_FILE_PATH = GLTF_BASE_URL + "SimpleModel3.gltf";
+
+let createScene = function(engine) {
+
+    let scene = new BABYLON.Scene(engine);
+    let path = GLTF_FILE_PATH;
+
+    return BABYLON.SceneLoader.LoadAsync(path).then(function (newScene) {
+        let mesh = newScene.meshes[0];
+        scene = newScene;
+
+        let camera = new BABYLON.ArcRotateCamera("camera", 0, 0, 3, BABYLON.Vector3.Zero(), scene);
+        
+        camera.attachControl(canvas, false, false);
+        scene.activeCamera = camera;
+
+        engine.runRenderLoop(function() {
+            //scene.activeCamera.alpha -= 0.01 * scene.getAnimationRatio();
+            mesh.rotate(BABYLON.Axis.X, Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+            mesh.rotate(BABYLON.Axis.Y, Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+            mesh.rotate(BABYLON.Axis.Z, Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+            scene.render();
+        });
+    });
+
+    return scene;
+};
+
+let canvas = document.querySelector("#c");
+let engine = new BABYLON.Engine(canvas, true);
+
+window.addEventListener('resize', function() {
+    engine.resize();
+});
+let scene = createScene(engine);
+</script>
+<a href="https://github.com/cx20/hello/blob/master/html5/babylonjs/4-1.gltf_triangle.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
+</body>
+</html>
