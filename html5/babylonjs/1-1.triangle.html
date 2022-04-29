@@ -56,15 +56,15 @@ const createScene = function() {
     return scene;
 }
 
-engine.runRenderLoop(function () {
+const scene = createScene();
+
+engine.runRenderLoop(() => {
     scene.render();
 });
 
-window.addEventListener('resize', function() {
+window.addEventListener('resize', () => {
     engine.resize();
 });
-
-const scene = createScene();
 </script>
 <a href="https://github.com/cx20/hello/blob/master/html5/babylonjs/1-1.triangle.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
 </body>

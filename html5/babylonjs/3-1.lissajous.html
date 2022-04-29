@@ -32,12 +32,11 @@ void main() {
 <script>
 const canvas = document.querySelector("#c");
 const engine = new BABYLON.Engine(canvas);
-let mesh;
 
 const createScene = function(engine) {
     const scene = new BABYLON.Scene(engine);
     const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -3), scene);
-    mesh = new BABYLON.Mesh('mesh', scene);
+    const mesh = new BABYLON.Mesh('mesh', scene);
     scene.clearColor = new BABYLON.Color3(0, 0, 0);
 
     let positions = [];
@@ -93,16 +92,24 @@ const createScene = function(engine) {
     
     mesh.material = material;
 
+    scene.onBeforeRenderObservable.add(() => {
+        mesh.rotate(BABYLON.Axis.Y, -Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+    });
+
     return scene;
 }
 
 const scene = createScene();
 
-engine.runRenderLoop(function () {
-    mesh.rotate(BABYLON.Axis.Y, -Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+engine.runRenderLoop(() => {
     scene.render();
 });
+
+window.addEventListener('resize', () => {
+    engine.resize();
+});
 </script>
+
 <a href="https://github.com/cx20/hello/blob/master/html5/babylonjs/3-1.lissajous.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
 </body>
 </html>
