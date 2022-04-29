@@ -8,8 +8,8 @@
 </head>
 <body>
 
-<script id="vs" type="x-shader/x-vertex">
-attribute vec3 position;
+<script id="vs" type="x-shader/x-vertex">#version 300 es
+in  vec3 position;
 uniform mat4 worldViewProjection;
 
 void main() {
@@ -17,14 +17,15 @@ void main() {
 }
 </script>
 
-<script id="fs" type="x-shader/x-fragment">
+<script id="fs" type="x-shader/x-fragment">#version 300 es
 precision mediump float;
+out vec4 fragColor;
 
 void main() {
-    gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
+    fragColor = vec4(0.0, 0.0, 1.0, 1.0);
 }
 </script>
-
+        
 <canvas id="c"></canvas>
 
 <script>
