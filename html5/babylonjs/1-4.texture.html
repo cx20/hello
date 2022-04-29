@@ -33,11 +33,11 @@ void main() {
 <script>
 const canvas = document.querySelector("#c");
 const engine = new BABYLON.Engine(canvas);
-let cube;
+
 const createScene = function() {
     const scene = new BABYLON.Scene(engine);
     const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -3), scene);
-    cube = new BABYLON.Mesh('cube', scene);
+    const cube = new BABYLON.Mesh('cube', scene);
     scene.clearColor = new BABYLON.Color3(1, 1, 1);
 
     // Cube data
@@ -169,23 +169,32 @@ const createScene = function() {
         uniforms: ["worldViewProjection"]
     });
     
-    material.setTexture("texture_", new BABYLON.Texture("https://cx20.github.io/webgl-test/assets/textures/frog.jpg", scene)); // 256x256
+    material.setTexture("texture_", new BABYLON.Texture("../../assets/textures/frog.jpg", scene)); // 256x256
 
     cube.material = material;
     cube.material.backFaceCulling = false;
+
+    scene.onBeforeRenderObservable.add(() => {
+        cube.rotate(BABYLON.Axis.X, Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+        cube.rotate(BABYLON.Axis.Y, Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+        cube.rotate(BABYLON.Axis.Z, Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+    });
 
     return scene;
 };
 
 const scene = createScene();
 
-engine.runRenderLoop(function () {
-    cube.rotate(BABYLON.Axis.X, Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
-    cube.rotate(BABYLON.Axis.Y, Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
-    cube.rotate(BABYLON.Axis.Z, Math.PI * 1.0 / 180.0 * scene.getAnimationRatio(), BABYLON.Space.LOCAL);
+engine.runRenderLoop(() => {
     scene.render();
 });
+
+window.addEventListener('resize', () => {
+    engine.resize();
+});
+
 </script>
+
 <a href="https://github.com/cx20/hello/blob/master/html5/babylonjs/1-4.texture.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
 </body>
 </html>
