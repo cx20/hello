@@ -156,7 +156,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
         else
         {
             glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             DrawCube();
 
@@ -337,6 +337,8 @@ void InitShader()
         20, 21, 22,   20, 22, 23   // Left face
     };
 
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
     
     glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
@@ -396,7 +398,7 @@ void DrawCube()
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
 
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Draw a cube from the 36 vertices
     glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
