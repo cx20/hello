@@ -2,9 +2,11 @@
 #include <atlapp.h>
 #include <atlcrack.h>
 #include <d3d11.h>
-#include <d3dx11.h>
+#include <d3d11_4.h>
 #include <d3dcompiler.h>
-#include <xnamath.h>
+#include <directxmath.h>
+
+using namespace DirectX;
 
 struct VERTEX
 {
@@ -12,7 +14,7 @@ struct VERTEX
     XMFLOAT4 Color;
 };
 
-HRESULT CompileShaderFromFile( TCHAR* szFileName, LPCTSTR szEntryPoint, LPCTSTR szShaderModel, ID3DBlob** ppBlobOut );
+HRESULT CompileShaderFromFile( LPCWSTR szFileName, LPCTSTR szEntryPoint, LPCTSTR szShaderModel, ID3DBlob** ppBlobOut );
 
 class CHelloWindow : public CWindowImpl<CHelloWindow>
 {
@@ -138,7 +140,7 @@ HRESULT CHelloWindow::InitDevice()
     m_pImmediateContext->RSSetViewports( 1, &vp );
 
     ID3DBlob* pVSBlob = NULL;
-    hr = CompileShaderFromFile( _T("hello.fx"), _T("VS"), _T("vs_4_0"), &pVSBlob );
+    hr = CompileShaderFromFile( L"hello.fx", _T("VS"), _T("vs_4_0"), &pVSBlob );
     if( FAILED( hr ) )
         return hr;
 
@@ -165,7 +167,7 @@ HRESULT CHelloWindow::InitDevice()
     m_pImmediateContext->IASetInputLayout( m_pVertexLayout );
 
     ID3DBlob* pPSBlob = NULL;
-    hr = CompileShaderFromFile( _T("hello.fx"), _T("PS"), _T("ps_4_0"), &pPSBlob );
+    hr = CompileShaderFromFile( L"hello.fx", _T("PS"), _T("ps_4_0"), &pPSBlob );
     if( FAILED( hr ) )
         return hr;
 
@@ -229,15 +231,15 @@ VOID CHelloWindow::Render()
     m_pSwapChain->Present( 0, 0 );
 }
 
-HRESULT CompileShaderFromFile( TCHAR* szFileName, LPCTSTR szEntryPoint, LPCTSTR szShaderModel, ID3DBlob** ppBlobOut )
+HRESULT CompileShaderFromFile( LPCWSTR szFileName, LPCTSTR szEntryPoint, LPCTSTR szShaderModel, ID3DBlob** ppBlobOut )
 {
     HRESULT hr = S_OK;
 
     DWORD dwShaderFlags = D3DCOMPILE_ENABLE_STRICTNESS;
 
     ID3DBlob* pErrorBlob;
-    hr = D3DX11CompileFromFile( szFileName, NULL, NULL, szEntryPoint, szShaderModel, 
-        dwShaderFlags, 0, NULL, ppBlobOut, &pErrorBlob, NULL );
+    hr = D3DCompileFromFile( szFileName, NULL, NULL, szEntryPoint, szShaderModel, 
+        dwShaderFlags, 0, ppBlobOut, &pErrorBlob );
     if( FAILED(hr) )
     {
         if( pErrorBlob ) pErrorBlob->Release();
