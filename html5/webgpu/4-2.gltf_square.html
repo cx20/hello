@@ -7,16 +7,16 @@
 <body>
 <script id="vs" type="x-shader/x-vertex">
 struct VertexInput {
-    @location(0) position : vec3<f32>;
-    @location(1) color : vec3<f32>;
+    @location(0) position : vec3<f32>,
+    @location(1) color : vec3<f32>
 };
 
 struct VertexOutput {
-    @builtin(position) Position : vec4<f32>;
-    @location(0) fragColor : vec4<f32>;
+    @builtin(position) Position : vec4<f32>,
+    @location(0) fragColor : vec4<f32>
 };
 
-@stage(vertex)
+@vertex
 fn main(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
     output.fragColor = vec4<f32>(input.color, 1.0);
@@ -27,14 +27,14 @@ fn main(input : VertexInput) -> VertexOutput {
 
 <script id="fs" type="x-shader/x-fragment">
 struct FragmentInput {
-    @location(0) fragColor : vec4<f32>;
+    @location(0) fragColor : vec4<f32>
 };
 
 struct FragmentOutput {
-    @location(0) outColor : vec4<f32>;
+    @location(0) outColor : vec4<f32>
 };
 
-@stage(fragment)
+@fragment
 fn main(input : FragmentInput) -> FragmentOutput {
     var output : FragmentOutput;
     output.outColor = input.fragColor;
@@ -207,8 +207,8 @@ async function init() {
     c.height = window.innerHeight;
     
     const ctx = c.getContext("webgpu");
-    const format = ctx.getPreferredFormat(adapter);
-    ctx.configure({device: device, format: format});
+    const format = gpu.getPreferredCanvasFormat();
+    ctx.configure({device: device, format: format, alphaMode: "opaque"});
 
     let vShaderModule = makeShaderModule_WGSL(device, vertexShaderWGSL);
     let fShaderModule = makeShaderModule_WGSL(device, fragmentShaderWGSL);
@@ -217,6 +217,7 @@ async function init() {
     let colorBuffer = makeVertexBuffer(device, new Float32Array(colors, colorBufferViewByteOffset, colorLength));
 
     const pipeline = device.createRenderPipeline({
+        layout: "auto",
         vertex: {
             module: vShaderModule,
             entryPoint: "main",

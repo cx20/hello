@@ -8,21 +8,21 @@
 <body>
 <script id="vs" type="x-shader/x-vertex">
 struct Uniforms {
-    modelViewProjectionMatrix : mat4x4<f32>;
+    modelViewProjectionMatrix : mat4x4<f32>
 };
 @binding(0) @group(0) var<uniform> uniforms : Uniforms;
 
 struct VertexInput {
-    @location(0) position : vec3<f32>;
-    @location(1) textureCoord : vec2<f32>;
+    @location(0) position : vec3<f32>,
+    @location(1) textureCoord : vec2<f32>
 };
 
 struct VertexOutput {
-    @builtin(position) Position : vec4<f32>;
-    @location(0) vTextureCoord : vec2<f32>;
+    @builtin(position) Position : vec4<f32>,
+    @location(0) vTextureCoord : vec2<f32>
 };
 
-@stage(vertex)
+@vertex
 fn main(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
     output.vTextureCoord = input.textureCoord;
@@ -36,14 +36,14 @@ fn main(input : VertexInput) -> VertexOutput {
 @binding(2) @group(0) var myTexture: texture_2d<f32>;
 
 struct FragmentInput {
-    @location(0) vTextureCoord: vec2<f32>;
+    @location(0) vTextureCoord: vec2<f32>
 };
 
 struct FragmentOutput {
-    @location(0) outColor : vec4<f32>;
+    @location(0) outColor : vec4<f32>
 };
 
-@stage(fragment)
+@fragment
 fn main(input : FragmentInput) -> FragmentOutput {
     var output : FragmentOutput;
     output.outColor =  textureSample(myTexture, mySampler, input.vTextureCoord);
@@ -255,8 +255,8 @@ async function init() {
     mat4.perspective(projectionMatrix, 45, aspect, 0.1, 100.0);
 
     const ctx = c.getContext("webgpu");
-    const format = ctx.getPreferredFormat(adapter);
-    ctx.configure({device: device, format: format});
+    const format = gpu.getPreferredCanvasFormat();
+    ctx.configure({device: device, format: format, alphaMode: "opaque"});
 
     let vShaderModule = makeShaderModule_WGSL(device, vertexShaderWGSL);
     let fShaderModule = makeShaderModule_WGSL(device, fragmentShaderWGSL);
@@ -265,6 +265,7 @@ async function init() {
     let coordBuffer = makeVertexBuffer(device, new Float32Array(texCoords, texCoordBufferViewByteOffset, texCoordLength));
 
     const pipeline = device.createRenderPipeline({
+        layout: "auto",
         vertex: {
             module: vShaderModule,
             entryPoint: "main",
