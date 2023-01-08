@@ -82,12 +82,12 @@ fn main(
 
 <canvas id="c" width="465" height="465"></canvas>
 <script>
-init();
 const vertexShaderWGSL = document.getElementById("vs").textContent;
 const fragmentShaderWGSL = document.getElementById("fs").textContent;
+init();
 
 async function init() {
-    const gpu = navigator['gpu']; //
+    const gpu = navigator['gpu'];
     const adapter = await gpu.requestAdapter();
     const device = await adapter.requestDevice();
 

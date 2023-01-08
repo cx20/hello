@@ -10,7 +10,7 @@
 <script id="vs" type="x-shader/x-vertex">
 struct Uniforms {
     modelViewProjectionMatrix : mat4x4<f32>
-};
+}
 @binding(0) @group(0) var<uniform> uniforms : Uniforms;
 
 struct VertexOutput {
@@ -40,7 +40,7 @@ fn main(
 @binding(2) @group(0) var myTexture: texture_2d<f32>;
 struct Uniforms {
     pointLightingLocation : vec3<f32>
-};
+}
 @binding(3) @group(0) var<uniform> uniforms : Uniforms;
 
 struct FragmentOutput {
@@ -67,12 +67,12 @@ fn main(
 
 <canvas id="c" width="465" height="465"></canvas>
 <script>
-init();
 const vertexShaderWGSL = document.getElementById("vs").textContent;
 const fragmentShaderWGSL = document.getElementById("fs").textContent;
+init();
 
 async function init() {
-    const gpu = navigator['gpu']; //
+    const gpu = navigator['gpu'];
     const adapter = await gpu.requestAdapter();
     const device = await adapter.requestDevice();
 

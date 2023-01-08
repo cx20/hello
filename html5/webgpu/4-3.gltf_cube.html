@@ -9,7 +9,7 @@
 <script id="vs" type="x-shader/x-vertex">
 struct Uniforms {
     modelViewProjectionMatrix : mat4x4<f32>
-};
+}
 @binding(0) @group(0) var<uniform> uniforms : Uniforms;
 
 struct VertexOutput {
@@ -106,7 +106,6 @@ let diffuse = [];
 let shininess = 0;
 let specular = [];
 
-//init();
 const vertexShaderWGSL = document.getElementById("vs").textContent;
 const fragmentShaderWGSL = document.getElementById("fs").textContent;
 
