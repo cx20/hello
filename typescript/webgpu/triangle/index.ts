@@ -4,53 +4,52 @@ const main = () => {
 
 const vertexShaderWGSL = `
 
-struct VertexInput {
-    [[location(0)]] position : vec3<f32>;
-    [[location(1)]] color : vec4<f32>;
-};
-
 struct VertexOutput {
-    [[builtin(position)]] Position : vec4<f32>;
-    [[location(0)]] fragColor : vec4<f32>;
-};
+    @builtin(position) Position : vec4<f32>,
+    @location(0) fragColor : vec4<f32>
+}
 
-[[stage(vertex)]]
-fn main(input : VertexInput) -> VertexOutput {
+@vertex
+fn main(
+    @location(0) position : vec3<f32>,
+    @location(1) color : vec4<f32>
+) -> VertexOutput {
     var output : VertexOutput;
-    output.fragColor = input.color;
-    output.Position = vec4<f32>(input.position, 1.0);
+    output.fragColor = color;
+    output.Position = vec4<f32>(position, 1.0);
     return output;
 }`;
 const fragmentShaderWGSL = `
 
-struct FragmentInput {
-    [[location(0)]] fragColor : vec4<f32>;
-};
-
 struct FragmentOutput {
-    [[location(0)]] outColor : vec4<f32>;
-};
+    @location(0) outColor : vec4<f32>
+}
 
-[[stage(fragment)]]
-fn main(input : FragmentInput) -> FragmentOutput {
+@fragment
+fn main(
+    @location(0) fragColor : vec4<f32>
+) -> FragmentOutput {
     var output : FragmentOutput;
-    output.outColor = input.fragColor;
+    output.outColor = fragColor;
     return output;
 }
 `;
 
 async function init() {
-    const gpu = navigator["gpu"];
+    const gpu = navigator.gpu;
     const adapter = await gpu.requestAdapter();
     const device = await adapter.requestDevice();
 
     const c = document.getElementById("canvas");
     c.width = window.innerWidth;
     c.height = window.innerHeight;
-    const ctx = c.getContext("webgpu");
-
-    const format = ctx.getPreferredFormat(adapter);
-    const swapChain = configureSwapChain(device, format, ctx);
+    const ctx = c.getContext("webgpu") as GPUCanvasContext;
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    ctx.configure({
+      device,
+      format: format,
+      alphaMode: 'opaque',
+    });
 
     let vShaderModule = makeShaderModule_WGSL(device, vertexShaderWGSL);
     let fShaderModule = makeShaderModule_WGSL(device, fragmentShaderWGSL);
@@ -69,6 +68,7 @@ async function init() {
     let colorBuffer = makeVertexBuffer(device, new Float32Array(colors));
 
     const pipeline = device.createRenderPipeline({
+        layout: "auto",
         vertex: {
             module: vShaderModule,
             entryPoint: "main",
@@ -132,14 +132,6 @@ async function init() {
         requestAnimationFrame(render);
     }
     requestAnimationFrame(render);
-}
-
-function configureSwapChain(device, format, context) {
-    const swapChainDescriptor = {
-        device: device,
-        format: format
-    };
-    return context.configure(swapChainDescriptor);
 }
 
 function makeShaderModule_WGSL(device, source) {
