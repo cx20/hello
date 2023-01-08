@@ -2,6 +2,7 @@
     "compilerOptions": {
         "target": "ESNext",
         "module": "CommonJS",
-        "noImplicitAny": true
+        "noImplicitAny": true,
+        "typeRoots": [ "./node_modules/@webgpu/types", "./node_modules/@types"]
     }
 }
