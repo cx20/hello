@@ -13,19 +13,17 @@ struct Uniform {
 };
 @binding(0) @group(0) var<uniform> uniforms : Uniform;
 
-struct VertexInput {
-    @location(0) position : vec3<f32>
-};
-
 struct VertexOutput {
     @builtin(position) Position : vec4<f32>,
     @location(0) fragColor : vec4<f32>
-};
+}
 
 @vertex
-fn main(input : VertexInput) -> VertexOutput {
+fn main(
+    @location(0) position : vec3<f32>
+) -> VertexOutput {
     var output : VertexOutput;
-    var p : vec3<f32> = input.position;
+    var p : vec3<f32> = position;
 
     var i : f32 = floor(p.x / 100.0);
     var j : f32 = p.x - i * 100.0;
@@ -48,18 +46,16 @@ fn main(input : VertexInput) -> VertexOutput {
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
-struct FragmentInput {
-    @location(0) fragColor : vec4<f32>
-};
-
 struct FragmentOutput {
     @location(0) outColor : vec4<f32>
-};
+}
 
 @fragment
-fn main(input : FragmentInput) -> FragmentOutput {
+fn main(
+    @location(0) fragColor : vec4<f32>
+) -> FragmentOutput {
     var output : FragmentOutput;
-    output.outColor = input.fragColor;
+    output.outColor = fragColor;
     return output;
 }
 </script>
@@ -138,7 +134,8 @@ async function init() {
         }
     });
 
-    const uniformBufferSize = 4 * 16 + 4 * 1; // 4x4 matrix
+    //const uniformBufferSize = 4 * 16 + 4 * 1; // 4x4 matrix
+    const uniformBufferSize = 80; // TODO: minimum binding size (80).
 
     const uniformBuffer = device.createBuffer({
         size: uniformBufferSize,
