@@ -1,7 +1,3 @@
-const main = () => {
-    init();
-}
-
 const vertexShaderWGSL = `
 
 struct VertexOutput {
@@ -35,12 +31,16 @@ fn main(
 }
 `;
 
+const main = () => {
+    init();
+}
+
 async function init() {
     const gpu = navigator.gpu;
-    const adapter = await gpu.requestAdapter();
-    const device = await adapter.requestDevice();
+    const adapter = await gpu.requestAdapter() as GPUAdapter;
+    const device = await adapter.requestDevice() as GPUDevice;
 
-    const c = document.getElementById("canvas");
+    const c = document.getElementById("canvas") as HTMLCanvasElement;
     c.width = window.innerWidth;
     c.height = window.innerHeight;
     const ctx = c.getContext("webgpu") as GPUCanvasContext;
@@ -48,7 +48,7 @@ async function init() {
     ctx.configure({
       device,
       format: format,
-      alphaMode: 'opaque',
+      alphaMode: 'opaque'
     });
 
     let vShaderModule = makeShaderModule_WGSL(device, vertexShaderWGSL);
@@ -107,18 +107,18 @@ async function init() {
             ]
         },
         primitive: {
-            topology: "triangle-strip",
-            stripIndexFormat: "uint32"
+            topology: "triangle-strip"
         },
     });
 
     let render = function () {
         const commandEncoder = device.createCommandEncoder();
         const textureView = ctx.getCurrentTexture().createView();
-        const renderPassDescriptor = {
+        const renderPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [{
                 view: textureView,
-                loadValue: {r: 1, g: 1, b: 1, a: 1},
+                clearValue: {r: 1.0, g: 1.0, b: 1.0, a: 1.0},
+                loadOp: "clear",
                 storeOp: "store"
             }]
         };
@@ -127,14 +127,14 @@ async function init() {
         passEncoder.setVertexBuffer(0, vertexBuffer);
         passEncoder.setVertexBuffer(1, colorBuffer);
         passEncoder.draw(3, 1, 0, 0);
-        passEncoder.endPass();
+        passEncoder.end();
         device.queue.submit([commandEncoder.finish()]);
         requestAnimationFrame(render);
     }
     requestAnimationFrame(render);
 }
 
-function makeShaderModule_WGSL(device, source) {
+function makeShaderModule_WGSL(device: GPUDevice, source: string) {
     let shaderModuleDescriptor = {
         code: source
     };
@@ -142,7 +142,7 @@ function makeShaderModule_WGSL(device, source) {
     return shaderModule;
 }
 
-function makeVertexBuffer(device, data) {
+function makeVertexBuffer(device: GPUDevice, data: any) {
     const verticesBuffer = device.createBuffer({
         size: data.byteLength,
         usage: GPUBufferUsage.VERTEX,
