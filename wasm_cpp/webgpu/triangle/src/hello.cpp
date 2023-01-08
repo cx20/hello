@@ -83,25 +83,24 @@ WGPUBuffer vertBuf; // vertex buffer with triangle position and colours
 WGPUBuffer indxBuf; // index buffer
 
 char const triangle_vert_wgsl[] = R"(
-	struct VertexIn {
-		@location(0) aPos : vec3<f32>;
-		@location(1) aCol : vec3<f32>;
-	};
 	struct VertexOut {
-		@location(0) vCol : vec3<f32>;
-		@builtin(position) Position : vec4<f32>;
-	};
-	@stage(vertex)
-	fn main(input : VertexIn) -> VertexOut {
+		@location(0) vCol : vec3<f32>,
+		@builtin(position) Position : vec4<f32>
+	}
+	@vertex
+	fn main(
+		@location(0) aPos : vec3<f32>,
+		@location(1) aCol : vec3<f32>
+	) -> VertexOut {
 		var output : VertexOut;
-		output.Position = vec4<f32>(input.aPos, 1.0);
-		output.vCol = input.aCol;
+		output.Position = vec4<f32>(aPos, 1.0);
+		output.vCol = aCol;
 		return output;
 	}
 )";
 
 char const triangle_frag_wgsl[] = R"(
-	@stage(fragment)
+	@fragment
 	fn main(@location(0) vCol : vec3<f32>) -> @location(0) vec4<f32> {
 		return vec4<f32>(vCol, 1.0);
 	}
@@ -225,10 +224,10 @@ bool redraw() {
 	colorDesc.view    = backBufView;
 	colorDesc.loadOp  = WGPULoadOp_Clear;
 	colorDesc.storeOp = WGPUStoreOp_Store;
-	colorDesc.clearColor.r = 1.0f;
-	colorDesc.clearColor.g = 1.0f;
-	colorDesc.clearColor.b = 1.0f;
-	colorDesc.clearColor.a = 1.0f;
+	colorDesc.clearValue.r = 1.0f;
+	colorDesc.clearValue.g = 1.0f;
+	colorDesc.clearValue.b = 1.0f;
+	colorDesc.clearValue.a = 1.0f;
 
 	WGPURenderPassDescriptor renderPass = {};
 	renderPass.colorAttachmentCount = 1;
@@ -243,7 +242,7 @@ bool redraw() {
 	wgpuRenderPassEncoderSetIndexBuffer(pass, indxBuf, WGPUIndexFormat_Uint16, 0, WGPU_WHOLE_SIZE);
 	wgpuRenderPassEncoderDrawIndexed(pass, 3, 1, 0, 0, 0);
 
-	wgpuRenderPassEncoderEndPass(pass);
+	wgpuRenderPassEncoderEnd(pass);
 	wgpuRenderPassEncoderRelease(pass);														// release pass
 	WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, nullptr);				// create commands
 	wgpuCommandEncoderRelease(encoder);														// release encoder
