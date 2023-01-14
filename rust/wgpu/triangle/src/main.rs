@@ -48,23 +48,48 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         [ 0.5, -0.5, 0.0],
     ];
 
+    let color_data: [[f32; 4]; 3] = [
+        [1.0, 0.0, 0.0, 1.0], // v0
+        [0.0, 1.0, 0.0, 1.0], // v1
+        [0.0, 0.0, 1.0, 1.0], // v2
+    ];
+
     let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Vertex Buffer"),
         contents: bytemuck::cast_slice(&vertex_data),
         usage: wgpu::BufferUsages::VERTEX
     });
 
-    let vertex_buffers = [wgpu::VertexBufferLayout {
-        array_stride: 12,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &[
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x3,
-                offset: 0,
-                shader_location: 0,
-            },
-        ],
-    }];
+    let color_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Color Buffer"),
+        contents: bytemuck::cast_slice(&color_data),
+        usage: wgpu::BufferUsages::VERTEX
+    });
+
+    let vertex_buffers = [
+        wgpu::VertexBufferLayout {
+            array_stride: 3 * 4,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x3,
+                    offset: 0,
+                    shader_location: 0,
+                },
+            ],
+        },
+        wgpu::VertexBufferLayout {
+            array_stride: 4 * 4,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: & [
+                wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x4,
+                    offset: 0,
+                    shader_location: 1,
+                },
+            ],
+        }
+    ];
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
@@ -147,7 +172,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             view: &view,
                             resolve_target: None,
                             ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                                 store: true,
                             },
                         })],
@@ -155,6 +180,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     });
                     rpass.set_pipeline(&render_pipeline);
                     rpass.set_vertex_buffer(0, vertex_buf.slice(..));
+                    rpass.set_vertex_buffer(1, color_buf.slice(..));
                     rpass.draw(0..3, 0..1);
                 }
 
