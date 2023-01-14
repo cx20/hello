@@ -8,8 +8,5 @@ cl hello.cpp ^
     user32.lib ^
     shell32.lib ^
     gdi32.lib ^
-    opengl32.lib ^
-    glu32.lib ^
-    glew32s.lib ^
     glfw3_mt.lib ^
     wgpu_native.lib
