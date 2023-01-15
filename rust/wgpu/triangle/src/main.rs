@@ -44,8 +44,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     let vertex_data: [[f32; 3]; 3] = [
         [ 0.0,  0.5, 0.0],
-        [-0.5, -0.5, 0.0],
         [ 0.5, -0.5, 0.0],
+        [-0.5, -0.5, 0.0],
     ];
 
     let color_data: [[f32; 4]; 3] = [

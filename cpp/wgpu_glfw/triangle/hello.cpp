@@ -177,9 +177,9 @@ int main (int, char**)
 
 	// create the buffers (x, y, z, r, g, b)
 	float const vertData[] = {
-		-0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, // v0
+		 0.0f,  0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // v0
 		 0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, // v1
-		-0.0f,  0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // v2
+		-0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, // v2
 	};
 	uint16_t const indxData[] = {
 		0, 1, 2,

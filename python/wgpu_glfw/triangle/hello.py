@@ -66,8 +66,8 @@ def _main(canvas, device):
     vertex_data = np.array(
         [
             [ 0.0,  0.5, 0.0],
-            [-0.5, -0.5, 0.0],
             [ 0.5, -0.5, 0.0],
+            [-0.5, -0.5, 0.0],
         ],
         dtype=np.float32,
     )
@@ -121,29 +121,13 @@ def _main(canvas, device):
         },
         primitive={
             "topology": wgpu.PrimitiveTopology.triangle_list,
-            "front_face": wgpu.FrontFace.ccw,
-            "cull_mode": wgpu.CullMode.none,
         },
-        depth_stencil=None,
-        multisample=None,
         fragment={
             "module": fragment_shader,
             "entry_point": "main",
             "targets": [
                 {
                     "format": render_texture_format,
-                    "blend": {
-                        "color": (
-                            wgpu.BlendFactor.one,
-                            wgpu.BlendFactor.zero,
-                            wgpu.BlendOperation.add,
-                        ),
-                        "alpha": (
-                            wgpu.BlendFactor.one,
-                            wgpu.BlendFactor.zero,
-                            wgpu.BlendOperation.add,
-                        ),
-                    },
                 },
             ],
         },
@@ -157,7 +141,6 @@ def _main(canvas, device):
             color_attachments=[
                 {
                     "view": current_texture_view,
-                    "resolve_target": None,
                     "clear_value": (0, 0, 0, 1),
                     "load_op": wgpu.LoadOp.clear,
                     "store_op": wgpu.StoreOp.store,
@@ -174,7 +157,6 @@ def _main(canvas, device):
 
     canvas.request_draw(draw_frame)
     return device
-
 
 if __name__ == "__main__":
 
