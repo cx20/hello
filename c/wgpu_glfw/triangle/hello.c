@@ -39,12 +39,12 @@ const char *triangle_frag_wgsl =
 	"        return vec4<f32>(vCol, 1.0);\n"
 	"    }\n";
 
-static void handle_device_lost(WGPUDeviceLostReason reason, char const *message, void *userdata)
+static void handle_device_lost(WGPUDeviceLostReason reason, const char *message, void *userdata)
 {
 	printf("DEVICE LOST (%d): %s\n", reason, message);
 }
 
-static void handle_uncaptured_error(WGPUErrorType type, char const *message, void *userdata)
+static void handle_uncaptured_error(WGPUErrorType type, const char *message, void *userdata)
 {
 
 	printf("UNCAPTURED ERROR (%d): %s\n", type, message);

@@ -12,7 +12,7 @@
 
 using namespace wgpu;
 
-char const triangle_vert_wgsl[] = R"(
+const char triangle_vert_wgsl[] = R"(
 	struct VertexOut {
 		@location(0) vCol : vec3<f32>,
 		@builtin(position) Position : vec4<f32>
@@ -29,7 +29,7 @@ char const triangle_vert_wgsl[] = R"(
 	}
 )";
 
-char const triangle_frag_wgsl[] = R"(
+const char triangle_frag_wgsl[] = R"(
 	@fragment
 	fn main(@location(0) vCol : vec3<f32>) -> @location(0) vec4<f32> {
 		return vec4<f32>(vCol, 1.0);
@@ -81,7 +81,7 @@ int main (int, char**)
 
 	// Add an error callback for more debug info
 	// (TODO: fix the callback in the webgpu.hpp wrapper)
-	auto myCallback = [](ErrorType type, char const* message) {
+	auto myCallback = [](ErrorType type, const char* message) {
 		std::cout << "Device error: type " << type;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
@@ -90,7 +90,7 @@ int main (int, char**)
 		decltype(myCallback) theCallback;
 	};
 	Context ctx = { myCallback };
-	static auto cCallback = [](WGPUErrorType type, char const* message, void* userdata) -> void {
+	static auto cCallback = [](WGPUErrorType type, const char* message, void* userdata) -> void {
 		Context& ctx = *reinterpret_cast<Context*>(userdata);
 		ctx.theCallback(static_cast<ErrorType>(type), message);
 	};

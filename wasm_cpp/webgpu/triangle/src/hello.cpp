@@ -82,7 +82,7 @@ WGPURenderPipeline pipeline;
 WGPUBuffer vertBuf; // vertex buffer with triangle position and colours
 WGPUBuffer indxBuf; // index buffer
 
-char const triangle_vert_wgsl[] = R"(
+const char triangle_vert_wgsl[] = R"(
 	struct VertexOut {
 		@location(0) vCol : vec3<f32>,
 		@builtin(position) Position : vec4<f32>
@@ -99,7 +99,7 @@ char const triangle_vert_wgsl[] = R"(
 	}
 )";
 
-char const triangle_frag_wgsl[] = R"(
+const char triangle_frag_wgsl[] = R"(
 	@fragment
 	fn main(@location(0) vCol : vec3<f32>) -> @location(0) vec4<f32> {
 		return vec4<f32>(vCol, 1.0);
