@@ -1,0 +1,9 @@
+del glfw3webgpu.c
+del glfw3webgpu.h
+del glfw3webgpu.obj
+del hello.exe
+del hello.obj
+del webgpu.h
+del wgpu.h
+del wgpu_native.dll
+del wgpu_native.lib
