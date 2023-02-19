@@ -10,6 +10,12 @@
 #define HEIGHT 480
 #define FRAMES 2
 
+typedef struct STRUCT_VERTEX
+{
+    float position[3];
+    float color[4];
+} VERTEX;
+
 IDXGISwapChain3*           g_swapChain;
 ID3D12Device*              g_device;
 ID3D12Resource*            g_renderTarget[FRAMES];
@@ -98,15 +104,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     SwapChain->lpVtbl->QueryInterface(SwapChain, (REFIID)&IID_IDXGISwapChain3, (LPVOID *)(&g_swapChain));
     SwapChain->lpVtbl->Release(SwapChain);
     D3D12_INPUT_ELEMENT_DESC layout[] = {
-        {
-            "POSITION", 
-            0, 
-            DXGI_FORMAT_R32G32B32_FLOAT, 
-            0, 
-            0, 
-            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 
-            0
-        }
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
     ID3DBlob *blob;
     D3D12_ROOT_PARAMETER timeParam;
@@ -199,10 +198,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_device->lpVtbl->CreateCommandList(g_device, 0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_commandAllocator, g_pso, (REFIID)&IID_ID3D12CommandList, (LPVOID *)(&g_commandList));
     D3D12_VIEWPORT mViewport = {0.0f, 0.0f, (float)(WIDTH), (float)(HEIGHT), 0.0f, 1.0f};
     D3D12_RECT mRectScissor = {0, 0, (LONG)(WIDTH), (LONG)(HEIGHT)};
-    float vertices[] = {
-          0.0f,  0.5f, 0.0f,
-          0.5f, -0.5f, 0.0f,
-         -0.5f, -0.5f, 0.0f
+    VERTEX vertices[] = {
+        { { 0.0f,  0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+        { { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
+        { {-0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}}
     };
     static D3D12_HEAP_PROPERTIES heapProperties = {
         D3D12_HEAP_TYPE_UPLOAD, 
@@ -214,7 +213,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     static D3D12_RESOURCE_DESC VertexBufferDesc = {
         D3D12_RESOURCE_DIMENSION_BUFFER, 
         0, 
-        _countof(vertices) * 12, 
+        _countof(vertices) * sizeof(VERTEX), 
         1, 
         1, 
         1, 
@@ -240,7 +239,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     D3D12_VERTEX_BUFFER_VIEW mDescViewBufVert = {
         buffer->lpVtbl->GetGPUVirtualAddress(buffer), 
         sizeof(vertices), 
-        12
+        sizeof(VERTEX)
     };
     g_commandList->lpVtbl->Close(g_commandList);
     g_device->lpVtbl->CreateFence(g_device, 0, D3D12_FENCE_FLAG_NONE, (REFIID)&IID_ID3D12Fence, (LPVOID *)(&g_fence));
