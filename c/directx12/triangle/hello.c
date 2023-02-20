@@ -107,21 +107,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
-    ID3DBlob *blob;
-    D3D12_ROOT_PARAMETER timeParam;
-    ZeroMemory(&timeParam, sizeof(timeParam));
-    timeParam.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    timeParam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    timeParam.Constants = (D3D12_ROOT_CONSTANTS){0, 0, 1};
+    ID3DBlob* signature;
+    ID3DBlob* error;
     D3D12_ROOT_SIGNATURE_DESC descRootSignature = {
-        1, 
-        &timeParam, 
+        0, 
+        NULL, 
         0, 
         NULL, 
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
     };
-    D3D12SerializeRootSignature(&descRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &blob, 0);
-    g_device->lpVtbl->CreateRootSignature(g_device, 0, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), (REFIID)&IID_ID3D12RootSignature, (LPVOID *)(&g_rootSignature));
+    D3D12SerializeRootSignature(&descRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
+    g_device->lpVtbl->CreateRootSignature(
+        g_device, 
+        0,
+        signature->lpVtbl->GetBufferPointer(signature),
+        signature->lpVtbl->GetBufferSize(signature),
+        (REFIID)&IID_ID3D12RootSignature,
+        (LPVOID *)(&g_rootSignature)
+    );
     D3D12_RASTERIZER_DESC rasterizer = {
         D3D12_FILL_MODE_SOLID, 
         D3D12_CULL_MODE_BACK, 
@@ -194,8 +197,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         g_device->lpVtbl->CreateRenderTargetView(g_device, g_renderTarget[i], NULL, rtvHandle);
         rtvHandle.ptr += mrtvDescriptorIncrSize;
     }
-    g_device->lpVtbl->CreateCommandAllocator(g_device, D3D12_COMMAND_LIST_TYPE_DIRECT, (REFIID)&IID_ID3D12CommandAllocator, (LPVOID *)(&g_commandAllocator));
-    g_device->lpVtbl->CreateCommandList(g_device, 0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_commandAllocator, g_pso, (REFIID)&IID_ID3D12CommandList, (LPVOID *)(&g_commandList));
+    g_device->lpVtbl->CreateCommandAllocator(
+        g_device,
+        D3D12_COMMAND_LIST_TYPE_DIRECT,
+        (REFIID)&IID_ID3D12CommandAllocator,
+        (LPVOID *)(&g_commandAllocator)
+    );
+    g_device->lpVtbl->CreateCommandList(
+        g_device,
+        0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+        g_commandAllocator,
+        g_pso,
+        (REFIID)&IID_ID3D12CommandList,
+        (LPVOID *)(&g_commandList)
+    );
     D3D12_VIEWPORT mViewport = {0.0f, 0.0f, (float)(WIDTH), (float)(HEIGHT), 0.0f, 1.0f};
     D3D12_RECT mRectScissor = {0, 0, (LONG)(WIDTH), (LONG)(HEIGHT)};
     VERTEX vertices[] = {
@@ -257,8 +272,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         g_commandAllocator->lpVtbl->Reset(g_commandAllocator);
         g_commandList->lpVtbl->Reset(g_commandList, g_commandAllocator, g_pso);
         g_commandList->lpVtbl->SetGraphicsRootSignature(g_commandList, g_rootSignature);
-        float timer = GetTickCount() * 0.001f;
-        g_commandList->lpVtbl->SetGraphicsRoot32BitConstants(g_commandList, 0, 1, &timer, 0);
         g_commandList->lpVtbl->RSSetViewports(g_commandList, 1, &mViewport);
         g_commandList->lpVtbl->RSSetScissorRects(g_commandList, 1, &mRectScissor);
         D3D12_RESOURCE_BARRIER barrierRTAsTexture = {
