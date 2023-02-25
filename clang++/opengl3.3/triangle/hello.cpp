@@ -6,8 +6,6 @@
 
 #include <unistd.h>
 
-#include <iostream>
-
 #define WINDOW_WIDTH    640
 #define WINDOW_HEIGHT   480
 
@@ -23,11 +21,6 @@
 #define GL_STATIC_DRAW                    0x88E4
 #define GL_FRAGMENT_SHADER                0x8B30
 #define GL_VERTEX_SHADER                  0x8B31
-#define WGL_CONTEXT_MAJOR_VERSION_ARB     0x2091
-#define WGL_CONTEXT_MINOR_VERSION_ARB     0x2092
-#define WGL_CONTEXT_FLAGS_ARB             0x2094
-#define WGL_CONTEXT_PROFILE_MASK_ARB      0x9126
-#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB  0x00000001
 
 typedef ptrdiff_t GLsizeiptr;
 typedef char GLchar;
@@ -46,8 +39,6 @@ typedef GLint (APIENTRYP PFNGLGETATTRIBLOCATIONPROC) (GLuint program, const GLch
 typedef void (APIENTRYP PFNGLENABLEVERTEXATTRIBARRAYPROC) (GLuint index);
 typedef void (APIENTRYP PFNGLVERTEXATTRIBPOINTERPROC) (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer);
 
-typedef GLXContext (*PFNGLXCREATECONTEXTATTRIBSARBPROC)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
-
 PFNGLGENBUFFERSPROC               glGenBuffers;
 PFNGLBINDBUFFERPROC               glBindBuffer;
 PFNGLBUFFERDATAPROC               glBufferData;
@@ -62,16 +53,12 @@ PFNGLGETATTRIBLOCATIONPROC        glGetAttribLocation;
 PFNGLENABLEVERTEXATTRIBARRAYPROC  glEnableVertexAttribArray;
 PFNGLVERTEXATTRIBPOINTERPROC      glVertexAttribPointer;
 
-PFNGLXCREATECONTEXTATTRIBSARBPROC glXCreateContextAttribsARB;
-
 extern bool Initialize(int w, int h);
 extern void InitOpenGLFunc();
 extern void InitShader();
 extern bool Update(float deltaTime);
 extern void Render();
 extern void Shutdown();
-
-typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
 
 // Shader sources
 const GLchar* vertexSource =
@@ -180,19 +167,8 @@ int main(int argc, char** argv) {
     XSetWMProtocols(display, window, &atomWmDeleteWindow, 1);
 
     GLXContext context = 0;
-    //context = glXCreateNewContext( display, bestFbc, GLX_RGBA_TYPE, 0, True );
 
-    glXCreateContextAttribsARB = (PFNGLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddressARB((const GLubyte *)"glXCreateContextAttribsARB");
-
-    int context_attribs[] = {
-        GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-        GLX_CONTEXT_MINOR_VERSION_ARB, 3,
-        GLX_CONTEXT_FLAGS_ARB, GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
-        None
-    };
-
-    context = glXCreateContextAttribsARB( display, bestFbc, 0, True, context_attribs );
-                                      
+    context = glXCreateNewContext( display, bestFbc, GLX_RGBA_TYPE, 0, True );
     XSync( display, False );
 
     glXIsDirect (display, context);
@@ -261,8 +237,6 @@ void InitOpenGLFunc()
     glGetAttribLocation       = (PFNGLGETATTRIBLOCATIONPROC)       glXGetProcAddressARB((const GLubyte *)"glGetAttribLocation");
     glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC) glXGetProcAddressARB((const GLubyte *)"glEnableVertexAttribArray");
     glVertexAttribPointer     = (PFNGLVERTEXATTRIBPOINTERPROC)     glXGetProcAddressARB((const GLubyte *)"glVertexAttribPointer");
-    
-    glXCreateContextAttribsARB = (PFNGLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddressARB((const GLubyte *)"glXCreateContextAttribsARB");
 }
 
 void InitShader()
