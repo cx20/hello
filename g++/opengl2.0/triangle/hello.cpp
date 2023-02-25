@@ -60,8 +60,6 @@ extern bool Update(float deltaTime);
 extern void Render();
 extern void Shutdown();
 
-typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
-
 // Shader sources
 const GLchar* vertexSource = 
     "#version 110                                 \n"
