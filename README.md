@@ -193,8 +193,8 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 
 |Browser       |Version |Remarks                                          |
 |:-------------|:------:|:------------------------------------------------|
-|Chrome Stable |  112   |                                                 |
-|Chrome Canary |  114   |When using WebGPU, use the Canary version        |
+|Chrome Stable |  113   |                                                 |
+|Chrome Canary |  115   |                                                 |
 
 |Language      |Version |Remarks                                          |
 |:-------------|:------:|:------------------------------------------------|
