@@ -198,9 +198,9 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 
 |Language      |Version |Remarks                                          |
 |:-------------|:------:|:------------------------------------------------|
-|C/C++         |19.30   |Visual Studio 2022 Developer Command Prompt      |
-|C#            | 4.0    |Visual Studio 2022 Developer Command Prompt      |
-|VB.NET        | 4.0    |Visual Studio 2022 Developer Command Prompt      |
+|C/C++         |19.36   |Visual Studio 2022 Developer Command Prompt      |
+|C#            | 4.6    |Visual Studio 2022 Developer Command Prompt      |
+|VB.NET        | 4.6    |Visual Studio 2022 Developer Command Prompt      |
 |JScript.NET   |14.0    |Visual Studio 2022 Developer Command Prompt      |
 |D             | 2.0098 |                                                 |
 |Go            | 1.20.1 |                                                 |
