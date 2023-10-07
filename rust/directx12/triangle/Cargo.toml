@@ -8,7 +8,6 @@ array-init = "2.0.0"
 
 [dependencies.windows]
 features = [
-    "alloc",
     "Win32_Foundation",
     "Win32_Graphics_Direct3D_Fxc",
     "Win32_Graphics_Direct3D12",

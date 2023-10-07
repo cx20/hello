@@ -12,13 +12,12 @@ use core::ffi::c_void;
 
 fn main() -> Result<()> {
     unsafe {
-        let instance = GetModuleHandleA(None);
-        debug_assert!(instance.0 != 0);
-
+        let instance = GetModuleHandleA(None).unwrap();
+        
         let window_class = "window";
 
         let wc = WNDCLASSA {
-            hCursor: LoadCursorW(None, IDC_ARROW),
+            hCursor: LoadCursorW(None, IDC_ARROW).unwrap(),
             hInstance: instance,
             lpszClassName: PCSTR(b"window\0".as_ptr()),
 
@@ -80,11 +79,11 @@ fn enable_open_gl(hdc: HDC) -> HGLRC {
     unsafe {
         let pfd = PIXELFORMATDESCRIPTOR {
             dwFlags: PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-            iPixelType: PFD_TYPE_RGBA as u8,
+            iPixelType: PFD_TYPE_RGBA,
             cColorBits: 32,
             cDepthBits: 24,
             cStencilBits: 8,
-            iLayerType: PFD_MAIN_PLANE as u8,
+            iLayerType: PFD_MAIN_PLANE,
             ..Default::default()
         };
 
@@ -92,7 +91,7 @@ fn enable_open_gl(hdc: HDC) -> HGLRC {
 
         SetPixelFormat(hdc, i_format, &pfd);
 
-        let hrc = wglCreateContext(hdc);
+        let hrc = wglCreateContext(hdc).unwrap();
         wglMakeCurrent(hdc, hrc);
         
         hrc

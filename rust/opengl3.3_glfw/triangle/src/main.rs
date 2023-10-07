@@ -73,7 +73,7 @@ fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
 
 fn main() {
     unsafe {
-        let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+        let mut glfw = glfw::init(glfw::fail_on_errors).unwrap();
 
         glfw.window_hint(glfw::WindowHint::ContextVersion(3, 3));
         glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
@@ -101,7 +101,8 @@ fn main() {
         gl::EnableVertexArrayAttrib(vao, 0);
         gl::BufferData(gl::ARRAY_BUFFER, (VERTEX_DATA.len() * mem::size_of::<GLfloat>()) as GLsizeiptr, mem::transmute(&VERTEX_DATA[0]), gl::STATIC_DRAW);
 
-        let pos_attr = gl::GetAttribLocation(program, CString::new("position").unwrap().as_ptr());
+        let cstr_position = CString::new("position").unwrap();
+        let pos_attr = gl::GetAttribLocation(program, cstr_position.as_ptr());
         gl::EnableVertexAttribArray(pos_attr as GLuint);
         gl::VertexAttribPointer(pos_attr as GLuint, 3, gl::FLOAT, gl::FALSE as GLboolean, 0, ptr::null());
 
@@ -109,14 +110,16 @@ fn main() {
         gl::EnableVertexArrayAttrib(vao, 1);
         gl::BufferData(gl::ARRAY_BUFFER, (COLOR_DATA.len() * mem::size_of::<GLfloat>()) as GLsizeiptr, mem::transmute(&COLOR_DATA[0]), gl::STATIC_DRAW);
 
-        let color_attr = gl::GetAttribLocation(program, CString::new("color").unwrap().as_ptr());
+        let cstr_color = CString::new("color").unwrap();
+        let color_attr = gl::GetAttribLocation(program, cstr_color.as_ptr());
         gl::EnableVertexAttribArray(color_attr as GLuint);
         gl::VertexAttribPointer(color_attr as GLuint, 3, gl::FLOAT, gl::FALSE as GLboolean, 0, ptr::null());
 
         gl::BindVertexArray(0);
 
         gl::UseProgram(program);
-        gl::BindFragDataLocation(program, 0, CString::new("outColor").unwrap().as_ptr());
+        let cstr_out_color = CString::new("outColor").unwrap();
+        gl::BindFragDataLocation(program, 0, cstr_out_color.as_ptr());
 
         while !window.should_close() {
             gl::BindVertexArray(vao);

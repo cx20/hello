@@ -92,8 +92,10 @@ fn main() {
         let fs = compile_shader(FS_SRC, gl::FRAGMENT_SHADER);
         let program = link_program(vs, fs);
 
-        let pos_attr = gl::GetAttribLocation(program, CString::new("position").unwrap().as_ptr());
-        let col_attr = gl::GetAttribLocation(program, CString::new("color").unwrap().as_ptr());
+        let cstr_position = CString::new("position").unwrap();
+        let cstr_color = CString::new("color").unwrap();
+        let pos_attr = gl::GetAttribLocation(program, cstr_position.as_ptr());
+        let col_attr = gl::GetAttribLocation(program, cstr_color.as_ptr());
 
         let mut vbo : [GLuint;2] = [0, 0];
 
