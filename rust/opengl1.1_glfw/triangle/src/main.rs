@@ -24,7 +24,7 @@ static COLOR_DATA: [GLfloat;9] = [
 
 fn main() {
     unsafe {
-        let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+        let mut glfw = glfw::init(glfw::fail_on_errors).unwrap();
         glfw.window_hint(glfw::WindowHint::ContextVersion(1, 1));
         let (mut window, _) = glfw.create_window(640, 480, "Hello, World!", glfw::WindowMode::Windowed).expect("Failed");
         window.make_current();

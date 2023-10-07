@@ -11,13 +11,12 @@ use core::ffi::c_void;
 
 fn main() -> Result<()> {
     unsafe {
-        let instance = GetModuleHandleA(None);
-        debug_assert!(instance.0 != 0);
-
+        let instance = GetModuleHandleA(None)?;
+        
         let window_class = "window";
 
         let wc = WNDCLASSA {
-            hCursor: LoadCursorW(None, IDC_ARROW),
+            hCursor: LoadCursorW(None, IDC_ARROW)?,
             hInstance: instance,
             lpszClassName: PCSTR(b"window\0".as_ptr()),
 

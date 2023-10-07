@@ -5,7 +5,6 @@ extern crate glfw;
 
 use gl::types::*;
 use glfw::Context;
-use std::ffi::CString;
 use std::mem;
 use std::ptr;
 use std::str;
@@ -70,7 +69,7 @@ fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
 
 fn main() {
     unsafe {
-        let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+        let mut glfw = glfw::init(glfw::fail_on_errors).unwrap();
 
         glfw.window_hint(glfw::WindowHint::ContextVersion(2, 0));
 
