@@ -5,7 +5,7 @@ environment:
 |  jogl-all.jar
 |  Hello.java
 |
-+-native
++-natives
     +-windows-amd64
         gluegen-rt.dll
         jogl_desktop.dll
