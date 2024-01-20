@@ -1,4 +1,4 @@
-SET SDL_HOME=C:\Libraries\SDL2-devel-2.0.20-VC\SDL2-2.0.20
+SET SDL_HOME=C:\Libraries\SDL2-devel-2.28.5-VC\SDL2-2.28.5
 SET IMGUI_HOME=C:\Libraries\imgui
 SET INCLUDE=%SDL_HOME%\include;%IMGUI_HOME%;%IMGUI_HOME%\backends;%INCLUDE%
 SET LIB=%SDL_HOME%\lib\x64;%LIB%
