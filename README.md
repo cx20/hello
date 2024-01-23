@@ -207,6 +207,6 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |JScript.NET   |14.0    |Visual Studio 2022 Developer Command Prompt      |
 |D             | 2.0098 |                                                 |
 |Go            | 1.20.1 |                                                 |
-|Rust          | 1.75   |When using WebGPU, use "rustup default nightly". |
+|Rust          | 1.77   |When using WebGPU, use "rustup default nightly". |
 |Java          | 1.8.0  |                                                 |
 |Emscripten    | 3.1.29 |emsdk\emcmdprompt.bat                            |
