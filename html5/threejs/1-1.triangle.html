@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Testing Triangle Using Babylon.js</title>
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cx20.github.io/gltf-test/libs/three.js/r161/build/three.module.js",
+        "three/examples/jsm/": "https://cx20.github.io/gltf-test/libs/three.js/r161/examples/jsm/"
+    }
+}
+</script>
+
+<script id="vs" type="x-shader/x-vertex">
+attribute vec3 position;
+
+void main() {
+    gl_Position = vec4(position, 1.0);
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+precision mediump float;
+
+void main() {
+    gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
+}
+</script>
+
+<div id="container"></div>
+
+<script type="module">
+import * as THREE from 'three';
+
+let container;
+let camera, scene, renderer;
+
+init();
+animate();
+
+function init() {
+    container = document.getElementById('container');
+    //camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 1, 10);
+    camera = new THREE.PerspectiveCamera(30, 465/465, 1, 10);
+    camera.position.z = 2;
+    scene = new THREE.Scene();
+
+    let vertexPositions = [
+        [ 0.0,  0.5, 0.0], // v0
+        [-0.5, -0.5, 0.0], // v1
+        [ 0.5, -0.5, 0.0]  // v2
+    ];
+    let vertices = new Float32Array(vertexPositions.length * 3);
+    for (let i = 0; i < vertexPositions.length; i++) {
+        vertices[i * 3 + 0] = vertexPositions[i][0];
+        vertices[i * 3 + 1] = vertexPositions[i][1];
+        vertices[i * 3 + 2] = vertexPositions[i][2];
+    }
+    
+    let geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    
+    let material = new THREE.RawShaderMaterial({
+        vertexShader: document.getElementById('vs').textContent,
+        fragmentShader: document.getElementById('fs').textContent
+    });
+
+    let mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+
+    renderer = new THREE.WebGLRenderer();
+    renderer.setClearColor(0xffffff);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    container.appendChild(renderer.domElement);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    render();
+}
+
+function render() {
+    renderer.render(scene, camera);
+}
+</script>
+<a href="https://github.com/cx20/hello/blob/master/html5/threejs/1-1.triangle.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
+</body>
+</html>

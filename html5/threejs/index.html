@@ -1,0 +1,85 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+ <head>
+  <title>CX's three.js World!</title>
+ </head>
+ <div style="display: flex;">
+<div id="panel" style="width: 300px;">
+<table border="0">
+<tr><td>
+■CX's three.js World! [<a href="../">..</a>]<br>
+├基本図形<br>
+｜├<a href="./1-1.triangle.html" target="main">三角形</a><br>
+｜├<a href="./1-2.square.html" target="main">正方形</a><br>
+｜├<a href="./1-3.cube.html" target="main">立方体</a><br>
+｜└<a href="./1-4.texture.html" target="main">テクスチャ付き立方体</a><br>
+├ティポット<br>
+｜├<a href="./2-1.teapot.html" target="main">ティポット（その１）</a><br>
+｜├<a href="./2-2.teapot.html" target="main">ティポット（その２）</a><br>
+｜├<a href="./2-3.teapot.html" target="main">ティポット（その３）</a><br>
+｜├<a href="./2-4.teapot.html" target="main">ティポット（その４）</a><br>
+｜├<a href="./2-5.teapot.html" target="main">ティポット（その５）</a><br>
+｜└<a href="./2-6.teapot.html" target="main">ティポット（その６）</a><br>
+├三次元グラフ<br>
+｜├<a href="./3-1.lissajous.html" target="main">リサージュ図形</a><br>
+｜├<a href="./3-2.3d_lissajous.html" target="main">三次元リサージュ図形</a><br>
+｜├<a href="./3-3.harmonograph.html" target="main">ハーモノグラフ</a><br>
+｜└<a href="./3-4.3d_function.html" target="main">三次元関数</a><br>
+└glTF<br>
+　├<a href="./4-1.gltf_triangle.html" target="main">三角形</a><br>
+　├<a href="./4-2.gltf_square.html" target="main">正方形</a><br>
+　├<a href="./4-3.gltf_cube.html" target="main">立方体</a><br>
+　└<a href="./4-4.gltf_texture.html" target="main">テクスチャ付き立方体</a><br>
+</td>
+<td>
+</td>
+</tr>
+</table>
+</div>
+<div style="display: auto">
+ <!-- <iframe name="main" style="position: absolute; width: 100%; height: 100%; overflow: auto"></iframe> -->
+ <iframe name="main" style="position: absolute; width: calc(100% - 320px); height: calc(100% - 20px); overflow: hidden"></iframe>
+</div>
+</div>
+<script>
+window.onload = function() {
+    let hash = location.hash;
+    let url = getUrlfromHash(hash);
+    navigateInnerFrame(url);
+}
+
+// TODO: https://threejs.org/examples/ のサンプル一覧画面のようなナビゲーションを実現する
+// アドレスバーにはサンプルに対応したハッシュ「#～」を表示し、
+// 内部フレームにはクリックしたサンプルが表示される。
+// また、サンプルURLを新しいウィンドウで開くと、直接サンプルのURLが表示される
+window.addEventListener("click", {
+    handleEvent: function(e) {
+        let hash = e.target.hash;
+        let pathname = e.target.pathname.split("/").pop();
+        let url = e.target.href;
+        // URL にハッシュ部分が設定されていない場合
+        if (hash.length == 0) {
+            // URL を「#～」に置き換える
+            // 例）「1-5.lissajous.html」→「#1-5.lissajous」
+            hash = "#" + pathname.replace(".html", "");
+            // アドレスバーの URL に「#～」を付与する
+            location.href = hash;
+        }
+        // 内部フレームをクリックされた URL に変更する
+        navigateInnerFrame(url);
+    }
+}, false);
+
+function getUrlfromHash(hash) {
+    if (hash.length > 0) {
+        return hash.replace("#", "./") + ".html";
+    } else {
+        return "./1-1.triangle.html"; // default
+    }
+}
+
+function navigateInnerFrame(url) {
+    main.location.href = url;
+}
+</script>
+</html>
