@@ -160,7 +160,7 @@ function init() {
     geometry.setAttribute('uv', new THREE.BufferAttribute(texcoord, 2));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     let loader = new THREE.TextureLoader();
-    let texture = loader.load('../../../assets/textures/frog.jpg');
+    let texture = loader.load('../../assets/textures/frog.jpg');
     let uniforms = {
         texture : { type: "t", value: texture }
     };
