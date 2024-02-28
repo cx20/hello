@@ -16,24 +16,6 @@
 }
 </script>
 
-<script type="x-shader/x-vertex" id="vertexShader">
-varying vec4 vColor;
-
-void main() {
-    vColor = color;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-</script>
-
-<script type="x-shader/x-fragment" id="fragmentShader">
-precision mediump float;
-varying vec4 vColor;
-
-void main() {
-    gl_FragColor = vColor;
-}
-</script>
-
 <div id="container"></div>
 
 <script type="module">
@@ -59,36 +41,28 @@ function init() {
     directionalLight.position.set( 1, 0, 1 );
     scene.add( directionalLight );
 
-    let unpackedColors = [];
-    for (let i=0; i < vertexNormals.length; i += 3) {
-        let r = vertexNormals[i+0] + 0.5;
-        let g = vertexNormals[i+1] + 0.5;
-        let b = vertexNormals[i+2] + 0.5;
-        let a = 1.0;
-        unpackedColors.push(r);
-        unpackedColors.push(g);
-        unpackedColors.push(b);
-        unpackedColors.push(a);
-    }
-
-
     let geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertexPositions), 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(unpackedColors), 4));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(vertexNormals), 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(vertexTextureCoords), 2));
     geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indices),1));
+    
+    let loader = new THREE.TextureLoader();
+    // copy from: https://github.com/gpjt/webgl-lessons/blob/master/lesson14/arroway.de_metal%2Bstructure%2B06_d100_flat.jpg
+    let texture = loader.load('../../assets/textures/arroway.de_metal+structure+06_d100_flat.jpg');
 
-    const material = new THREE.ShaderMaterial({
-        vertexShader: document.getElementById('vertexShader').textContent,
-        fragmentShader: document.getElementById('fragmentShader').textContent,
-        vertexColors: true
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    let material = new THREE.MeshLambertMaterial({
+        map: texture,
+        flatShading: true
     });
 
-    mesh = new THREE.LineSegments(geometry, material);
-    
+    mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
-    
+
     renderer = new THREE.WebGLRenderer();
-    renderer.setClearColor(0xffffff);
+    renderer.setClearColor(0x000000);
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 }
@@ -121,6 +95,6 @@ $.getJSON("../../assets/models/json/teapot.json", function (data) {
 });
 </script>
 
-<a href="https://github.com/cx20/hello/blob/master/html5/threejs/2-3.teapot.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
+<a href="https://github.com/cx20/hello/blob/master/html5/threejs/2-5.teapot.html" target="_blank" style="position:absolute; top:15px; left:15px">View Source</a>
 </body>
 </html>
