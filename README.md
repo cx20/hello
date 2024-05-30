@@ -205,7 +205,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |C#            | 4.9    |Visual Studio 2022 Developer Command Prompt      |
 |VB.NET        | 4.9    |Visual Studio 2022 Developer Command Prompt      |
 |JScript.NET   |14.0    |Visual Studio 2022 Developer Command Prompt      |
-|D             | 2.0098 |                                                 |
+|D             | 2.108.1|                                                 |
 |Go            | 1.20.1 |                                                 |
 |Rust          | 1.77   |When using WebGPU, use "rustup default nightly". |
 |Java          | 1.8.0  |                                                 |

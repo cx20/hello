@@ -1,6 +1,6 @@
 compile:
 ```
-C:\> dmd hello.d gdi32.lib hello.def
+C:\> dmd hello.d gdi32.lib user32.lib
 ```
 Result:
 ```
