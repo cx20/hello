@@ -1,9 +1,12 @@
 #![windows_subsystem = "windows"]
 
-use windows::Win32::UI::WindowsAndMessaging::{MessageBoxA, MB_OK};
+use windows::{
+    core::*,
+    Win32::UI::WindowsAndMessaging::*,
+};
 
 fn main() {
     unsafe {
-        MessageBoxA(None, "Hello, Win32 API(Rust) World!", "Hello, World!", MB_OK);
+        MessageBoxA(None, s!("Hello, Win32 API(Rust) World!"), s!("Hello, World!"), MB_OK);
     }
 }

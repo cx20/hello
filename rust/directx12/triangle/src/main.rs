@@ -88,6 +88,7 @@ where
     title.push('\0');
 
     let hwnd = unsafe {
+        let sample_ptr = &mut sample as *mut _ as _;
         CreateWindowExA(
             WINDOW_EX_STYLE::default(),
             s!("RustWindowClass"),
@@ -100,19 +101,19 @@ where
             None, // no parent window
             None, // no menus
             instance,
-            Some(&mut sample as *mut _ as _),
+            Some(sample_ptr),
         )
-    };
+    }?;
 
     sample.bind_to_window(&hwnd)?;
-    unsafe { ShowWindow(hwnd, SW_SHOW) };
+    unsafe { _ = ShowWindow(hwnd, SW_SHOW); };
 
     loop {
         let mut message = MSG::default();
 
         if unsafe { PeekMessageA(&mut message, None, 0, 0, PM_REMOVE) }.into() {
             unsafe {
-                TranslateMessage(&message);
+                _ = TranslateMessage(&message);
                 DispatchMessageA(&message);
             }
 
@@ -126,6 +127,7 @@ where
 }
 
 fn sample_wndproc<S: DXSample>(sample: &mut S, message: u32, wparam: WPARAM) -> bool {
+
     match message {
         WM_KEYDOWN => {
             sample.on_key_down(wparam.0 as u8);
@@ -150,42 +152,38 @@ extern "system" fn wndproc<S: DXSample>(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+
     match message {
         WM_CREATE => {
             unsafe {
                 let create_struct: &CREATESTRUCTA = transmute(lparam);
                 SetWindowLongPtrA(window, GWLP_USERDATA, create_struct.lpCreateParams as _);
             }
-            LRESULT::default()
+            return LRESULT::default();
         }
         WM_DESTROY => {
             unsafe { PostQuitMessage(0) };
-            LRESULT::default()
+            return LRESULT::default();
         }
         _ => {
             let user_data = unsafe { GetWindowLongPtrA(window, GWLP_USERDATA) };
             let sample = std::ptr::NonNull::<S>::new(user_data as _);
-            let handled = sample.map_or(false, |mut s| {
-                sample_wndproc(unsafe { s.as_mut() }, message, wparam)
-            });
-
-            if handled {
-                LRESULT::default()
-            } else {
-                unsafe { DefWindowProcA(window, message, wparam, lparam) }
+            if let Some(mut s) = sample {
+                if sample_wndproc(unsafe { s.as_mut() }, message, wparam) {
+                    return LRESULT::default();
+                }
             }
         }
     }
+    unsafe { DefWindowProcA(window, message, wparam, lparam) }
 }
 
 fn get_hardware_adapter(factory: &IDXGIFactory4) -> Result<IDXGIAdapter1> {
     for i in 0.. {
         let adapter = unsafe { factory.EnumAdapters1(i)? };
+        let desc = unsafe { adapter.GetDesc1()? };
 
-        let mut desc = Default::default();
-        unsafe { adapter.GetDesc1(&mut desc)? };
-
-        if (DXGI_ADAPTER_FLAG(desc.Flags) & DXGI_ADAPTER_FLAG_SOFTWARE)
+        if (DXGI_ADAPTER_FLAG(desc.Flags as _) & DXGI_ADAPTER_FLAG_SOFTWARE)
             != DXGI_ADAPTER_FLAG_NONE
         {
             // Don't select the Basic Render Driver adapter. If you want a
@@ -411,11 +409,13 @@ mod d3d12_hello_triangle {
                 populate_command_list(resources).unwrap();
 
                 // Execute the command list.
-                let command_list = Some(resources.command_list.can_clone_into());
+                let command_list = Some(resources.command_list.cast().unwrap());
                 unsafe { resources.command_queue.ExecuteCommandLists(&[command_list]) };
 
                 // Present the frame.
-                unsafe { resources.swap_chain.Present(1, 0) }.ok().unwrap();
+                unsafe { resources.swap_chain.Present(1, DXGI_PRESENT(0)) }
+                    .ok()
+                    .unwrap();
 
                 wait_for_previous_frame(resources);
             }
@@ -515,7 +515,7 @@ mod d3d12_hello_triangle {
         let dxgi_factory_flags = if cfg!(debug_assertions) {
             DXGI_CREATE_FACTORY_DEBUG
         } else {
-            0
+            DXGI_CREATE_FACTORY_FLAGS(0)
         };
 
         let dxgi_factory: IDXGIFactory4 = unsafe { CreateDXGIFactory2(dxgi_factory_flags) }?;
@@ -570,7 +570,6 @@ mod d3d12_hello_triangle {
         let shaders_hlsl_path = asset_path.join("shaders.hlsl");
         let shaders_hlsl = shaders_hlsl_path.to_str().unwrap();
         let shaders_hlsl: HSTRING = shaders_hlsl.into();
-
         let mut vertex_shader = None;
         let vertex_shader = unsafe {
             D3DCompileFromFile(
@@ -585,6 +584,10 @@ mod d3d12_hello_triangle {
                 None,
             )
         }
+        .map_err(|e| {
+            println!("Vertex shader compilation error: {:?}", e);
+            e
+        })
         .map(|()| vertex_shader.unwrap())?;
 
         let mut pixel_shader = None;
@@ -601,6 +604,10 @@ mod d3d12_hello_triangle {
                 None,
             )
         }
+        .map_err(|e| {
+            println!("Vertex shader compilation error: {:?}", e);
+            e
+        })
         .map(|()| pixel_shader.unwrap())?;
 
         let mut input_element_descs: [D3D12_INPUT_ELEMENT_DESC; 2] = [
