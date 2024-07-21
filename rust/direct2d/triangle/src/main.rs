@@ -2,13 +2,13 @@ use windows::{
     core::*, Foundation::Numerics::*, Win32::Foundation::*, Win32::Graphics::Direct2D::Common::*,
     Win32::Graphics::Direct2D::*, Win32::Graphics::Direct3D::*, Win32::Graphics::Direct3D11::*,
     Win32::Graphics::Dxgi::Common::*, Win32::Graphics::Dxgi::*, Win32::Graphics::Gdi::*,
-    Win32::System::Com::*, Win32::System::LibraryLoader::*, 
+    Win32::System::Com::*, Win32::System::LibraryLoader::*,
     Win32::UI::WindowsAndMessaging::*,
 };
 
 fn main() -> Result<()> {
     unsafe {
-        CoInitializeEx(None, COINIT_MULTITHREADED)?;
+        CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
     }
     let mut window = Window::new()?;
     window.run()
@@ -18,7 +18,7 @@ struct Window {
     handle: HWND,
     factory: ID2D1Factory1,
     dxfactory: IDXGIFactory2,
-    style: ID2D1StrokeStyle,
+    style: ID2D1StrokeStyle1,
 
     target: Option<ID2D1DeviceContext>,
     swapchain: Option<IDXGISwapChain1>,
@@ -42,7 +42,7 @@ impl Window {
 
 
         Ok(Window {
-            handle: HWND(0),
+            handle: Default::default(),
             factory,
             dxfactory,
             style,
@@ -80,7 +80,7 @@ impl Window {
             target.EndDraw(None, None)?;
         }
 
-        if let Err(error) = self.present(1, 0) {
+        if let Err(error) = self.present(1, DXGI_PRESENT(0)) {
             if error.code() == DXGI_STATUS_OCCLUDED {
                 self.occlusion = unsafe {
                     self.dxfactory
@@ -107,7 +107,7 @@ impl Window {
         self.shadow = None;
     }
 
-    fn present(&self, sync: u32, flags: u32) -> Result<()> {
+    fn present(&self, sync: u32, flags: DXGI_PRESENT) -> Result<()> {
         unsafe { self.swapchain.as_ref().unwrap().Present(sync, flags).ok() }
     }
 
@@ -167,7 +167,7 @@ impl Window {
             ..Default::default()
         };
 
-        unsafe { target.CreateBitmap2(size_u, None, 0, &properties) }
+        unsafe { target.CreateBitmap(size_u, None, 0, &properties) }
     }
 
     fn resize_swapchain_bitmap(&mut self) -> Result<()> {
@@ -177,7 +177,7 @@ impl Window {
 
             if unsafe {
                 swapchain
-                    .ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0)
+                    .ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG(0))
                     .is_ok()
             } {
                 create_swapchain_bitmap(swapchain, target)?;
@@ -199,7 +199,7 @@ impl Window {
                     let mut ps = PAINTSTRUCT::default();
                     BeginPaint(self.handle, &mut ps);
                     self.render().unwrap();
-                    EndPaint(self.handle, &ps);
+                    let _ = EndPaint(self.handle, &ps);
                     LRESULT(0)
                 }
                 WM_SIZE => {
@@ -236,7 +236,6 @@ impl Window {
     fn run(&mut self) -> Result<()> {
         unsafe {
             let instance = GetModuleHandleA(None)?;
-            debug_assert!(instance.0 != 0);
             let window_class = s!("window");
 
             let wc = WNDCLASSA {
@@ -252,7 +251,7 @@ impl Window {
             let atom = RegisterClassA(&wc);
             debug_assert!(atom != 0);
 
-            let handle = CreateWindowExA(
+            let _handle = CreateWindowExA(
                 WINDOW_EX_STYLE::default(),
                 window_class,
                 s!("Hello, World!"),
@@ -267,8 +266,6 @@ impl Window {
                 Some(self as *mut _ as _),
             );
 
-            debug_assert!(handle.0 != 0);
-            debug_assert!(handle == self.handle);
             let mut message = MSG::default();
 
             loop {
@@ -282,7 +279,7 @@ impl Window {
                         DispatchMessageA(&message);
                     }
                 } else {
-                    GetMessageA(&mut message, None, 0, 0);
+                    let _ = GetMessageA(&mut message, None, 0, 0);
 
                     if message.message == WM_QUIT {
                         return Ok(());
@@ -355,8 +352,8 @@ fn create_factory() -> Result<ID2D1Factory1> {
     unsafe { D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, Some(&options)) }
 }
 
-fn create_style(factory: &ID2D1Factory1) -> Result<ID2D1StrokeStyle> {
-    let props = D2D1_STROKE_STYLE_PROPERTIES {
+fn create_style(factory: &ID2D1Factory1) -> Result<ID2D1StrokeStyle1> {
+    let props = D2D1_STROKE_STYLE_PROPERTIES1 {
         startCap: D2D1_CAP_STYLE_ROUND,
         endCap: D2D1_CAP_STYLE_TRIANGLE,
         ..Default::default()

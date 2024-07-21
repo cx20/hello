@@ -8,9 +8,12 @@ git = "https://github.com/brendanzab/gl-rs.git"
 
 [dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs.git"
+version = "0.57.0"
 default-features = false
+features = ["with-window-handle-v0-5"]
 
 [dependencies.windows]
+version = "0.57.0"
 features = [
     "Win32_Graphics_OpenGL",
 ]

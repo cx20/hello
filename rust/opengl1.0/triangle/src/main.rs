@@ -11,13 +11,13 @@ use windows::{
 
 fn main() -> Result<()> {
     unsafe {
-        let instance = GetModuleHandleA(None).unwrap();
+        let instance = GetModuleHandleA(None)?;
 
-        let window_class = "window";
+        let window_class = s!("window");
 
         let wc = WNDCLASSA {
             hCursor: LoadCursorW(None, IDC_ARROW).unwrap(),
-            hInstance: instance,
+            hInstance: HINSTANCE(instance.0),
             lpszClassName: PCSTR(b"window\0".as_ptr()),
 
             style: CS_HREDRAW | CS_VREDRAW,
@@ -25,13 +25,12 @@ fn main() -> Result<()> {
             ..Default::default()
         };
 
-        let atom = RegisterClassA(&wc);
-        debug_assert!(atom != 0);
+        let _atom = RegisterClassA(&wc);
 
         let hwnd = CreateWindowExA(
             Default::default(),
             window_class,
-            "Hello, World!",
+            s!("Hello, World!"),
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -40,8 +39,8 @@ fn main() -> Result<()> {
             None,
             None,
             instance,
-            std::ptr::null_mut()
-        );
+            None,
+        )?;
 
         let hdc = GetDC(hwnd);
         let hrc = enable_open_gl(hdc);
@@ -50,7 +49,7 @@ fn main() -> Result<()> {
             let mut message = MSG::default();
 
             if PeekMessageA(&mut message, None, 0, 0, PM_REMOVE).into() {
-                TranslateMessage(&message);
+                _ = TranslateMessage(&message);
                 DispatchMessageA(&message);
 
                 if message.message == WM_QUIT {
@@ -62,13 +61,13 @@ fn main() -> Result<()> {
 
                 draw_triangle();
 
-                SwapBuffers(hdc);
+                _ = SwapBuffers(hdc);
 
             }
         }
 
     disable_open_gl(hwnd, hdc, hrc);
-    DestroyWindow(hwnd);
+    _ = DestroyWindow(hwnd);
 
         Ok(())
     }
@@ -82,16 +81,16 @@ fn enable_open_gl(hdc: HDC) -> HGLRC {
             cColorBits: 32,
             cDepthBits: 24,
             cStencilBits: 8,
-            iLayerType: PFD_MAIN_PLANE,
+            iLayerType: PFD_MAIN_PLANE.0 as u8,
             ..Default::default()
         };
 
         let i_format = ChoosePixelFormat(hdc, &pfd);
 
-        SetPixelFormat(hdc, i_format, &pfd);
+        _ = SetPixelFormat(hdc, i_format, &pfd);
 
         let hrc = wglCreateContext(hdc).unwrap();
-        wglMakeCurrent(hdc, hrc);
+        _ = wglMakeCurrent(hdc, hrc);
         
         hrc
     }
@@ -99,8 +98,8 @@ fn enable_open_gl(hdc: HDC) -> HGLRC {
 
 fn disable_open_gl(hwnd: HWND, hdc: HDC, hrc: HGLRC) {
     unsafe {
-        wglMakeCurrent(None, None);
-        wglDeleteContext(hrc);
+        _ = wglMakeCurrent(None, None);
+        _ = wglDeleteContext(hrc);
         ReleaseDC(hwnd, hdc);
     }
 }

@@ -13,11 +13,11 @@ fn main() -> Result<()> {
     unsafe {
         let instance = GetModuleHandleA(None)?;
         
-        let window_class = "window";
+        let window_class = s!("window");
 
         let wc = WNDCLASSA {
             hCursor: LoadCursorW(None, IDC_ARROW)?,
-            hInstance: instance,
+            hInstance: HINSTANCE(instance.0),
             lpszClassName: PCSTR(b"window\0".as_ptr()),
 
             style: CS_HREDRAW | CS_VREDRAW,
@@ -25,13 +25,12 @@ fn main() -> Result<()> {
             ..Default::default()
         };
 
-        let atom = RegisterClassA(&wc);
-        debug_assert!(atom != 0);
+        let _atom = RegisterClassA(&wc);
 
-        CreateWindowExA(
+        let _hwnd = CreateWindowExA(
             Default::default(),
             window_class,
-            "Hello, World!",
+            s!("Hello, World!"),
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -40,12 +39,12 @@ fn main() -> Result<()> {
             None,
             None,
             instance,
-            std::ptr::null_mut()
+            None
         );
 
         let mut message = MSG::default();
 
-        while GetMessageA(&mut message, HWND(0), 0, 0).into() {
+        while GetMessageA(&mut message, HWND::default(), 0, 0).into() {
             DispatchMessageA(&message);
         }
 
@@ -60,7 +59,7 @@ extern "system" fn wndproc(window: HWND, message: u32, wparam: WPARAM, lparam: L
                 let mut ps = PAINTSTRUCT::default();
                 let hdc = BeginPaint(window, &mut ps);
                 draw_triangle(hdc);
-                EndPaint(window, &ps);
+                let _ = EndPaint(window, &ps);
                 LRESULT(0)
             }
             WM_DESTROY => {
@@ -84,6 +83,6 @@ fn draw_triangle(_hdc: HDC) {
 
         let mut _gradient_triangle = GRADIENT_TRIANGLE { Vertex1: 0, Vertex2: 1, Vertex3: 2 };
         let raw_gradient_triangle: *mut GRADIENT_TRIANGLE = &mut _gradient_triangle;
-        GradientFill(_hdc, &_vertex, raw_gradient_triangle as *mut c_void, 1, GRADIENT_FILL_TRIANGLE);
+        let _ = GradientFill(_hdc, &_vertex, raw_gradient_triangle as *mut c_void, 1, GRADIENT_FILL_TRIANGLE);
     }
 }

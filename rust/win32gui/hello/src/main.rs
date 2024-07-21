@@ -5,32 +5,30 @@ use windows::{
     Win32::Foundation::*,
     Win32::Graphics::Gdi::*,
     Win32::System::LibraryLoader::GetModuleHandleA,
-    Win32::UI::WindowsAndMessaging::*
+    Win32::UI::WindowsAndMessaging::*,
 };
 
 fn main() -> Result<()> {
     unsafe {
-        let instance = GetModuleHandleA(None).unwrap();
+        let instance = GetModuleHandleA(None)?;
 
-        let window_class = "window";
+        let window_class = s!("window");
 
         let wc = WNDCLASSA {
-            hCursor: LoadCursorW(None, IDC_ARROW).unwrap(),
-            hInstance: instance,
-            lpszClassName: PCSTR(b"window\0".as_ptr()),
-
+            hCursor: LoadCursorA(None, PCSTR(IDC_ARROW.0 as *const u8))?,
+            hInstance: HINSTANCE(instance.0),
+            lpszClassName: PCSTR(window_class.as_ptr() as *const u8),
             style: CS_HREDRAW | CS_VREDRAW,
             lpfnWndProc: Some(wndproc),
             ..Default::default()
         };
 
-        let atom = RegisterClassA(&wc);
-        debug_assert!(atom != 0);
+        let _atom = RegisterClassA(&wc);
 
-        CreateWindowExA(
+        let _hwnd = CreateWindowExA(
             Default::default(),
             window_class,
-            "Hello, World!",
+            s!("Hello, World!"),
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -39,12 +37,12 @@ fn main() -> Result<()> {
             None,
             None,
             instance,
-            std::ptr::null_mut()
+            None,
         );
 
         let mut message = MSG::default();
 
-        while GetMessageA(&mut message, HWND(0), 0, 0).into() {
+        while GetMessageA(&mut message, HWND::default(), 0, 0).into() {
             DispatchMessageA(&message);
         }
 
@@ -54,12 +52,13 @@ fn main() -> Result<()> {
 
 extern "system" fn wndproc(window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     unsafe {
-        match message as u32 {
+        match message {
             WM_PAINT => {
                 let mut ps = PAINTSTRUCT::default();
                 let hdc = BeginPaint(window, &mut ps);
-                TextOutA(hdc, 0, 0, "Hello, Win32 GUI(Rust) World!".as_bytes());
-                EndPaint(window, &ps);
+                let text = "Hello, Win32 GUI(Rust) World!";
+                let _ = TextOutA(hdc, 0, 0, text.as_bytes());
+                let _ = EndPaint(window, &ps);
                 LRESULT(0)
             }
             WM_DESTROY => {
