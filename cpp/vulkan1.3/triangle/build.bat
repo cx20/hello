@@ -1,4 +1,4 @@
-SET VULKAN_SDK=C:\VulkanSDK\1.3.204.0
+SET VULKAN_SDK=C:\VulkanSDK\1.3.296.0
 SET INCLUDE=%INCLUDE%;%VULKAN_SDK%\Include;C:\Libraries\glfw-3.3.6.bin.WIN64\include;C:\Libraries\glm
 SET LIB=%LIB%;%VULKAN_SDK%\Lib;C:\Libraries\glfw-3.3.6.bin.WIN64\lib-vc2022
 SET PATH=%PATH%;%VULKAN_SDK%\bin
