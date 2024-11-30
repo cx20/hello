@@ -210,4 +210,4 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |Rust          | 1.81   |When using WebGPU, use "rustup default nightly". |
 |Zig           | 0.13   |                                                 |
 |Java          | 1.8.0  |                                                 |
-|Emscripten    | 3.1.29 |emsdk\emcmdprompt.bat                            |
+|Emscripten    | 3.1.73 |emsdk\emcmdprompt.bat                            |
