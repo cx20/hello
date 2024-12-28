@@ -185,7 +185,32 @@ class D3D12Hello
             psoDesc.VS                    = D3D12_SHADER_BYTECODE ( vertexShader.GetBufferPointer(), vertexShader.GetBufferSize() );
             psoDesc.PS                    = D3D12_SHADER_BYTECODE ( pixelShader.GetBufferPointer(), pixelShader.GetBufferSize() );
             psoDesc.RasterizerState       = D3D12_RASTERIZER_DESC();
-            psoDesc.BlendState            = D3D12_BLEND_DESC();
+            //psoDesc.BlendState            = D3D12_BLEND_DESC();
+
+            D3D12_RENDER_TARGET_BLEND_DESC[8] renderTargetBlendDescs;
+
+            renderTargetBlendDescs[0] = D3D12_RENDER_TARGET_BLEND_DESC(
+                FALSE, FALSE,
+                D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+                D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+                D3D12_LOGIC_OP_NOOP, D3D12_COLOR_WRITE_ENABLE_ALL
+            );
+
+            foreach (i; 1 .. 8)
+            {
+                renderTargetBlendDescs[i] = D3D12_RENDER_TARGET_BLEND_DESC(
+                    FALSE, FALSE,
+                    D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+                    D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+                    D3D12_LOGIC_OP_NOOP, D3D12_COLOR_WRITE_ENABLE_ALL
+                );
+            }
+
+            psoDesc.BlendState = D3D12_BLEND_DESC(
+                FALSE, FALSE,
+                renderTargetBlendDescs
+            );
+
             psoDesc.DepthStencilState.DepthEnable   = FALSE;
             psoDesc.DepthStencilState.StencilEnable = FALSE;
             psoDesc.SampleMask            = UINT.max;
@@ -326,7 +351,7 @@ class D3D12Hello
         auto rtvHandle = D3D12_CPU_DESCRIPTOR_HANDLE(cast(size_t)(rtvHeap.GetCPUDescriptorHandleForHeapStart().ptr + cast(void*)(frameIndex * rtvDescriptorSize)));
         commandList.OMSetRenderTargets(1, &rtvHandle, FALSE, null);
 
-        const float[4] clearColor = [ 1.0f, 0.0f, 0.0f, 1.0f ];
+        const float[4] clearColor = [ 0.0f, 0.0f, 0.0f, 1.0f ];
         commandList.ClearRenderTargetView(rtvHandle, clearColor.ptr, 0, null);
         commandList.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         commandList.IASetVertexBuffers(0, 1, &vertexBufferView);
