@@ -1,4 +1,4 @@
-// forked from https://github.com/microsoft/windows-rs/tree/master/crates/samples/direct3d12
+// forked from https://github.com/microsoft/windows-rs/tree/master/crates/samples/windows/direct3d12
 
 use windows::{
     core::*, Win32::Foundation::*, Win32::Graphics::Direct3D::Fxc::*, Win32::Graphics::Direct3D::*,
