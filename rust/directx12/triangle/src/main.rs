@@ -120,6 +120,8 @@ where
             if message.message == WM_QUIT {
                 break;
             }
+        } else {
+            sample.render();
         }
     }
 
