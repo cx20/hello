@@ -3,144 +3,116 @@
 import wgpu
 import numpy as np
 
-vertex_shader_source = """
+shader_source_with_buffers = """
 struct VertexInput {
     @location(0) position : vec3<f32>,
-    @location(1) color : vec4<f32>
+    @location(1) color : vec4<f32>,
 };
 struct VertexOutput {
-    @builtin(position) Position : vec4<f32>,
-    @location(0) fragColor : vec4<f32>,
+    @location(0) color : vec4<f32>,
+    @builtin(position) pos: vec4<f32>,
 };
 
-@stage(vertex)
-fn main(in: VertexInput) -> VertexOutput {
-    var output : VertexOutput;
-    output.fragColor = in.color;
-    output.Position = vec4<f32>(in.position, 1.0);
-    return output;
+@vertex
+fn vs_main(in: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    out.pos = vec4<f32>(in.position, 1.0);
+    out.color = in.color;
+    return out;
+}
 
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    let physical_color = pow(in.color.rgb, vec3<f32>(2.2));  // gamma correct
+    return vec4<f32>(physical_color, in.color.a);
 }
 """
 
-fragment_shader_source = """
-struct VertexInput {
-    @location(0) fragColor : vec4<f32>
-};
+vertex_data = np.array(
+    [
+        [ 0.0,  0.5, 0.0], # Vertex 1
+        [ 0.5, -0.5, 0.0], # Vertex 2
+        [-0.5, -0.5, 0.0], # Vertex 3
+    ],
+    dtype=np.float32,
+)
 
-struct FragmentOutput {
-    @location(0) outColor : vec4<f32>
-};
+color_data = np.array(
+    [
+        [1.0, 0.0, 0.0, 1.0],  # Red
+        [0.0, 1.0, 0.0, 1.0],  # Green
+        [0.0, 0.0, 1.0, 1.0],  # Blue
+    ],
+    dtype=np.float32,
+)
 
-@stage(fragment)
-fn main(in: VertexInput) -> FragmentOutput {
-    var output : FragmentOutput;
-    output.outColor = in.fragColor;
-    return output;
-}
-"""
+def get_render_pipeline_kwargs_with_buffers(canvas, device):
+    context = canvas.get_context("wgpu")
+    render_texture_format = context.get_preferred_format(device.adapter)
+    context.configure(device=device, format=render_texture_format)
 
-def main(canvas, power_preference="high-performance", limits=None):
-    adapter = wgpu.request_adapter(canvas=None, power_preference=power_preference)
-    device = adapter.request_device(required_limits=limits)
-    return _main(canvas, device)
-
-async def main_async(canvas):
-    adapter = await wgpu.request_adapter_async(
-        canvas=canvas, power_preference="high-performance"
-    )
-    device = await adapter.request_device_async(required_limits={})
-    return _main(canvas, device)
-
-def _main(canvas, device):
-
-    vertex_shader = device.create_shader_module(code=vertex_shader_source)
-    fragment_shader = device.create_shader_module(code=fragment_shader_source)
-
+    shader = device.create_shader_module(code=shader_source_with_buffers)
     pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[])
 
-    present_context = canvas.get_context()
-    render_texture_format = present_context.get_preferred_format(device.adapter)
-    present_context.configure(device=device, format=render_texture_format)
-
-    vertex_data = np.array(
-        [
-            [ 0.0,  0.5, 0.0],
-            [ 0.5, -0.5, 0.0],
-            [-0.5, -0.5, 0.0],
-        ],
-        dtype=np.float32,
-    )
-
-    color_data = np.array(
-        [
-            [1.0, 0.0, 0.0, 1.0],
-            [0.0, 1.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0, 1.0],
-        ],
-        dtype=np.float32,
-    )
-
     vertex_buffer = device.create_buffer_with_data(
-        data=vertex_data, usage=wgpu.BufferUsage.VERTEX
+        data=vertex_data.tobytes(),
+        usage=wgpu.BufferUsage.VERTEX,
     )
 
     color_buffer = device.create_buffer_with_data(
-        data=color_data, usage=wgpu.BufferUsage.VERTEX
+        data=color_data.tobytes(),
+        usage=wgpu.BufferUsage.VERTEX,
     )
 
-    render_pipeline = device.create_render_pipeline(
+    return dict(
         layout=pipeline_layout,
         vertex={
-            "module": vertex_shader,
-            "entry_point": "main",
+            "module": shader,
+            "entry_point": "vs_main",
             "buffers": [
                 {
-                    "array_stride": 3 * 4,
+                    "array_stride": 3 * 4,  # 3 floats (x, y, z), 4 bytes per float
                     "step_mode": wgpu.VertexStepMode.vertex,
                     "attributes": [
-                        {
-                            "format": wgpu.VertexFormat.float32x3,
-                            "offset": 0,
-                            "shader_location": 0,
-                        },
+                        {"format": wgpu.VertexFormat.float32x3, "offset": 0, "shader_location": 0},  # position
                     ],
                 },
                 {
-                    "array_stride": 4 * 4,
+                    "array_stride": 4 * 4,  # 4 floats (r, g, b, a), 4 bytes per float
                     "step_mode": wgpu.VertexStepMode.vertex,
                     "attributes": [
-                        {
-                            "format": wgpu.VertexFormat.float32x4,
-                            "offset": 0,
-                            "shader_location": 1,
-                        },
+                        {"format": wgpu.VertexFormat.float32x4, "offset": 0, "shader_location": 1},  # color
                     ],
                 },
             ],
         },
-        primitive={
-            "topology": wgpu.PrimitiveTopology.triangle_list,
-        },
+        depth_stencil=None,
+        multisample=None,
         fragment={
-            "module": fragment_shader,
-            "entry_point": "main",
+            "module": shader,
+            "entry_point": "fs_main",
             "targets": [
                 {
                     "format": render_texture_format,
+                    "blend": {
+                        "color": {},
+                        "alpha": {},
+                    },
                 },
             ],
         },
-    )
+    ), vertex_buffer, color_buffer
 
-    def draw_frame():
-        current_texture_view = present_context.get_current_texture()
+def get_draw_function_with_buffers(canvas, device, render_pipeline, vertex_buffer, color_buffer):
+    def draw_frame_sync():
+        current_texture = canvas.get_context("wgpu").get_current_texture()
         command_encoder = device.create_command_encoder()
 
         render_pass = command_encoder.begin_render_pass(
             color_attachments=[
                 {
-                    "view": current_texture_view,
+                    "view": current_texture.create_view(),
+                    "resolve_target": None,
                     "clear_value": (0, 0, 0, 1),
                     "load_op": wgpu.LoadOp.clear,
                     "store_op": wgpu.StoreOp.store,
@@ -155,14 +127,15 @@ def _main(canvas, device):
         render_pass.end()
         device.queue.submit([command_encoder.finish()])
 
-    canvas.request_draw(draw_frame)
-    return device
+    return draw_frame_sync
 
 if __name__ == "__main__":
-
-    import wgpu.backends.rs  # noqa: F401, Select Rust backend
     from wgpu.gui.auto import WgpuCanvas, run
 
     canvas = WgpuCanvas(size=(640, 480), title="Hello, World!")
-    main(canvas)
+    device = wgpu.gpu.request_adapter_sync().request_device_sync()
+    pipeline_kwargs, vertex_buffer, color_buffer = get_render_pipeline_kwargs_with_buffers(canvas, device)
+    render_pipeline = device.create_render_pipeline(**pipeline_kwargs)
+    draw_frame = get_draw_function_with_buffers(canvas, device, render_pipeline, vertex_buffer, color_buffer)
+    canvas.request_draw(draw_frame)
     run()

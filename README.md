@@ -172,7 +172,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |OpenGL4.6 (GLFW)    |                                                                               |                                                                          |[Link](https://github.com/cx20/hello/tree/master/python/opengl4.6_glfw/triangle)   |                                                                          |
 |OpenGL ES 2.0 (GLFW)|                                                                               |                                                                          |[Link](https://github.com/cx20/hello/tree/master/python/opengles2.0_glfw/triangle) |                                                                          |
 |OpenGL ES 3.0 (GLFW)|                                                                               |                                                                          |[Link](https://github.com/cx20/hello/tree/master/python/opengles3.0_glfw/triangle) |                                                                          |
-|WebGPU (wgpu+GLFW)  |                                                                               |                                                                          |[WIP] [Link](https://github.com/cx20/hello/tree/master/python/wgpu_glfw/triangle)  |                                                                          |
+|WebGPU (wgpu+GLFW)  |                                                                               |                                                                          |[Link](https://github.com/cx20/hello/tree/master/python/wgpu_glfw/triangle)        |                                                                          |
 
 ## Web Browser / WebAssembly Languages
 
@@ -207,6 +207,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |JScript.NET   |14.0    |Visual Studio 2022 Developer Command Prompt      |
 |D             | 2.108.1|                                                 |
 |Go            | 1.20.1 |                                                 |
+|Python        | 3.12   |                                                 |
 |Rust          | 1.85   |When using WebGPU, use "rustup default nightly". |
 |Zig           | 0.13   |                                                 |
 |Java          | 1.8.0  |                                                 |

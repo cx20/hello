@@ -1,1 +1,1 @@
-python hello.py
+python3.12 hello.py
