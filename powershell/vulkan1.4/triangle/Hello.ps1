@@ -1862,6 +1862,30 @@ public class HelloForm : Form
     [DllImport("vulkan-1.dll")]
     static extern void vkGetPhysicalDeviceMemoryProperties(IntPtr physicalDevice, out VkPhysicalDeviceMemoryProperties pMemoryProperties);
 
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern VkResult vkDeviceWaitIdle(IntPtr device);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroySemaphore(IntPtr device, IntPtr semaphore, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroyFence(IntPtr device, IntPtr fence, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroyDebugUtilsMessengerEXT(IntPtr instance, IntPtr messenger, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroyCommandPool(IntPtr device, IntPtr commandPool, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroyShaderModule(IntPtr device, IntPtr shaderModule, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkFreeMemory(IntPtr device, IntPtr memory, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroyImage(IntPtr device, IntPtr image, IntPtr pAllocator);
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate uint VkDebugUtilsMessengerCallbackEXT(
         VkDebugUtilsMessageSeverityFlagsEXT messageSeverity,
@@ -1876,6 +1900,9 @@ public class HelloForm : Form
         IntPtr pAllocator,
         out IntPtr pMessenger
     );
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate void vkDestroyDebugUtilsMessengerEXTFunc(IntPtr instance, IntPtr messenger, IntPtr pAllocator);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate VkBool32 DebugUtilsMessengerCallbackEXT(
@@ -1928,6 +1955,8 @@ public class HelloForm : Form
     private bool isInitialized = false;
     private VkFormat swapChainImageFormat; 
     private VkExtent2D swapChainExtent;    
+    private IntPtr vertShaderModule;
+    private IntPtr fragShaderModule;
     private IntPtr graphicsQueue; 
     private IntPtr presentQueue; 
     private IntPtr pipelineLayout;
@@ -2025,6 +2054,8 @@ public class HelloForm : Form
         CreateFramebuffers(); 
         CreateCommandBuffers(); 
         CreateSyncObjects(); 
+
+        Console.WriteLine("[HelloForm::Initialize] - End");
     }
 
 
@@ -2382,8 +2413,8 @@ public class HelloForm : Form
         Console.WriteLine("----------------------------------------");
         Console.WriteLine("[HelloForm::CreateGraphicsPipeline] - Start");
 
-        IntPtr vertShaderModule = LoadShaderModule("hello_vert.spv");
-        IntPtr fragShaderModule = LoadShaderModule("hello_frag.spv");
+        vertShaderModule = LoadShaderModule("hello_vert.spv");
+        fragShaderModule = LoadShaderModule("hello_frag.spv");
 
         if (vertShaderModule == IntPtr.Zero || fragShaderModule == IntPtr.Zero)
         {
@@ -2823,7 +2854,7 @@ public class HelloForm : Form
             var extensions = new VkExtensionProperties[extensionCount];
             for (int i = 0; i < extensionCount; i++)
             {
-                extensions.Initialize();
+                extensions[i].Initialize();
                 IntPtr offset = IntPtr.Add(buffer, i * structSize);
                 extensions[i] = Marshal.PtrToStructure<VkExtensionProperties>(offset);
             }
@@ -3089,6 +3120,8 @@ public class HelloForm : Form
             var createInfo = new VkImageViewCreateInfo
             {
                 sType = VkStructureType.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                pNext = IntPtr.Zero,
+                flags = 0,
                 image = swapChainImages[i],
                 viewType = VkImageViewType.VK_IMAGE_VIEW_TYPE_2D,
                 format = swapChainImageFormat,
@@ -3539,6 +3572,24 @@ public class HelloForm : Form
         Console.WriteLine("----------------------------------------");
         Console.WriteLine("[HelloForm::Cleanup] - Start");
 
+       vkDeviceWaitIdle(device);
+
+       vkDestroyImageView(device, depthImageView, IntPtr.Zero);
+       vkDestroyImage(device, depthImage, IntPtr.Zero);
+       vkFreeMemory(device, depthImageMemory, IntPtr.Zero); 
+   
+       for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+       {
+           vkDestroySemaphore(device, imageAvailableSemaphores[i], IntPtr.Zero);
+           vkDestroySemaphore(device, renderFinishedSemaphores[i], IntPtr.Zero);
+           vkDestroyFence(device, inFlightFences[i], IntPtr.Zero);
+       }
+
+       vkDestroyCommandPool(device, commandPool, IntPtr.Zero);
+       
+       vkDestroyShaderModule(device, fragShaderModule, IntPtr.Zero);
+       vkDestroyShaderModule(device, vertShaderModule, IntPtr.Zero);
+
         for (var i = 0; i < swapChainFramebuffers.Length; i++)
         {
             vkDestroyFramebuffer(device, swapChainFramebuffers[i], IntPtr.Zero);
@@ -3548,13 +3599,22 @@ public class HelloForm : Form
         vkDestroyPipelineLayout(device, pipelineLayout, IntPtr.Zero);
         vkDestroyRenderPass(device, renderPass, IntPtr.Zero);
 
-        for (var i = 0; i < swapChainImageViews.Length; i++)
+       for (var i = 0; i < swapChainImages.Length; i++)
         {
             vkDestroyImageView(device, swapChainImageViews[i], IntPtr.Zero);
         }
 
         vkDestroySwapchainKHR(device, swapChain, IntPtr.Zero);
         vkDestroyDevice(device, IntPtr.Zero);
+
+       if (debugMessenger != IntPtr.Zero)
+       {
+           var vkDestroyDebugUtilsMessengerEXTPtr = vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+           var vkDestroyDebugUtilsMessengerEXT = (vkDestroyDebugUtilsMessengerEXTFunc)Marshal.GetDelegateForFunctionPointer(
+               vkDestroyDebugUtilsMessengerEXTPtr, typeof(vkDestroyDebugUtilsMessengerEXTFunc));
+           vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, IntPtr.Zero);
+       }
+
         vkDestroySurfaceKHR(instance, surface, IntPtr.Zero);
         vkDestroyInstance(instance, IntPtr.Zero);
 
