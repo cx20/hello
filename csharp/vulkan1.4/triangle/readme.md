@@ -26,11 +26,7 @@ Result:
 +------------------------------------------+
 ```
 
-Caution #1:
-
-The current version is WIP. The triangle is barely visible only in the debug build. Please note that it contains many bugs such as memory corruption.
-
-Caution #2:
+Caution:
 
 > validation layer: `setupLoaderTrampPhysDevs`:  Failed during dispatch call of '`vkEnumeratePhysicalDevices`' to lower layers or loader to get count.
 > failed to find GPUs with Vulkan support!
