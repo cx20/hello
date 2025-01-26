@@ -1942,9 +1942,6 @@ class HelloForm : Form
     private IntPtr depthImageMemory;
     private IntPtr depthImageView;
 
-    //private IntPtr hWnd;  
-    //private IntPtr hInstance;
-
     private IntPtr[] imageAvailableSemaphores;
     private IntPtr[] renderFinishedSemaphores;
     private IntPtr[] inFlightFences;
@@ -1967,28 +1964,6 @@ class HelloForm : Form
     IntPtr renderPass;
     
     IntPtr debugMessenger;
-
-/*
-    static Hello()
-    {
-        try
-        {
-            string vulkanPath = Path.Combine(Environment.SystemDirectory, "vulkan-1.dll");
-            Console.WriteLine($"Checking Vulkan DLL at: {vulkanPath}");
-            Console.WriteLine($"File exists: {File.Exists(vulkanPath)}");
-
-            IntPtr libHandle = LoadLibrary("vulkan-1.dll");
-            if (libHandle == IntPtr.Zero)
-            {
-                throw new DllNotFoundException($"Failed to load vulkan-1.dll. Error: {Marshal.GetLastWin32Error()}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Vulkan initialization failed: {ex.Message}");
-        }
-    }
-*/
 
     public HelloForm()
     {
