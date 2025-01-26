@@ -1,152 +1,17 @@
 $source = @"
 using System;
+using System.Drawing;
+using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
 
-public class Hello
+public class HelloForm : Form
 {
-    const uint WS_OVERLAPPED = 0x00000000;
-    const uint WS_POPUP = 0x80000000;
-    const uint WS_CHILD = 0x40000000;
-    const uint WS_MINIMIZE = 0x20000000;
-    const uint WS_VISIBLE = 0x10000000;
-    const uint WS_DISABLED = 0x08000000;
-    const uint WS_CLIPSIBLINGS = 0x04000000;
-    const uint WS_CLIPCHILDREN = 0x02000000;
-    const uint WS_MAXIMIZE = 0x01000000;
-    const uint WS_CAPTION = 0x00C00000; // WS_BORDER | WS_DLGFRAME
-    const uint WS_BORDER = 0x00800000;
-    const uint WS_DLGFRAME = 0x00400000;
-    const uint WS_VSCROLL = 0x00200000;
-    const uint WS_HSCROLL = 0x00100000;
-    const uint WS_SYSMENU = 0x00080000;
-    const uint WS_THICKFRAME = 0x00040000;
-    const uint WS_GROUP = 0x00020000;
-    const uint WS_TABSTOP = 0x00010000;
-
-    const uint WS_MINIMIZEBOX = 0x00020000;
-    const uint WS_MAXIMIZEBOX = 0x00010000;
-
-    const uint WS_TILED = WS_OVERLAPPED;
-    const uint WS_ICONIC = WS_MINIMIZE;
-    const uint WS_SIZEBOX = WS_THICKFRAME;
-    const uint WS_TILEDWINDOW = WS_OVERLAPPEDWINDOW;
-
-    const uint WS_OVERLAPPEDWINDOW = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
-    const uint WS_POPUPWINDOW = WS_POPUP | WS_BORDER | WS_SYSMENU;
-    const uint WS_CHILDWINDOW = WS_CHILD;
-
-    const uint PM_REMOVE = 1;
-    const uint PM_NOREMOVE = 0;
-
-    const uint WM_CREATE = 0x0001;
-    const uint WM_DESTROY = 0x0002;
-    const uint WM_PAINT = 0x000F;
-    const uint WM_CLOSE = 0x0010;
-    const uint WM_QUIT = 0x0012;
-    const uint WM_COMMAND = 0x0111;
-
-    const uint COLOR_WINDOW = 5;
-    const uint COLOR_BTNFACE = 15;
-
-    const uint CS_VREDRAW = 0x0001;
-    const uint CS_HREDRAW = 0x0002;
-
-    const int CW_USEDEFAULT = -2147483648; // ((uint)0x80000000)
-
-    const uint SW_SHOWDEFAULT = 10;
-
-    const int IDI_APPLICATION = 32512;
-    const int IDC_ARROW = 32512;
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct POINT
-    {
-        public int x;
-        public int y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct MSG
-    {
-        public IntPtr hwnd;
-        public uint message;
-        public IntPtr wParam;
-        public IntPtr lParam;
-        public uint time;
-        public POINT pt;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-    struct WNDCLASSEX
-    {
-        public uint cbSize;
-        public uint style;
-        public WndProcDelegate lpfnWndProc;
-        public Int32 cbClsExtra;
-        public Int32 cbWndExtra;
-        public IntPtr hInstance;
-        public IntPtr hIcon;
-        public IntPtr hCursor;
-        public IntPtr hbrBackground;
-        public string lpszMenuName;
-        public string lpszClassName;
-        public IntPtr hIconSm;
-    }
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern short RegisterClassEx(ref WNDCLASSEX pcWndClassEx);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern IntPtr CreateWindowEx(
-        uint dwExStyle,
-        string lpClassName,
-        string lpWindowName,
-        uint dwStyle,
-        int x,
-        int y,
-        int nWidth,
-        int nHeight,
-        IntPtr hWndParent,
-        IntPtr hMenu,
-        IntPtr hInstance,
-        IntPtr lpParam);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern bool ShowWindow(IntPtr hWnd, uint nCmdShow);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern bool UpdateWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern IntPtr DefWindowProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern void PostQuitMessage(int nExitCode);
-
     [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
     private static extern IntPtr GetModuleHandle(string lpModuleName);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool PeekMessage(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax, uint wRemoveMsg);
-
-    [DllImport("user32.dll")]
-    private static extern bool TranslateMessage(ref MSG lpMsg);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr DispatchMessage(ref MSG lpmsg);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    static extern IntPtr LoadCursor(IntPtr hInstance, IntPtr lpCursorName);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    static extern IntPtr LoadIcon(IntPtr hInstance, IntPtr lpIconName);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr GetActiveWindow();
 
     [DllImport("kernel32.dll")]
     private static extern IntPtr LoadLibrary(string dllToLoad);
@@ -2060,6 +1925,7 @@ public class Hello
         }
     }
 
+    private bool isInitialized = false;
     private VkFormat swapChainImageFormat; 
     private VkExtent2D swapChainExtent;    
     private IntPtr graphicsQueue; 
@@ -2076,9 +1942,6 @@ public class Hello
     private IntPtr depthImage;
     private IntPtr depthImageMemory;
     private IntPtr depthImageView;
-
-    private IntPtr hWnd;  
-    private IntPtr hInstance;
 
     private IntPtr[] imageAvailableSemaphores;
     private IntPtr[] renderFinishedSemaphores;
@@ -2103,35 +1966,35 @@ public class Hello
     
     IntPtr debugMessenger;
 
-    static Hello()
+    public HelloForm()
     {
-        try
+        this.Size = new Size( 640, 480 );
+        this.Text = "Hello, World!";
+    }
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        Initialize();
+        isInitialized = true;
+    }
+    
+    protected override void OnPaint(PaintEventArgs e) {  
+        base.OnPaint(e); 
+        DrawFrame();
+    }
+    
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        if (isInitialized)
         {
-            string vulkanPath = Path.Combine(Environment.SystemDirectory, "vulkan-1.dll");
-            Console.WriteLine("Checking Vulkan DLL at: " + vulkanPath);
-            Console.WriteLine("File exists: " + File.Exists(vulkanPath));
-
-            IntPtr libHandle = LoadLibrary("vulkan-1.dll");
-            if (libHandle == IntPtr.Zero)
-            {
-                throw new DllNotFoundException("Failed to load vulkan-1.dll. Error: " + Marshal.GetLastWin32Error());
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Vulkan initialization failed: " + ex.Message);
+            RecreateSwapChain();
         }
     }
 
-    private static IntPtr WndProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam)
-    {
-        switch (uMsg)
-        {
-            case WM_DESTROY:
-                PostQuitMessage(0);
-                break;
-        }
-        return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    protected override void OnClosed(EventArgs e) {
+        base.OnClosed(e);
+        Cleanup();
     }
 
     private static VkBool32 DebugCallback(
@@ -2148,9 +2011,8 @@ public class Hello
     public void Initialize()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::Initialize] - Start");
+        Console.WriteLine("[HelloForm::Initialize] - Start");
 
-        CreateWindow();
         CreateInstance();
         CreateSurface();
         CreateDevice();
@@ -2165,57 +2027,11 @@ public class Hello
         CreateSyncObjects(); 
     }
 
-    private void CreateWindow()
-    {
-        Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateWindow] - Start");
-
-        hInstance = GetModuleHandle(null);
-        const string CLASS_NAME = "VulkanWindow";
-        const string WINDOW_NAME = "Hello, World!";
-
-        WNDCLASSEX wcex = new WNDCLASSEX
-        {
-            cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(),
-            style = CS_HREDRAW | CS_VREDRAW,
-            lpfnWndProc = new WndProcDelegate(WndProc),
-            hInstance = hInstance,
-            hCursor = LoadCursor(IntPtr.Zero, new IntPtr(IDC_ARROW)),
-            hbrBackground = new IntPtr(COLOR_WINDOW + 1),
-            lpszClassName = CLASS_NAME
-        };
-
-        RegisterClassEx(ref wcex);
-
-        hWnd = CreateWindowEx(
-            0,
-            CLASS_NAME,
-            WINDOW_NAME,
-            WS_OVERLAPPEDWINDOW,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            800,
-            600,
-            IntPtr.Zero,
-            IntPtr.Zero,
-            hInstance,
-            IntPtr.Zero);
-
-        if (hWnd == IntPtr.Zero)
-        {
-            throw new Exception("Failed to create window.");
-        }
-
-        ShowWindow(hWnd, SW_SHOWDEFAULT);
-        UpdateWindow(hWnd);
-
-        Console.WriteLine("Window created successfully: " + hWnd);
-    }
 
     private void CreateInstance()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateInstance] - Start");
+        Console.WriteLine("[HelloForm::CreateInstance] - Start");
 
         IntPtr appNamePtr = Marshal.StringToHGlobalAnsi("Hello Triangle");
         IntPtr engineNamePtr = Marshal.StringToHGlobalAnsi("No Engine");
@@ -2317,13 +2133,13 @@ public class Hello
     private void CreateSurface()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateSurface] - Start");
+        Console.WriteLine("[HelloForm::CreateSurface] - Start");
 
         var surfaceCreateInfo = new VkWin32SurfaceCreateInfoKHR
         {
             sType = VkStructureType.VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-            hinstance = hInstance, 
-            hwnd = hWnd           
+            hinstance = GetModuleHandle(null), // hInstance, 
+            hwnd = this.Handle // hWnd
         };
 
         VkResult result = vkCreateWin32SurfaceKHR(instance, ref surfaceCreateInfo, IntPtr.Zero, out surface);
@@ -2339,7 +2155,7 @@ public class Hello
     void CreateDevice()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateDevice] - Start");
+        Console.WriteLine("[HelloForm::CreateDevice] - Start");
 
         uint deviceCount = 0;
         vkEnumeratePhysicalDevices(instance, ref deviceCount, null);
@@ -2377,13 +2193,13 @@ public class Hello
 
         LoadVulkanFunctions();
 
-        Console.WriteLine("[Hello::CreateDevice] - End");
+        Console.WriteLine("[HelloForm::CreateDevice] - End");
     }
 
     private void CreateSwapChain()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateSwapChain] - Start");
+        Console.WriteLine("[HelloForm::CreateSwapChain] - Start");
 
         var swapChainSupport = QuerySwapChainSupport(physicalDevice);
 
@@ -2462,7 +2278,7 @@ public class Hello
                 throw new Exception("Failed to get swap chain images! Error code: " + result);
             }
 
-            Console.WriteLine("[Hello::CreateSwapChain] - Swap chain images initialized. Count: " + imageCount);
+            Console.WriteLine("[HelloForm::CreateSwapChain] - Swap chain images initialized. Count: " + imageCount);
         }
         finally
         {
@@ -2474,13 +2290,13 @@ public class Hello
 
         CreateSwapChainImageViews();
 
-        Console.WriteLine("[Hello::CreateSwapChain] - End");
+        Console.WriteLine("[HelloForm::CreateSwapChain] - End");
     }
 
     private void CreateRenderPass()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateRenderPass] - Start");
+        Console.WriteLine("[HelloForm::CreateRenderPass] - Start");
 
         var colorAttachment = new VkAttachmentDescription
         {
@@ -2505,9 +2321,9 @@ public class Hello
             srcSubpass = VulkanConstants.VK_SUBPASS_EXTERNAL,
             dstSubpass = 0,
             srcStageMask = VkPipelineStageFlags.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            dstStageMask = VkPipelineStageFlags.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             srcAccessMask = 0,
-            dstAccessMask = VkAccessFlags.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+            dstStageMask = VkPipelineStageFlags.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            dstAccessMask = VkAccessFlags.VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VkAccessFlags.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
         };
 
         GCHandle colorAttachmentRefHandle = GCHandle.Alloc(colorAttachmentRef, GCHandleType.Pinned);
@@ -2558,13 +2374,13 @@ public class Hello
         }
 
         Console.WriteLine("Render pass created successfully.");
-        Console.WriteLine("[Hello::CreateRenderPass] - End");
+        Console.WriteLine("[HelloForm::CreateRenderPass] - End");
     }
 
     void CreateGraphicsPipeline()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateGraphicsPipeline] - Start");
+        Console.WriteLine("[HelloForm::CreateGraphicsPipeline] - Start");
 
         IntPtr vertShaderModule = LoadShaderModule("hello_vert.spv");
         IntPtr fragShaderModule = LoadShaderModule("hello_frag.spv");
@@ -2754,7 +2570,7 @@ public class Hello
     private void CreateCommandPool()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateCommandPool] - Start");
+        Console.WriteLine("[HelloForm::CreateCommandPool] - Start");
 
         QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
         if (!indices.GraphicsFamily.HasValue)
@@ -2778,13 +2594,13 @@ public class Hello
         }
 
         Console.WriteLine("Command pool created successfully: " + commandPool);
-        Console.WriteLine("[Hello::CreateCommandPool] - End");
+        Console.WriteLine("[HelloForm::CreateCommandPool] - End");
     }
 
     private void CreateDepthResources()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateDepthResources] - Start");
+        Console.WriteLine("[HelloForm::CreateDepthResources] - Start");
 
         VkFormat depthFormat = FindDepthFormat();
         CreateImage(swapChainExtent.width, swapChainExtent.height, depthFormat,
@@ -2795,13 +2611,13 @@ public class Hello
 
         depthImageView = CreateImageView(depthImage, depthFormat, VkImageAspectFlags.VK_IMAGE_ASPECT_DEPTH_BIT);
 
-        Console.WriteLine("[Hello::CreateDepthResources] - End");
+        Console.WriteLine("[HelloForm::CreateDepthResources] - End");
     }
 
     private void CreateFramebuffers()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateFramebuffers] - Start");
+        Console.WriteLine("[HelloForm::CreateFramebuffers] - Start");
 
         swapChainFramebuffers = new IntPtr[swapChainImageViews.Length];
 
@@ -2835,13 +2651,13 @@ public class Hello
             }
         }
 
-        Console.WriteLine("[Hello::CreateFramebuffers] - End");
+        Console.WriteLine("[HelloForm::CreateFramebuffers] - End");
     }
 
     private void CreateCommandBuffers()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateCommandBuffers] - Start");
+        Console.WriteLine("[HelloForm::CreateCommandBuffers] - Start");
 
         var allocInfo = new VkCommandBufferAllocateInfo
         {
@@ -2859,13 +2675,13 @@ public class Hello
 
         Console.WriteLine("Command buffer created successfully.");
 
-        Console.WriteLine("[Hello::CreateCommandBuffers] - End");
+        Console.WriteLine("[HelloForm::CreateCommandBuffers] - End");
     }
 
     public void CreateSyncObjects()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateSyncObjects] - Start");
+        Console.WriteLine("[HelloForm::CreateSyncObjects] - Start");
 
         Console.WriteLine("Creating sync objects for " + MAX_FRAMES_IN_FLIGHT + " frames");
 
@@ -2887,28 +2703,28 @@ public class Hello
 
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
         {
-            Console.WriteLine("[Hello::CreateSyncObjects] - Creating sync objects for frame " + (i + 1) + "/" + MAX_FRAMES_IN_FLIGHT);
+            Console.WriteLine("[HelloForm::CreateSyncObjects] - Creating sync objects for frame " + (i + 1) + "/" + MAX_FRAMES_IN_FLIGHT);
 
             VkResult semaphoreResult1 = vkCreateSemaphore(device, ref semaphoreInfo, IntPtr.Zero, out imageAvailableSemaphores[i]);
             VkResult semaphoreResult2 = vkCreateSemaphore(device, ref semaphoreInfo, IntPtr.Zero, out renderFinishedSemaphores[i]);
             if (semaphoreResult1 != VkResult.VK_SUCCESS || semaphoreResult2 != VkResult.VK_SUCCESS)
             {
-                Console.WriteLine("[Hello::CreateSyncObjects] - Failed to create semaphores for frame " + (i + 1));
+                Console.WriteLine("[HelloForm::CreateSyncObjects] - Failed to create semaphores for frame " + (i + 1));
                 throw new Exception("Failed to create semaphores! Results: imageAvailable=" + semaphoreResult1 + ", renderFinished=" + semaphoreResult2);
             }
-            Console.WriteLine("[Hello::CreateSyncObjects] - Semaphores created: imageAvailable=" + imageAvailableSemaphores[i] +", renderFinished=" + renderFinishedSemaphores[i]);
+            Console.WriteLine("[HelloForm::CreateSyncObjects] - Semaphores created: imageAvailable=" + imageAvailableSemaphores[i] +", renderFinished=" + renderFinishedSemaphores[i]);
 
             VkResult fenceResult = vkCreateFence(device, ref fenceInfo, IntPtr.Zero, out inFlightFences[i]);
             if (fenceResult != VkResult.VK_SUCCESS)
             {
-                Console.WriteLine("[Hello::CreateSyncObjects] - Failed to create fence for frame " + (i + 1));
+                Console.WriteLine("[HelloForm::CreateSyncObjects] - Failed to create fence for frame " + (i + 1));
                 throw new Exception("Failed to create fence! Result: " + fenceResult);
             }
-            Console.WriteLine("[Hello::CreateSyncObjects] - Fence created: inFlightFence=" + inFlightFences[i]);
+            Console.WriteLine("[HelloForm::CreateSyncObjects] - Fence created: inFlightFence=" + inFlightFences[i]);
         }
 
-        Console.WriteLine("[Hello::CreateSyncObjects] - All sync objects created successfully.");
-        Console.WriteLine("[Hello::CreateSyncObjects] - End");
+        Console.WriteLine("[HelloForm::CreateSyncObjects] - All sync objects created successfully.");
+        Console.WriteLine("[HelloForm::CreateSyncObjects] - End");
     }
 
     public void LoadVulkanFunctions()
@@ -2948,7 +2764,7 @@ public class Hello
     private bool IsDeviceSuitable(IntPtr device)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::IsDeviceSuitable] - Start");
+        Console.WriteLine("[HelloForm::IsDeviceSuitable] - Start");
 
         var indices = FindQueueFamilies(device);
 
@@ -2973,7 +2789,7 @@ public class Hello
     private bool CheckDeviceExtensionSupport(IntPtr device)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CheckDeviceExtensionSupport] - Start");
+        Console.WriteLine("[HelloForm::CheckDeviceExtensionSupport] - Start");
 
         uint extensionCount = 0;
 
@@ -3046,7 +2862,7 @@ public class Hello
     private SwapChainSupportDetails QuerySwapChainSupport(IntPtr device)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::QuerySwapChainSupport] - Start");
+        Console.WriteLine("[HelloForm::QuerySwapChainSupport] - Start");
 
         var details = new SwapChainSupportDetails();
         details.Initialize();
@@ -3095,14 +2911,14 @@ public class Hello
             }
         }
 
-        Console.WriteLine("[Hello::QuerySwapChainSupport] - End");
+        Console.WriteLine("[HelloForm::QuerySwapChainSupport] - End");
         return details;
     }
 
     private void CreateLogicalDevice()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateLogicalDevice] - Start");
+        Console.WriteLine("[HelloForm::CreateLogicalDevice] - Start");
 
         try
         {
@@ -3183,7 +2999,7 @@ public class Hello
             Marshal.FreeHGlobal(createInfo.pEnabledFeatures);
             Marshal.FreeHGlobal(queueCreateInfo.pQueuePriorities);
 
-            Console.WriteLine("[Hello::CreateLogicalDevice] - End");
+            Console.WriteLine("[HelloForm::CreateLogicalDevice] - End");
         }
         catch (Exception ex)
         {
@@ -3196,14 +3012,14 @@ public class Hello
     private void CleanupExtensions(IntPtr[] extensionPointers)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CleanupExtensions] - Start");
+        Console.WriteLine("[HelloForm::CleanupExtensions] - Start");
 
         foreach (var ptr in extensionPointers)
         {
             Marshal.FreeHGlobal(ptr);
         }
 
-        Console.WriteLine("[Hello::CleanupExtensions] - End");
+        Console.WriteLine("[HelloForm::CleanupExtensions] - End");
     }
 
     private QueueFamilyIndices FindQueueFamilies(IntPtr physicalDevice)
@@ -3246,28 +3062,28 @@ public class Hello
     private void CreateSwapChainImageViews()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateSwapChainImageViews] - Start");
+        Console.WriteLine("[HelloForm::CreateSwapChainImageViews] - Start");
 
         if (swapChainImages == null || swapChainImages.Length == 0)
         {
-            Console.WriteLine("[Hello::CreateSwapChainImageViews] - No swap chain images available!");
+            Console.WriteLine("[HelloForm::CreateSwapChainImageViews] - No swap chain images available!");
             throw new Exception("Swap chain images are null or empty.");
         }
 
         if (device == IntPtr.Zero)
         {
-            throw new Exception("[Hello::CreateSwapChainImageViews] - Vulkan device is not initialized.");
+            throw new Exception("[HelloForm::CreateSwapChainImageViews] - Vulkan device is not initialized.");
         }
 
-        Console.WriteLine("[Hello::CreateSwapChainImageViews] - Total swap chain images: " + swapChainImages.Length);
+        Console.WriteLine("[HelloForm::CreateSwapChainImageViews] - Total swap chain images: " + swapChainImages.Length);
         swapChainImageViews = new IntPtr[swapChainImages.Length];
 
         for (int i = 0; i < swapChainImages.Length; i++)
         {
             if (swapChainImages[i] == IntPtr.Zero)
             {
-                Console.WriteLine("[Hello::CreateSwapChainImageViews] - swapChainImages[" + i + "] is invalid.");
-                throw new Exception("[Hello::CreateSwapChainImageViews] - Invalid swap chain image at index " + i + ".");
+                Console.WriteLine("[HelloForm::CreateSwapChainImageViews] - swapChainImages[" + i + "] is invalid.");
+                throw new Exception("[HelloForm::CreateSwapChainImageViews] - Invalid swap chain image at index " + i + ".");
             }
 
             var createInfo = new VkImageViewCreateInfo
@@ -3293,7 +3109,7 @@ public class Hello
                 }
             };
 
-            Console.WriteLine("[Hello::CreateSwapChainImageViews] - Full VkImageViewCreateInfo for image " + i + ":");
+            Console.WriteLine("[HelloForm::CreateSwapChainImageViews] - Full VkImageViewCreateInfo for image " + i + ":");
             Console.WriteLine("    sType: " + createInfo.sType);
             Console.WriteLine("    image: " + createInfo.image);
             Console.WriteLine("    viewType: " + createInfo.viewType);
@@ -3316,21 +3132,21 @@ public class Hello
             VkResult result = vkCreateImageView(device, ref createInfo, IntPtr.Zero, out swapChainImageViews[i]);
             if (result != VkResult.VK_SUCCESS)
             {
-                Console.WriteLine("[Hello::CreateSwapChainImageViews] - vkCreateImageView failed for image " + i + ". VkResult: " + result);
-                throw new Exception("[Hello::CreateSwapChainImageViews] - Failed to create image view for image " + i + ". VkResult: " + result);
+                Console.WriteLine("[HelloForm::CreateSwapChainImageViews] - vkCreateImageView failed for image " + i + ". VkResult: " + result);
+                throw new Exception("[HelloForm::CreateSwapChainImageViews] - Failed to create image view for image " + i + ". VkResult: " + result);
             }
 
-            Console.WriteLine("[Hello::CreateSwapChainImageViews] - Image view created successfully for image " + i + ": " + swapChainImageViews[i]);
+            Console.WriteLine("[HelloForm::CreateSwapChainImageViews] - Image view created successfully for image " + i + ": " + swapChainImageViews[i]);
         }
 
-        Console.WriteLine("[Hello::CreateSwapChainImageViews] - Successfully created all image views.");
-        Console.WriteLine("[Hello::CreateSwapChainImageViews] - End");
+        Console.WriteLine("[HelloForm::CreateSwapChainImageViews] - Successfully created all image views.");
+        Console.WriteLine("[HelloForm::CreateSwapChainImageViews] - End");
     }
 
     private VkSurfaceFormatKHR ChooseSwapSurfaceFormat(VkSurfaceFormatKHR[] availableFormats)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::ChooseSwapSurfaceFormat] - Start");
+        Console.WriteLine("[HelloForm::ChooseSwapSurfaceFormat] - Start");
 
         Console.WriteLine("Available surface formats:");
         foreach (var format in availableFormats)
@@ -3345,21 +3161,21 @@ public class Hello
             {
                 Console.WriteLine("Selected format: " + format.format + ", ColorSpace: " + format.colorSpace);
 
-                Console.WriteLine("[Hello::ChooseSwapSurfaceFormat] - End");
+                Console.WriteLine("[HelloForm::ChooseSwapSurfaceFormat] - End");
                 return format;
             }
         }
 
         Console.WriteLine("Fallback format: " + availableFormats[0].format + ", ColorSpace: " + availableFormats[0].colorSpace);
 
-        Console.WriteLine("[Hello::ChooseSwapSurfaceFormat] - End");
+        Console.WriteLine("[HelloForm::ChooseSwapSurfaceFormat] - End");
         return availableFormats[0];
     }
 
     private VkPresentModeKHR ChooseSwapPresentMode(VkPresentModeKHR[] availablePresentModes)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::ChooseSwapPresentMode] - Start");
+        Console.WriteLine("[HelloForm::ChooseSwapPresentMode] - Start");
 
         foreach (var presentMode in availablePresentModes)
         {
@@ -3369,7 +3185,7 @@ public class Hello
             }
         }
 
-        Console.WriteLine("[Hello::ChooseSwapPresentMode] - End");
+        Console.WriteLine("[HelloForm::ChooseSwapPresentMode] - End");
 
         return VkPresentModeKHR.VK_PRESENT_MODE_FIFO_KHR;
     }
@@ -3377,11 +3193,11 @@ public class Hello
     private VkExtent2D ChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::ChooseSwapExtent] - Start");
+        Console.WriteLine("[HelloForm::ChooseSwapExtent] - Start");
 
         if (capabilities.currentExtent.width != uint.MaxValue)
         {
-            Console.WriteLine("[Hello::ChooseSwapExtent] - End");
+            Console.WriteLine("[HelloForm::ChooseSwapExtent] - End");
 
             return capabilities.currentExtent;
         }
@@ -3389,14 +3205,14 @@ public class Hello
         {
             VkExtent2D actualExtent = new VkExtent2D
             {
-                width = 800,  
-                height = 600
+	            width = (uint)this.ClientSize.Width,
+	            height = (uint)this.ClientSize.Height
             };
 
             actualExtent.width = Math.Max(capabilities.minImageExtent.width, Math.Min(capabilities.maxImageExtent.width, actualExtent.width));
             actualExtent.height = Math.Max(capabilities.minImageExtent.height, Math.Min(capabilities.maxImageExtent.height, actualExtent.height));
 
-            Console.WriteLine("[Hello::ChooseSwapExtent] - End");
+            Console.WriteLine("[HelloForm::ChooseSwapExtent] - End");
 
             return actualExtent;
         }
@@ -3426,7 +3242,7 @@ public class Hello
     private IntPtr LoadShaderModule(string filePath)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::LoadShaderModule] - Start");
+        Console.WriteLine("[HelloForm::LoadShaderModule] - Start");
         Console.WriteLine("filePath : " + filePath);
 
         byte[] code = File.ReadAllBytes(filePath);
@@ -3444,7 +3260,7 @@ public class Hello
             throw new Exception("Failed to create shader module for " + filePath);
         }
 
-        Console.WriteLine("[Hello::LoadShaderModule] - End");
+        Console.WriteLine("[HelloForm::LoadShaderModule] - End");
 
         return shaderModule;
     }
@@ -3454,7 +3270,7 @@ public class Hello
         out IntPtr image, out IntPtr imageMemory)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateImage] - Start");
+        Console.WriteLine("[HelloForm::CreateImage] - Start");
 
         var imageInfo = new VkImageCreateInfo
         {
@@ -3495,13 +3311,13 @@ public class Hello
 
         vkBindImageMemory(device, image, imageMemory, 0);
 
-        Console.WriteLine("[Hello::CreateImage] - End");
+        Console.WriteLine("[HelloForm::CreateImage] - End");
     }
 
     private uint FindMemoryType(uint typeFilter, VkMemoryPropertyFlags properties)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::FindMemoryType] - Start");
+        Console.WriteLine("[HelloForm::FindMemoryType] - Start");
 
         VkPhysicalDeviceMemoryProperties memProperties;
         vkGetPhysicalDeviceMemoryProperties(physicalDevice, out memProperties);
@@ -3511,19 +3327,19 @@ public class Hello
             if ((typeFilter & (1u << (int)i)) != 0 &&
                 (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
             {
-                Console.WriteLine("[Hello::FindMemoryType] - End");
+                Console.WriteLine("[HelloForm::FindMemoryType] - End");
                 return i;
             }
         }
 
-        Console.WriteLine("[Hello::FindMemoryType] - End");
+        Console.WriteLine("[HelloForm::FindMemoryType] - End");
         return 0;
     }
 
     private IntPtr CreateImageView(IntPtr image, VkFormat format, VkImageAspectFlags aspectFlags)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateImageView] - Start");
+        Console.WriteLine("[HelloForm::CreateImageView] - Start");
 
         var createInfo = new VkImageViewCreateInfo
         {
@@ -3554,7 +3370,7 @@ public class Hello
             throw new Exception("Failed to create image view!");
         }
 
-        Console.WriteLine("[Hello::CreateImageView] - End");
+        Console.WriteLine("[HelloForm::CreateImageView] - End");
 
         return imageView;
     }
@@ -3562,7 +3378,7 @@ public class Hello
     private void CreateCommandBuffer()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::CreateCommandBuffer] - Start");
+        Console.WriteLine("[HelloForm::CreateCommandBuffer] - Start");
 
         var allocInfo = new VkCommandBufferAllocateInfo
         {
@@ -3577,13 +3393,13 @@ public class Hello
             throw new Exception("Failed to allocate command buffers!");
         }
 
-        Console.WriteLine("[Hello::CreateCommandBuffer] - End");
+        Console.WriteLine("[HelloForm::CreateCommandBuffer] - End");
     }
 
     public void DrawFrame()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::DrawFrame] - Start");
+        Console.WriteLine("[HelloForm::DrawFrame] - Start");
 
         int currentFrame = frameIndex % MAX_FRAMES_IN_FLIGHT;
 
@@ -3608,7 +3424,8 @@ public class Hello
 
         var beginInfo = new VkCommandBufferBeginInfo
         {
-            sType = VkStructureType.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+            sType = VkStructureType.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            flags = VkCommandBufferUsageFlags.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT 
         };
 
         if (vkBeginCommandBuffer(commandBuffer, ref beginInfo) != VkResult.VK_SUCCESS)
@@ -3680,19 +3497,47 @@ public class Hello
 
         result = vkQueuePresentKHR(presentQueue, ref presentInfo);
 
-        if (result != VkResult.VK_SUCCESS)
+        if (result == VkResult.VK_ERROR_OUT_OF_DATE_KHR || result == VkResult.VK_SUBOPTIMAL_KHR)
+        {
+            RecreateSwapChain();
+            return;
+        }
+        else if (result != VkResult.VK_SUCCESS)
         {
             throw new Exception("Failed to present swap chain image!");
         }
 
         frameIndex++;
-        Console.WriteLine("[Hello::DrawFrame] - End");
+        Console.WriteLine("[HelloForm::DrawFrame] - End");
+    }
+
+    private void RecreateSwapChain()
+    {
+        foreach (var framebuffer in swapChainFramebuffers)
+        {
+            vkDestroyFramebuffer(device, framebuffer, IntPtr.Zero);
+        }
+
+        vkDestroyPipeline(device, graphicsPipeline, IntPtr.Zero);
+        vkDestroyPipelineLayout(device, pipelineLayout, IntPtr.Zero);
+
+        foreach (var imageView in swapChainImageViews)
+        {
+            vkDestroyImageView(device, imageView, IntPtr.Zero);
+        }
+
+        vkDestroySwapchainKHR(device, swapChain, IntPtr.Zero);
+
+        CreateSwapChain();
+        CreateSwapChainImageViews();
+        CreateGraphicsPipeline();
+        CreateFramebuffers();
     }
 
     public void Cleanup()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::Cleanup] - Start");
+        Console.WriteLine("[HelloForm::Cleanup] - Start");
 
         for (var i = 0; i < swapChainFramebuffers.Length; i++)
         {
@@ -3713,78 +3558,21 @@ public class Hello
         vkDestroySurfaceKHR(instance, surface, IntPtr.Zero);
         vkDestroyInstance(instance, IntPtr.Zero);
 
-        Console.WriteLine("[Hello::Cleanup] - End");
-    }
-
-    public void Run()
-    {
-        Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::Run] - Start");
-
-        Initialize();
-
-        MSG msg = new MSG();
-        bool isRunning = true;
-
-        try
-        {
-            Console.WriteLine("[Hello::Run] - Start frame loop");
-            while (isRunning)
-            {
-                Console.WriteLine("[Hello::Run] - Before frame processing");
-
-                while (PeekMessage(out msg, IntPtr.Zero, 0, 0, 1))
-                {
-                    if (msg.message == WM_QUIT)
-                    {
-                        isRunning = false;
-                        break;
-                    }
-
-                    TranslateMessage(ref msg);
-                    DispatchMessage(ref msg);
-                }
-
-                if (isRunning)
-                {
-                    DrawFrame();
-
-                    Console.WriteLine("[Hello::Run] - After frame processing");
-                }
-            }
-
-            Cleanup();
-
-            Console.WriteLine("[Hello::Run] - End");
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine("Exception in Run: " + e);
-        }
+        Console.WriteLine("[HelloForm::Cleanup] - End");
     }
 
     [STAThread]
-    public static int Main()
+    public static void Main()
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[Hello::Main] - Start");
+        Console.WriteLine("[HelloForm::Main] - Start");
 
-        var app = new Hello();
-        try
-        {
-            app.Run();
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e.Message);
-        }
+        HelloForm form = new HelloForm();
+        Application.Run(form);
 
-        Console.WriteLine("[Hello::Main] - End");
-
-        return 0;
+        Console.WriteLine("[HelloForm::Main] - End");
     }
-
 }
 "@
 Add-Type -Language CSharp -TypeDefinition $source -ReferencedAssemblies ("System.Drawing", "System.Windows.Forms" )
-[void][Hello]::Main()
+[void][HelloForm]::Main()
