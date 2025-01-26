@@ -749,7 +749,7 @@ class HelloForm : Form
         public byte[] extensionName; 
         public uint specVersion;
 
-        public VkExtensionProperties()
+        public void Initialize()
         {
             extensionName = new byte[256]; 
             specVersion = 0;
@@ -920,7 +920,7 @@ class HelloForm : Form
         public VkSurfaceFormatKHR[] formats;
         public VkPresentModeKHR[] presentModes;
 
-        public SwapChainSupportDetails()
+        public void Initialize()
         {
             capabilities = new VkSurfaceCapabilitiesKHR();
             formats = new VkSurfaceFormatKHR[0];
@@ -1861,6 +1861,30 @@ class HelloForm : Form
     [DllImport("vulkan-1.dll")]
     static extern void vkGetPhysicalDeviceMemoryProperties(IntPtr physicalDevice, out VkPhysicalDeviceMemoryProperties pMemoryProperties);
 
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern VkResult vkDeviceWaitIdle(IntPtr device);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroySemaphore(IntPtr device, IntPtr semaphore, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroyFence(IntPtr device, IntPtr fence, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroyDebugUtilsMessengerEXT(IntPtr instance, IntPtr messenger, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroyCommandPool(IntPtr device, IntPtr commandPool, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroyShaderModule(IntPtr device, IntPtr shaderModule, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkFreeMemory(IntPtr device, IntPtr memory, IntPtr pAllocator);
+
+    [DllImport("vulkan-1.dll", CallingConvention = CallingConvention.Winapi)]
+    public static extern void vkDestroyImage(IntPtr device, IntPtr image, IntPtr pAllocator);
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate uint VkDebugUtilsMessengerCallbackEXT(
         VkDebugUtilsMessageSeverityFlagsEXT messageSeverity,
@@ -1875,6 +1899,9 @@ class HelloForm : Form
         IntPtr pAllocator,
         out IntPtr pMessenger
     );
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate void vkDestroyDebugUtilsMessengerEXTFunc(IntPtr instance, IntPtr messenger, IntPtr pAllocator);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate VkBool32 DebugUtilsMessengerCallbackEXT(
@@ -1927,6 +1954,8 @@ class HelloForm : Form
     private bool isInitialized = false;
     private VkFormat swapChainImageFormat; 
     private VkExtent2D swapChainExtent;    
+    private IntPtr vertShaderModule;
+    private IntPtr fragShaderModule;
     private IntPtr graphicsQueue; 
     private IntPtr presentQueue; 
     private IntPtr pipelineLayout;
@@ -2068,13 +2097,16 @@ class HelloForm : Form
             var debugCreateInfo = new VkDebugUtilsMessengerCreateInfoEXT
             {
                 sType = VkStructureType.VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+                pNext = IntPtr.Zero,
+                flags = 0,
                 messageSeverity = VkDebugUtilsMessageSeverityFlagsEXT.VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
                                   VkDebugUtilsMessageSeverityFlagsEXT.VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
                                   VkDebugUtilsMessageSeverityFlagsEXT.VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
                 messageType = VkDebugUtilsMessageTypeFlagsEXT.VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                               VkDebugUtilsMessageTypeFlagsEXT.VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                               VkDebugUtilsMessageTypeFlagsEXT.VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-                pfnUserCallback = Marshal.GetFunctionPointerForDelegate(DebugCallback)
+                pfnUserCallback = Marshal.GetFunctionPointerForDelegate(DebugCallback),
+                pUserData = IntPtr.Zero
             };
 
             IntPtr[] layerPtrs = layers.Select(l => Marshal.StringToHGlobalAnsi(l)).ToArray();
@@ -2383,8 +2415,8 @@ class HelloForm : Form
         Console.WriteLine("----------------------------------------");
         Console.WriteLine("[HelloForm::CreateGraphicsPipeline] - Start");
 
-        IntPtr vertShaderModule = LoadShaderModule("hello_vert.spv");
-        IntPtr fragShaderModule = LoadShaderModule("hello_frag.spv");
+        vertShaderModule = LoadShaderModule("hello_vert.spv");
+        fragShaderModule = LoadShaderModule("hello_frag.spv");
 
         if (vertShaderModule == IntPtr.Zero || fragShaderModule == IntPtr.Zero)
         {
@@ -2865,6 +2897,7 @@ class HelloForm : Form
         Console.WriteLine("[HelloForm::QuerySwapChainSupport] - Start");
 
         var details = new SwapChainSupportDetails();
+        details.Initialize();
         var capResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, out details.capabilities);
         Console.WriteLine($"Capabilities result: {capResult}");
 
@@ -3087,6 +3120,8 @@ class HelloForm : Form
             var createInfo = new VkImageViewCreateInfo
             {
                 sType = VkStructureType.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                pNext = IntPtr.Zero,
+                flags = 0,
                 image = swapChainImages[i],
                 viewType = VkImageViewType.VK_IMAGE_VIEW_TYPE_2D,
                 format = swapChainImageFormat,
@@ -3526,29 +3561,56 @@ class HelloForm : Form
 
     public void Cleanup()
     {
-        Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[HelloForm::Cleanup] - Start");
+       Console.WriteLine("----------------------------------------");
+       Console.WriteLine("[HelloForm::Cleanup] - Start");
 
-        for (var i = 0; i < swapChainFramebuffers.Length; i++)
-        {
-            vkDestroyFramebuffer(device, swapChainFramebuffers[i], IntPtr.Zero);
-        }
+       vkDeviceWaitIdle(device);
 
-        vkDestroyPipeline(device, graphicsPipeline, IntPtr.Zero);
-        vkDestroyPipelineLayout(device, pipelineLayout, IntPtr.Zero);
-        vkDestroyRenderPass(device, renderPass, IntPtr.Zero);
+       vkDestroyImageView(device, depthImageView, IntPtr.Zero);
+       vkDestroyImage(device, depthImage, IntPtr.Zero);
+       vkFreeMemory(device, depthImageMemory, IntPtr.Zero); 
+   
+       for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+       {
+           vkDestroySemaphore(device, imageAvailableSemaphores[i], IntPtr.Zero);
+           vkDestroySemaphore(device, renderFinishedSemaphores[i], IntPtr.Zero);
+           vkDestroyFence(device, inFlightFences[i], IntPtr.Zero);
+       }
 
-        for (var i = 0; i < swapChainImageViews.Length; i++)
-        {
-            vkDestroyImageView(device, swapChainImageViews[i], IntPtr.Zero);
-        }
+       vkDestroyCommandPool(device, commandPool, IntPtr.Zero);
+       
+       vkDestroyShaderModule(device, fragShaderModule, IntPtr.Zero);
+       vkDestroyShaderModule(device, vertShaderModule, IntPtr.Zero);
 
-        vkDestroySwapchainKHR(device, swapChain, IntPtr.Zero);
-        vkDestroyDevice(device, IntPtr.Zero);
-        vkDestroySurfaceKHR(instance, surface, IntPtr.Zero);
-        vkDestroyInstance(instance, IntPtr.Zero);
+       for (var i = 0; i < swapChainFramebuffers.Length; i++)
+       {
+           vkDestroyFramebuffer(device, swapChainFramebuffers[i], IntPtr.Zero);
+       }
 
-        Console.WriteLine("[HelloForm::Cleanup] - End");
+       vkDestroyPipeline(device, graphicsPipeline, IntPtr.Zero);
+       vkDestroyPipelineLayout(device, pipelineLayout, IntPtr.Zero);
+       vkDestroyRenderPass(device, renderPass, IntPtr.Zero);
+
+       for (var i = 0; i < swapChainImages.Length; i++)
+       {
+           vkDestroyImageView(device, swapChainImageViews[i], IntPtr.Zero);
+       }
+
+       vkDestroySwapchainKHR(device, swapChain, IntPtr.Zero);
+       vkDestroyDevice(device, IntPtr.Zero);
+
+       if (debugMessenger != IntPtr.Zero)
+       {
+           var vkDestroyDebugUtilsMessengerEXTPtr = vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+           var vkDestroyDebugUtilsMessengerEXT = (vkDestroyDebugUtilsMessengerEXTFunc)Marshal.GetDelegateForFunctionPointer(
+               vkDestroyDebugUtilsMessengerEXTPtr, typeof(vkDestroyDebugUtilsMessengerEXTFunc));
+           vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, IntPtr.Zero);
+       }
+
+       vkDestroySurfaceKHR(instance, surface, IntPtr.Zero);
+       vkDestroyInstance(instance, IntPtr.Zero);
+
+       Console.WriteLine("[HelloForm::Cleanup] - End");
     }
 
     [STAThread]
