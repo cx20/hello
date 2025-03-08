@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Lissajous curve Using Three.js</title>
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cx20.github.io/gltf-test/libs/three.js/r174/build/three.module.js",
+        "three/examples/jsm/": "https://cx20.github.io/gltf-test/libs/three.js/r174/examples/jsm/"
+    }
+}
+</script>
+
+<script id="vs" type="x-shader/x-vertex">
+attribute vec3 position;
+attribute vec4 color;
+varying vec4 vColor;
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+
+void main() {
+    vColor = color;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 vColor;
+
+void main() {
+    gl_FragColor = vColor;
+}
+</script>
+
+<div id="container"></div>
+
+<script type="module">
+import * as THREE from 'three';
+
+let container;
+let camera, scene, renderer;
+let mesh;
+
+init();
+animate();
+
+function init() {
+    container = document.getElementById('container');
+    
+    // シーンの作成
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+    
+    // カメラの作成
+    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.z = 3;
+    
+    // リサージュ曲線の頂点データを生成
+    const MAX = 72;
+    const A = 2.0;
+    const B = 3.0;
+    
+    let positions = [];
+    let colors = [];
+    let indices = [];
+    
+    for (let i = 0; i <= MAX; i++) {
+        let x = 0.5 * Math.cos(2 * Math.PI * i / MAX * A);
+        let y = 0.5 * Math.sin(2 * Math.PI * i / MAX * B);
+        let z = 0.5 * Math.sin(2 * Math.PI * i / MAX * A);
+        
+        let r = x + 0.5;
+        let g = y + 0.5;
+        let b = z + 0.5;
+        
+        positions.push(x, y, z);
+        colors.push(r, g, b, 1.0);
+        indices.push(i);
+    }
+    
+    let geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4));
+    geometry.setIndex(indices);
+    
+    let material = new THREE.RawShaderMaterial({
+        vertexShader: document.getElementById('vs').textContent,
+        fragmentShader: document.getElementById('fs').textContent,
+        vertexColors: true
+    });
+    
+    mesh = new THREE.Line(geometry, material);
+    scene.add(mesh);
+    
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    container.appendChild(renderer.domElement);
+    
+    window.addEventListener('resize', onWindowResize);
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    
+    mesh.rotation.y -= Math.PI * 1.0 / 180.0;
+    
+    renderer.render(scene, camera);
+}
+</script>
+
+<a href="https://github.com/cx20/hello/blob/master/html5/threejs/3-1.lissajous.html" target="_blank">View Source</a>
+
+</body>
+</html>
