@@ -58,14 +58,14 @@
     .field public valuetype Hello/POINT pt
   } // end of class MSG
 
-  .class auto ansi sealed nested private WndProcDelgate
+  .class auto ansi sealed nested private WndProcDelegate
          extends [mscorlib]System.MulticastDelegate
   {
     .method public hidebysig specialname rtspecialname 
             instance void  .ctor(object 'object',
                                  native int 'method') runtime managed
     {
-    } // end of method WndProcDelgate::.ctor
+    } // end of method WndProcDelegate::.ctor
 
     .method public hidebysig newslot virtual 
             instance native int  Invoke(native int hWnd,
@@ -73,7 +73,7 @@
                                         native int wParam,
                                         native int lParam) runtime managed
     {
-    } // end of method WndProcDelgate::Invoke
+    } // end of method WndProcDelegate::Invoke
 
     .method public hidebysig newslot virtual 
             instance class [mscorlib]System.IAsyncResult 
@@ -84,21 +84,21 @@
                         class [mscorlib]System.AsyncCallback callback,
                         object 'object') runtime managed
     {
-    } // end of method WndProcDelgate::BeginInvoke
+    } // end of method WndProcDelegate::BeginInvoke
 
     .method public hidebysig newslot virtual 
             instance native int  EndInvoke(class [mscorlib]System.IAsyncResult result) runtime managed
     {
-    } // end of method WndProcDelgate::EndInvoke
+    } // end of method WndProcDelegate::EndInvoke
 
-  } // end of class WndProcDelgate
+  } // end of class WndProcDelegate
 
   .class sequential autochar sealed nested private beforefieldinit WNDCLASSEX
          extends [mscorlib]System.ValueType
   {
     .field public uint32 cbSize
     .field public uint32 style
-    .field public class Hello/WndProcDelgate lpfnWndProc
+    .field public class Hello/WndProcDelegate lpfnWndProc
     .field public int32 cbClsExtra
     .field public int32 cbWndExtra
     .field public native int hInstance
@@ -549,9 +549,9 @@
                                                    uint32,
                                                    native int,
                                                    native int)
-    IL_003c:  newobj     instance void Hello/WndProcDelgate::.ctor(object,
+    IL_003c:  newobj     instance void Hello/WndProcDelegate::.ctor(object,
                                                                    native int)
-    IL_0041:  stfld      class Hello/WndProcDelgate Hello/WNDCLASSEX::lpfnWndProc
+    IL_0041:  stfld      class Hello/WndProcDelegate Hello/WNDCLASSEX::lpfnWndProc
     IL_0046:  ldloca.s   V_1
     IL_0048:  ldc.i4.0
     IL_0049:  stfld      int32 Hello/WNDCLASSEX::cbClsExtra
