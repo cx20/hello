@@ -33,7 +33,7 @@ Public Class HelloWindow
     Const WM_DESTROY As Integer = &H2
     Const WM_PAINT As Integer = &HF
  
-    Delegate Function WndProcDelgate( _
+    Delegate Function WndProcDelegate( _
         ByVal hWnd As IntPtr, _
         ByVal Message As Integer, _
         ByVal wParam As IntPtr, _
@@ -60,7 +60,7 @@ Public Class HelloWindow
     Structure WNDCLASSEX
         Public cbSize As Integer
         Public style As Integer
-        Public lpfnWndProc As WndProcDelgate
+        Public lpfnWndProc As WndProcDelegate
         Public cbClsExtra As Integer
         Public cbWndExtra As Integer
         Public hInstance As IntPtr
@@ -213,7 +213,7 @@ Public Class HelloWindow
         With wcex
             .cbSize = Marshal.SizeOf(wcex)
             .style = CS_HREDRAW Or CS_VREDRAW
-            .lpfnWndProc = New WndProcDelgate(AddressOf WndProc)
+            .lpfnWndProc = New WndProcDelegate(AddressOf WndProc)
             .cbClsExtra = 0
             .cbWndExtra = 0
             .hInstance = hInstance

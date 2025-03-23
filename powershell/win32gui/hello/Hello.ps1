@@ -22,13 +22,13 @@ public class Hello
         public POINT pt;
     }
  
-    delegate IntPtr WndProcDelgate(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
+    delegate IntPtr WndProcDelegate(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
     struct WNDCLASSEX
     {
         public uint cbSize;
         public uint style;
-        public WndProcDelgate lpfnWndProc;
+        public WndProcDelegate lpfnWndProc;
         public Int32 cbClsExtra;
         public Int32 cbWndExtra;
         public IntPtr hInstance;
@@ -188,7 +188,7 @@ public class Hello
         WNDCLASSEX wcex = new WNDCLASSEX();
         wcex.cbSize = (uint)Marshal.SizeOf(wcex);
         wcex.style = CS_HREDRAW | CS_VREDRAW;
-        wcex.lpfnWndProc = new WndProcDelgate(WndProc);
+        wcex.lpfnWndProc = new WndProcDelegate(WndProc);
         wcex.cbClsExtra = 0;
         wcex.cbWndExtra = 0;
         wcex.hInstance = hInstance;

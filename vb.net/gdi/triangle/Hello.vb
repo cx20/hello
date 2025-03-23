@@ -16,13 +16,13 @@ Public Class HelloWindow
         Public pt As POINT
     End Structure
 
-    Delegate Function WndProcDelgate(hWnd As IntPtr, uMsg As UInteger, wParam As IntPtr, lParam As IntPtr) As IntPtr
+    Delegate Function WndProcDelegate(hWnd As IntPtr, uMsg As UInteger, wParam As IntPtr, lParam As IntPtr) As IntPtr
 
     <StructLayout(LayoutKind.Sequential, CharSet := CharSet.Auto)>
     Structure WNDCLASSEX
         Public cbSize As UInteger
         Public style As UInteger
-        Public lpfnWndProc As WndProcDelgate
+        Public lpfnWndProc As WndProcDelegate
         Public cbClsExtra As Integer
         Public cbWndExtra As Integer
         Public hInstance As IntPtr
@@ -248,7 +248,7 @@ Public Class HelloWindow
         Dim wcex As WNDCLASSEX = Nothing
         wcex.cbSize         = CUInt(Marshal.SizeOf(Of WNDCLASSEX)(wcex))
         wcex.style          = CS_HREDRAW Or CS_VREDRAW
-        wcex.lpfnWndProc    = New WndProcDelgate(AddressOf WndProc)
+        wcex.lpfnWndProc    = New WndProcDelegate(AddressOf WndProc)
         wcex.cbClsExtra     = 0
         wcex.cbWndExtra     = 0
         wcex.hInstance      = hINSTANCE
