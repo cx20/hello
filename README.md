@@ -198,8 +198,8 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 
 |Browser       |Version |Remarks                                          |
 |:-------------|:------:|:------------------------------------------------|
-|Chrome Stable |  136   |                                                 |
-|Chrome Canary |  138   |                                                 |
+|Chrome Stable |  137   |                                                 |
+|Chrome Canary |  139   |                                                 |
 
 |Language      |Version |Remarks                                          |
 |:-------------|:------:|:------------------------------------------------|
