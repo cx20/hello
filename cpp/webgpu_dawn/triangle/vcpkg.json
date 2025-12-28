@@ -1,0 +1,12 @@
+{
+  "name": "webgpu-triangle",
+  "version": "1.0.0",
+  "builtin-baseline": "84bab45d415d22042bd0b9081aea57f362da3f35",
+  "dependencies": [
+    {
+      "name": "dawn",
+      "features": ["d3d12"]
+    },
+    "glfw3"
+  ]
+}
