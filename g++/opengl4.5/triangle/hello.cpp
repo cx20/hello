@@ -5,6 +5,8 @@
 #include <GL/glx.h>
 
 #include <unistd.h>
+#include <stdio.h>
+#include <string.h>
 
 #define WINDOW_WIDTH    640
 #define WINDOW_HEIGHT   480
@@ -21,6 +23,9 @@
 #define GL_STATIC_DRAW                    0x88E4
 #define GL_FRAGMENT_SHADER                0x8B30
 #define GL_VERTEX_SHADER                  0x8B31
+#define GL_COMPILE_STATUS                 0x8B81
+#define GL_LINK_STATUS                    0x8B82
+#define GL_INFO_LOG_LENGTH                0x8B84
 
 typedef ptrdiff_t GLsizeiptr;
 typedef char GLchar;
@@ -38,6 +43,12 @@ typedef void (APIENTRYP PFNGLUSEPROGRAMPROC) (GLuint program);
 typedef GLint (APIENTRYP PFNGLGETATTRIBLOCATIONPROC) (GLuint program, const GLchar *name);
 typedef void (APIENTRYP PFNGLENABLEVERTEXATTRIBARRAYPROC) (GLuint index);
 typedef void (APIENTRYP PFNGLVERTEXATTRIBPOINTERPROC) (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer);
+typedef void (APIENTRYP PFNGLGENVERTEXARRAYSPROC) (GLsizei n, GLuint *arrays);
+typedef void (APIENTRYP PFNGLBINDVERTEXARRAYPROC) (GLuint array);
+typedef void (APIENTRYP PFNGLGETSHADERIVPROC) (GLuint shader, GLenum pname, GLint *params);
+typedef void (APIENTRYP PFNGLGETSHADERINFOLOGPROC) (GLuint shader, GLsizei bufSize, GLsizei *length, GLchar *infoLog);
+typedef void (APIENTRYP PFNGLGETPROGRAMIVPROC) (GLuint program, GLenum pname, GLint *params);
+typedef void (APIENTRYP PFNGLGETPROGRAMINFOLOGPROC) (GLuint program, GLsizei bufSize, GLsizei *length, GLchar *infoLog);
 
 PFNGLGENBUFFERSPROC               glGenBuffers;
 PFNGLBINDBUFFERPROC               glBindBuffer;
@@ -52,6 +63,12 @@ PFNGLUSEPROGRAMPROC               glUseProgram;
 PFNGLGETATTRIBLOCATIONPROC        glGetAttribLocation;
 PFNGLENABLEVERTEXATTRIBARRAYPROC  glEnableVertexAttribArray;
 PFNGLVERTEXATTRIBPOINTERPROC      glVertexAttribPointer;
+PFNGLGENVERTEXARRAYSPROC         glGenVertexArrays;
+PFNGLBINDVERTEXARRAYPROC         glBindVertexArray;
+PFNGLGETSHADERIVPROC             glGetShaderiv;
+PFNGLGETSHADERINFOLOGPROC        glGetShaderInfoLog;
+PFNGLGETPROGRAMIVPROC            glGetProgramiv;
+PFNGLGETPROGRAMINFOLOGPROC       glGetProgramInfoLog;
 
 extern bool Initialize(int w, int h);
 extern void InitOpenGLFunc();
@@ -61,7 +78,7 @@ extern void Render();
 extern void Shutdown();
 
 // Shader sources
-const GLchar* vertexSource = 
+const GLchar* vertexSource =
     "#version 450 core                            \n"
     "layout(location = 0) in  vec3 position;      \n"
     "layout(location = 1) in  vec3 color;         \n"
@@ -71,7 +88,7 @@ const GLchar* vertexSource =
     "  vColor = vec4(color, 1.0);                 \n"
     "  gl_Position = vec4(position, 1.0);         \n"
     "}                                            \n";
-const GLchar* fragmentSource = 
+const GLchar* fragmentSource =
     "#version 450 core                            \n"
     "in  vec4 vColor;                             \n"
     "out vec4 outColor;                           \n"
@@ -80,6 +97,7 @@ const GLchar* fragmentSource =
     "  outColor = vColor;                         \n"
     "}                                            \n";
 
+GLuint vao;
 GLuint vbo[2];
 GLint posAttrib;
 GLint colAttrib;
@@ -166,6 +184,7 @@ int main(int argc, char** argv) {
     XSetWMProtocols(display, window, &atomWmDeleteWindow, 1);
 
     GLXContext context = 0;
+
     context = glXCreateNewContext( display, bestFbc, GLX_RGBA_TYPE, 0, True );
     XSync( display, False );
 
@@ -235,10 +254,67 @@ void InitOpenGLFunc()
     glGetAttribLocation       = (PFNGLGETATTRIBLOCATIONPROC)       glXGetProcAddressARB((const GLubyte *)"glGetAttribLocation");
     glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC) glXGetProcAddressARB((const GLubyte *)"glEnableVertexAttribArray");
     glVertexAttribPointer     = (PFNGLVERTEXATTRIBPOINTERPROC)     glXGetProcAddressARB((const GLubyte *)"glVertexAttribPointer");
+    glGenVertexArrays         = (PFNGLGENVERTEXARRAYSPROC)         glXGetProcAddressARB((const GLubyte *)"glGenVertexArrays");
+    glBindVertexArray         = (PFNGLBINDVERTEXARRAYPROC)         glXGetProcAddressARB((const GLubyte *)"glBindVertexArray");
+    glGetShaderiv             = (PFNGLGETSHADERIVPROC)             glXGetProcAddressARB((const GLubyte *)"glGetShaderiv");
+    glGetShaderInfoLog        = (PFNGLGETSHADERINFOLOGPROC)        glXGetProcAddressARB((const GLubyte *)"glGetShaderInfoLog");
+    glGetProgramiv            = (PFNGLGETPROGRAMIVPROC)            glXGetProcAddressARB((const GLubyte *)"glGetProgramiv");
+    glGetProgramInfoLog       = (PFNGLGETPROGRAMINFOLOGPROC)       glXGetProcAddressARB((const GLubyte *)"glGetProgramInfoLog");
 }
 
 void InitShader()
 {
+    // Create and compile the vertex shader
+    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexSource, nullptr);
+    glCompileShader(vertexShader);
+    
+    // Check for vertex shader compile errors
+    GLint success;
+    GLchar infoLog[512];
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(vertexShader, 512, nullptr, infoLog);
+        printf("Vertex shader compilation failed: %s\n", infoLog);
+    } else {
+        printf("Vertex shader compiled successfully\n");
+    }
+
+    // Create and compile the fragment shader
+    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentSource, nullptr);
+    glCompileShader(fragmentShader);
+    
+    // Check for fragment shader compile errors
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(fragmentShader, 512, nullptr, infoLog);
+        printf("Fragment shader compilation failed: %s\n", infoLog);
+    } else {
+        printf("Fragment shader compiled successfully\n");
+    }
+
+    // Link the vertex and fragment shader into a shader program
+    GLuint shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+    
+    // Check for linking errors
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog);
+        printf("Program linking failed: %s\n", infoLog);
+    } else {
+        printf("Program linked successfully\n");
+    }
+    
+    glUseProgram(shaderProgram);
+    
+    // Create VAO
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+    
     glGenBuffers(2, vbo);
 
     GLfloat vertices[] = {
@@ -255,43 +331,25 @@ void InitShader()
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW);
-
-    // Create and compile the vertex shader
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexSource, nullptr);
-    glCompileShader(vertexShader);
-
-    // Create and compile the fragment shader
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentSource, nullptr);
-    glCompileShader(fragmentShader);
-
-    // Link the vertex and fragment shader into a shader program
-    GLuint shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    glUseProgram(shaderProgram);
     
     // Specify the layout of the vertex data
     posAttrib = glGetAttribLocation(shaderProgram, "position");
     glEnableVertexAttribArray(posAttrib);
+    glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW);
+    
     colAttrib = glGetAttribLocation(shaderProgram, "color");
     glEnableVertexAttribArray(colAttrib);
+    glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    
+    printf("Initialization complete\n");
 }
 
 void Render() {
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-    glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-    glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    
     glClear(GL_COLOR_BUFFER_BIT);
+    glBindVertexArray(vao);
 
     // Draw a triangle from the 3 vertices
     glDrawArrays(GL_TRIANGLES, 0, 3);
