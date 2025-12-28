@@ -23,23 +23,18 @@
 #define GL_STATIC_DRAW                    0x88E4
 #define GL_FRAGMENT_SHADER                0x8B30
 #define GL_VERTEX_SHADER                  0x8B31
+
 #ifndef GLX_CONTEXT_MAJOR_VERSION_ARB
 #define GLX_CONTEXT_MAJOR_VERSION_ARB     0x2091
 #endif
 #ifndef GLX_CONTEXT_MINOR_VERSION_ARB
 #define GLX_CONTEXT_MINOR_VERSION_ARB     0x2092
 #endif
-#ifndef GLX_CONTEXT_FLAGS_ARB
-#define GLX_CONTEXT_FLAGS_ARB             0x2094
-#endif
 #ifndef GLX_CONTEXT_PROFILE_MASK_ARB
 #define GLX_CONTEXT_PROFILE_MASK_ARB      0x9126
 #endif
 #ifndef GLX_CONTEXT_CORE_PROFILE_BIT_ARB
 #define GLX_CONTEXT_CORE_PROFILE_BIT_ARB  0x00000001
-#endif
-#ifndef GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB
-#define GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB 0x0002
 #endif
 
 typedef ptrdiff_t GLsizeiptr;
@@ -60,7 +55,7 @@ typedef void (APIENTRYP PFNGLENABLEVERTEXATTRIBARRAYPROC) (GLuint index);
 typedef void (APIENTRYP PFNGLVERTEXATTRIBPOINTERPROC) (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer);
 typedef void (APIENTRYP PFNGLGENVERTEXARRAYSPROC) (GLsizei n, GLuint *arrays);
 typedef void (APIENTRYP PFNGLBINDVERTEXARRAYPROC) (GLuint array);
-typedef GLXContext (*PFNGLXCREATECONTEXTATTRIBSARBPROC)(Display* dpy, GLXFBConfig config, GLXContext share_context, Bool direct, const int *attrib_list);
+typedef GLXContext (APIENTRYP PFNGLXCREATECONTEXTATTRIBSARBPROC) (Display *dpy, GLXFBConfig config, GLXContext share_context, Bool direct, const int *attrib_list);
 
 PFNGLGENBUFFERSPROC               glGenBuffers;
 PFNGLBINDBUFFERPROC               glBindBuffer;
@@ -87,7 +82,7 @@ extern void Render();
 extern void Shutdown();
 
 // Shader sources
-const GLchar* vertexSource = 
+const GLchar* vertexSource =
     "#version 450 core                            \n"
     "layout(location = 0) in  vec3 position;      \n"
     "layout(location = 1) in  vec3 color;         \n"
@@ -97,7 +92,7 @@ const GLchar* vertexSource =
     "  vColor = vec4(color, 1.0);                 \n"
     "  gl_Position = vec4(position, 1.0);         \n"
     "}                                            \n";
-const GLchar* fragmentSource = 
+const GLchar* fragmentSource =
     "#version 450 core                            \n"
     "in  vec4 vColor;                             \n"
     "out vec4 outColor;                           \n"
@@ -107,7 +102,8 @@ const GLchar* fragmentSource =
     "}                                            \n";
 
 GLuint vbo[2];
-GLuint vao;
+GLuint vao = 0;
+GLuint shaderProgram = 0;
 GLint posAttrib;
 GLint colAttrib;
 
@@ -192,14 +188,12 @@ int main(int argc, char** argv) {
     Atom atomWmDeleteWindow = XInternAtom(display, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(display, window, &atomWmDeleteWindow, 1);
 
-    glXCreateContextAttribsARB = (PFNGLXCREATECONTEXTATTRIBSARBPROC)
-        glXGetProcAddressARB((const GLubyte *)"glXCreateContextAttribsARB");
+    glXCreateContextAttribsARB = (PFNGLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddressARB((const GLubyte *)"glXCreateContextAttribsARB");
 
-    const int contextAttribs[] = {
+    int contextAttribs[] = {
         GLX_CONTEXT_MAJOR_VERSION_ARB, 4,
         GLX_CONTEXT_MINOR_VERSION_ARB, 5,
-        GLX_CONTEXT_PROFILE_MASK_ARB,  GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
-        GLX_CONTEXT_FLAGS_ARB,         GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
+        GLX_CONTEXT_PROFILE_MASK_ARB , GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
         None
     };
 
@@ -207,6 +201,7 @@ int main(int argc, char** argv) {
     if (glXCreateContextAttribsARB) {
         context = glXCreateContextAttribsARB(display, bestFbc, 0, True, contextAttribs);
     }
+
     if (!context) {
         context = glXCreateNewContext(display, bestFbc, GLX_RGBA_TYPE, 0, True);
     }
@@ -285,9 +280,9 @@ void InitOpenGLFunc()
 void InitShader()
 {
     glGenVertexArrays(1, &vao);
-    glGenBuffers(2, vbo);
-
     glBindVertexArray(vao);
+
+    glGenBuffers(2, vbo);
 
     GLfloat vertices[] = {
           0.0f,  0.5f, 0.0f,
@@ -318,7 +313,7 @@ void InitShader()
     glCompileShader(fragmentShader);
 
     // Link the vertex and fragment shader into a shader program
-    GLuint shaderProgram = glCreateProgram();
+    shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
@@ -327,21 +322,25 @@ void InitShader()
     // Specify the layout of the vertex data
     posAttrib = glGetAttribLocation(shaderProgram, "position");
     glEnableVertexAttribArray(posAttrib);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+    glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 0, (const void *)0);
 
     colAttrib = glGetAttribLocation(shaderProgram, "color");
     glEnableVertexAttribArray(colAttrib);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+    glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 0, (const void *)0);
+
+    glBindVertexArray(0);
 }
 
 void Render() {
+    glUseProgram(shaderProgram);
     glBindVertexArray(vao);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-    glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
-    
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-    glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
-    
+
     glClear(GL_COLOR_BUFFER_BIT);
 
     // Draw a triangle from the 3 vertices
     glDrawArrays(GL_TRIANGLES, 0, 3);
+
+    glBindVertexArray(0);
 }
