@@ -205,10 +205,10 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 
 |Language      |Version |Remarks                                          |
 |:-------------|:------:|:------------------------------------------------|
-|C/C++         |19.40   |Visual Studio 2022 Developer Command Prompt      |
-|C#            | 4.10   |Visual Studio 2022 Developer Command Prompt      |
-|VB.NET        | 4.10   |Visual Studio 2022 Developer Command Prompt      |
-|JScript.NET   |14.0    |Visual Studio 2022 Developer Command Prompt      |
+|C/C++         |19.50   |Visual Studio 2026 Developer Command Prompt      |
+|C#            | 5.0    |Visual Studio 2026 Developer Command Prompt      |
+|VB.NET        | 5.0    |Visual Studio 2026 Developer Command Prompt      |
+|JScript.NET   |14.0    |Visual Studio 2026 Developer Command Prompt      |
 |D             | 2.108.1|                                                 |
 |Go            | 1.20.1 |                                                 |
 |Python        | 3.12   |                                                 |
