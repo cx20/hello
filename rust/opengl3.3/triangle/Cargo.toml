@@ -1,0 +1,14 @@
+[package]
+name = "hello"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies.gl]
+version = "0.14"
+
+[dependencies.winapi]
+version = "0.3"
+features = ["winuser", "wingdi", "libloaderapi", "windef", "minwindef", "winnt"]
+
+[profile.release]
+opt-level = 3
