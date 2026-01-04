@@ -212,7 +212,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |D             | 2.108.1|                                                 |
 |Go            | 1.20.1 |                                                 |
 |Python        | 3.12   |                                                 |
-|Rust          | 1.85   |When using WebGPU, use "rustup default nightly". |
+|Rust          | 1.94   |When using WebGPU, use "rustup default nightly". |
 |Zig           | 0.13   |                                                 |
 |Java          | 1.8.0  |                                                 |
 |Emscripten    | 3.1.73 |emsdk\emcmdprompt.bat                            |
