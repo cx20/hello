@@ -23,8 +23,7 @@ void main()
 }`;
 
 immutable string fragmentSource = `
-precision mediump float;
-varying   vec4 vColor;
+varying vec4 vColor;
 void main()
 {
     gl_FragColor = vColor;
@@ -118,18 +117,47 @@ void InitShader()
     auto vs = vertexSource.toStringz;
     glShaderSource(vertexShader, 1, &vs, null);
     glCompileShader(vertexShader);
+    
+    // Check vertex shader compilation
+    GLint status;
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &status);
+    if (status != GL_TRUE) {
+        import core.sys.windows.winuser : MessageBoxA, MB_OK, MB_ICONERROR;
+        char[512] buffer;
+        glGetShaderInfoLog(vertexShader, 512, null, buffer.ptr);
+        MessageBoxA(null, buffer.ptr, "Vertex Shader Error", MB_OK | MB_ICONERROR);
+    }
 
     // Create and compile the fragment shader
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     auto fs = fragmentSource.toStringz;
     glShaderSource(fragmentShader, 1, &fs, null);
     glCompileShader(fragmentShader);
+    
+    // Check fragment shader compilation
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &status);
+    if (status != GL_TRUE) {
+        import core.sys.windows.winuser : MessageBoxA, MB_OK, MB_ICONERROR;
+        char[512] buffer;
+        glGetShaderInfoLog(fragmentShader, 512, null, buffer.ptr);
+        MessageBoxA(null, buffer.ptr, "Fragment Shader Error", MB_OK | MB_ICONERROR);
+    }
 
     // Link the vertex and fragment shader into a shader program
     GLuint shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
+    
+    // Check program linking
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &status);
+    if (status != GL_TRUE) {
+        import core.sys.windows.winuser : MessageBoxA, MB_OK, MB_ICONERROR;
+        char[512] buffer;
+        glGetProgramInfoLog(shaderProgram, 512, null, buffer.ptr);
+        MessageBoxA(null, buffer.ptr, "Program Link Error", MB_OK | MB_ICONERROR);
+    }
+    
     glUseProgram(shaderProgram);
 
     // Specify the layout of the vertex data

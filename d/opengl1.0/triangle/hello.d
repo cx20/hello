@@ -39,7 +39,7 @@ int myWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int
     string appName = "OpenGLTriangle";
     WNDCLASS wndclass = {};
     wndclass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    wndclass.lpfnWndProc = &WndProc;
+    wndclass.lpfnWndProc = &WndProc; // OK
     wndclass.hInstance = hInstance;
     wndclass.lpszClassName = appName.toUTF16z;
 
@@ -66,18 +66,19 @@ int myWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
-    return msg.wParam;
+    return cast(int)msg.wParam;
 }
 
 extern (Windows)
-LRESULT WndProc(void* hwnd, uint message, uint wParam, int lParam) nothrow {
+LRESULT WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) nothrow {
     static HGLRC hglrc;
     static HDC hdc;
 
     try {
         switch (message) {
             case WM_CREATE:
-                hdc = GetDC(cast(HWND) hwnd);
+                hdc = GetDC(hwnd);
+
                 PIXELFORMATDESCRIPTOR pfd = PIXELFORMATDESCRIPTOR(
                     nSize: PIXELFORMATDESCRIPTOR.sizeof,
                     nVersion: 1,
@@ -87,8 +88,10 @@ LRESULT WndProc(void* hwnd, uint message, uint wParam, int lParam) nothrow {
                     cDepthBits: 24,
                     iLayerType: PFD_MAIN_PLANE
                 );
+
                 int format = ChoosePixelFormat(hdc, &pfd);
                 SetPixelFormat(hdc, format, &pfd);
+
                 hglrc = wglCreateContext(hdc);
                 wglMakeCurrent(hdc, hglrc);
                 return 0;
@@ -96,21 +99,21 @@ LRESULT WndProc(void* hwnd, uint message, uint wParam, int lParam) nothrow {
             case WM_PAINT:
                 render();
                 SwapBuffers(hdc);
-                ValidateRect(cast(HWND) hwnd, null);
+                ValidateRect(hwnd, null);
                 return 0;
 
             case WM_DESTROY:
                 wglMakeCurrent(null, null);
                 wglDeleteContext(hglrc);
-                ReleaseDC(cast(HWND) hwnd, hdc);
+                ReleaseDC(hwnd, hdc);
                 PostQuitMessage(0);
                 return 0;
 
             default:
-                return DefWindowProc(cast(HWND) hwnd, message, wParam, lParam);
+                return DefWindowProc(hwnd, message, wParam, lParam);
         }
     } catch (Throwable) {
-        return DefWindowProc(cast(HWND) hwnd, message, wParam, lParam);
+        return DefWindowProc(hwnd, message, wParam, lParam);
     }
 }
 

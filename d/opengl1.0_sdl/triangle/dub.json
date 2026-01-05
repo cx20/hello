@@ -11,6 +11,7 @@
 	},
 	"versions": [
 		"SDL_2010",
+		"GL_11",
 		"GL_AllowDeprecated"
 	]
 }

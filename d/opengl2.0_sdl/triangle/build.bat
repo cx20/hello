@@ -1,1 +1,1 @@
-dub build --arch=x86_mscoff
+dub build --arch=x86_64

@@ -209,7 +209,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |C#            | 5.0    |Visual Studio 2026 Developer Command Prompt      |
 |VB.NET        | 5.0    |Visual Studio 2026 Developer Command Prompt      |
 |JScript.NET   |14.0    |Visual Studio 2026 Developer Command Prompt      |
-|D             | 2.108.1|                                                 |
+|D             | 2.111.0|                                                 |
 |Go            | 1.20.1 |                                                 |
 |Python        | 3.12   |                                                 |
 |Rust          | 1.94   |When using WebGPU, use "rustup default nightly". |
