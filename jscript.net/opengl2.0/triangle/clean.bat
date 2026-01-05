@@ -1,0 +1,2 @@
+del hello.exe
+

@@ -524,6 +524,12 @@ function RegisterWindowClass(hInstance: IntPtr): Boolean {
   return success;
 }
 
+function IsWindow(hWnd:IntPtr): Boolean {
+  var paramTypes:Type[] = [Type.GetType("System.IntPtr")];
+  var parameters:Object[] = [hWnd];
+  return InvokeWin32("user32.dll", Type.GetType("System.Boolean"), "IsWindow", paramTypes, parameters);
+}
+
 // Main entry point
 function Main(): void {
   DebugLog("Main started");
@@ -572,24 +578,26 @@ function Main(): void {
 
   DebugLog("Entering message loop");
   while (!bQuit) {
-    if (PeekMessage(msgPtr, hWnd, 0, 0, PM_REMOVE)) {
+    if (PeekMessage(msgPtr, IntPtr.Zero, 0, 0, PM_REMOVE)) {
       var msg = GetMessageIDFromMSG(msgPtr);
       if (msg == WM_QUIT) {
         DebugLog("WM_QUIT received -> exiting loop");
         bQuit = true;
-      } else if (msg == WM_DESTROY) {
-        DebugLog("WM_DESTROY detected -> PostQuitMessage(0)");
-        PostQuitMessage(0);
       } else {
         TranslateMessage(msgPtr);
         DispatchMessage(msgPtr);
       }
     } else {
-      glClearColor(0.0, 0.0, 0.2, 1.0);
-      glClear(GL_COLOR_BUFFER_BIT);
-      DrawTriangleVertexArray();
-      SwapBuffers(hDC);
-      Sleep(10);
+      if (!IsWindow(hWnd)) {
+        DebugLog("Window destroyed -> posting quit message");
+        PostQuitMessage(0);
+      } else {
+        glClearColor(0.0, 0.0, 0.2, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT);
+        DrawTriangleVertexArray();
+        SwapBuffers(hDC);
+        Sleep(16);
+      }
     }
   }
 
