@@ -1,6 +1,7 @@
 package main
 
 import (
+    "runtime"
     "syscall"
     "unsafe"
 )
@@ -8,9 +9,9 @@ import (
 const className = "OpenGLClass"
 
 const (
-    CW_USEDEFAULT int32 = -2147483648 // 0x80000000 as signed int32
-    WS_OVERLAPPEDWINDOW   = 0x00CF0000
-    SW_SHOW               = 5
+    SW_USE_DEFAULT      = 0x80000000
+    WS_VISIBLE          = 0x10000000
+    WS_OVERLAPPEDWINDOW = 0x00CF0000
 
     WM_DESTROY = 0x0002
     WM_CLOSE   = 0x0010
@@ -20,8 +21,7 @@ const (
 
     CS_OWNDC     = 0x0020
     IDC_ARROW    = 32512
-    IDI_APPLICATION = 32512
-    BLACK_BRUSH  = 4
+    COLOR_WINDOW = 5
 
     PFD_DRAW_TO_WINDOW = 0x00000004
     PFD_SUPPORT_OPENGL = 0x00000020
@@ -48,18 +48,18 @@ type MSG struct {
 }
 
 type WNDCLASSEXW struct {
-    cbSize        uint32
-    style         uint32
-    lpfnWndProc   uintptr
-    cbClsExtra    int32
-    cbWndExtra    int32
-    hInstance     syscall.Handle
-    hIcon         syscall.Handle
-    hCursor       syscall.Handle
-    hbrBackground syscall.Handle
-    lpszMenuName  *uint16
-    lpszClassName *uint16
-    hIconSm       syscall.Handle
+    size       uint32
+    style      uint32
+    wndProc    uintptr
+    clsExtra   int32
+    wndExtra   int32
+    instance   syscall.Handle
+    icon       syscall.Handle
+    cursor     syscall.Handle
+    background syscall.Handle
+    menuName   *uint16
+    className  *uint16
+    iconSm     syscall.Handle
 }
 
 type PIXELFORMATDESCRIPTOR struct {
@@ -97,44 +97,42 @@ var (
 )
 
 func main() {
+    runtime.LockOSThread()
+
     instance := getModuleHandle()
+    cursor := loadCursorResource(IDC_ARROW)
 
-    wcex := WNDCLASSEXW{
-        style:         CS_OWNDC,
-        lpfnWndProc:   syscall.NewCallback(wndProc),
-        hInstance:     instance,
-        hIcon:         loadIcon(0, IDI_APPLICATION),
-        hCursor:       loadCursor(0, IDC_ARROW),
-        hbrBackground: getStockObject(BLACK_BRUSH),
-        lpszClassName: syscall.StringToUTF16Ptr(className),
-        hIconSm:       loadIcon(0, IDI_APPLICATION),
+    wcx := WNDCLASSEXW{
+        style:      CS_OWNDC,
+        wndProc:    syscall.NewCallback(wndProc),
+        instance:   instance,
+        cursor:     cursor,
+        background: COLOR_WINDOW + 1,
+        className:  syscall.StringToUTF16Ptr(className),
     }
-    wcex.cbSize = uint32(unsafe.Sizeof(wcex))
+    wcx.size = uint32(unsafe.Sizeof(wcx))
 
-    if registerClassEx(&wcex) == 0 {
-        return
-    }
+    registerClassEx(&wcx)
 
-    hwnd := createWindowEx(
-        0,
+    hwnd := createWindow(
         className,
         "Hello, OpenGL 1.0 (Go) World!",
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
+        SW_USE_DEFAULT,
+        SW_USE_DEFAULT,
         640,
         480,
         0,
         0,
         instance,
-        0,
     )
 
-    showWindow(hwnd, SW_SHOW)
+    showWindow(hwnd, 5) // SW_SHOW = 5
 
     hdc = getDC(hwnd)
     hglrc = enableOpenGL(hdc)
 
+    // PeekMessage を使ったメッセージループ（C言語版と同様）
     bQuit := false
     for !bQuit {
         msg := MSG{}
@@ -161,15 +159,15 @@ func main() {
     destroyWindow(hwnd)
 }
 
-func wndProc(hwnd syscall.Handle, uMsg uint32, wParam, lParam uintptr) uintptr {
-    switch uMsg {
+func wndProc(hwnd syscall.Handle, msg uint32, wparam, lparam uintptr) uintptr {
+    switch msg {
     case WM_CLOSE:
         postQuitMessage(0)
         return 0
     case WM_DESTROY:
         return 0
     default:
-        return defWindowProc(hwnd, uMsg, wParam, lParam)
+        return defWindowProc(hwnd, msg, wparam, lparam)
     }
 }
 
@@ -223,7 +221,6 @@ var (
     procDispatchMessage = user32.NewProc("DispatchMessageW")
     procPeekMessageW    = user32.NewProc("PeekMessageW")
     procLoadCursorW     = user32.NewProc("LoadCursorW")
-    procLoadIconW       = user32.NewProc("LoadIconW")
     procPostQuitMessage = user32.NewProc("PostQuitMessage")
     procRegisterClassEx = user32.NewProc("RegisterClassExW")
     procShowWindow      = user32.NewProc("ShowWindow")
@@ -232,9 +229,9 @@ var (
     procReleaseDC       = user32.NewProc("ReleaseDC")
 )
 
-func createWindowEx(exStyle uint32, className, windowName string, style uint32, x, y, width, height int32, parent, menu, instance syscall.Handle, param uintptr) syscall.Handle {
+func createWindow(className, windowName string, style uint32, x, y, width, height uint32, parent, menu, instance syscall.Handle) syscall.Handle {
     ret, _, _ := procCreateWindowExW.Call(
-        uintptr(exStyle),
+        uintptr(0),
         uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(className))),
         uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(windowName))),
         uintptr(style),
@@ -245,13 +242,13 @@ func createWindowEx(exStyle uint32, className, windowName string, style uint32, 
         uintptr(parent),
         uintptr(menu),
         uintptr(instance),
-        param,
+        uintptr(0),
     )
     return syscall.Handle(ret)
 }
 
-func defWindowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr {
-    ret, _, _ := procDefWindowProcW.Call(uintptr(hwnd), uintptr(msg), wParam, lParam)
+func defWindowProc(hwnd syscall.Handle, msg uint32, wparam, lparam uintptr) uintptr {
+    ret, _, _ := procDefWindowProcW.Call(uintptr(hwnd), uintptr(msg), wparam, lparam)
     return ret
 }
 
@@ -259,9 +256,8 @@ func destroyWindow(hwnd syscall.Handle) {
     procDestroyWindow.Call(uintptr(hwnd))
 }
 
-func registerClassEx(wcex *WNDCLASSEXW) uint16 {
-    ret, _, _ := procRegisterClassEx.Call(uintptr(unsafe.Pointer(wcex)))
-    return uint16(ret)
+func registerClassEx(wcx *WNDCLASSEXW) {
+    procRegisterClassEx.Call(uintptr(unsafe.Pointer(wcx)))
 }
 
 func showWindow(hwnd syscall.Handle, nCmdShow int32) {
@@ -276,13 +272,8 @@ func dispatchMessage(msg *MSG) {
     procDispatchMessage.Call(uintptr(unsafe.Pointer(msg)))
 }
 
-func loadCursor(hInstance syscall.Handle, cursorName uint32) syscall.Handle {
-    ret, _, _ := procLoadCursorW.Call(uintptr(hInstance), uintptr(cursorName))
-    return syscall.Handle(ret)
-}
-
-func loadIcon(hInstance syscall.Handle, iconName uint32) syscall.Handle {
-    ret, _, _ := procLoadIconW.Call(uintptr(hInstance), uintptr(iconName))
+func loadCursorResource(cursorName uint32) syscall.Handle {
+    ret, _, _ := procLoadCursorW.Call(uintptr(0), uintptr(uint16(cursorName)))
     return syscall.Handle(ret)
 }
 
@@ -316,7 +307,6 @@ var (
     procChoosePixelFormat = gdi32.NewProc("ChoosePixelFormat")
     procSetPixelFormat    = gdi32.NewProc("SetPixelFormat")
     procSwapBuffers       = gdi32.NewProc("SwapBuffers")
-    procGetStockObject    = gdi32.NewProc("GetStockObject")
 )
 
 func choosePixelFormat(hdc syscall.Handle, pfd *PIXELFORMATDESCRIPTOR) int32 {
@@ -330,11 +320,6 @@ func setPixelFormat(hdc syscall.Handle, format int32, pfd *PIXELFORMATDESCRIPTOR
 
 func swapBuffers(hdc syscall.Handle) {
     procSwapBuffers.Call(uintptr(hdc))
-}
-
-func getStockObject(fnObject int32) syscall.Handle {
-    ret, _, _ := procGetStockObject.Call(uintptr(fnObject))
-    return syscall.Handle(ret)
 }
 
 // ===== opengl32.dll =====
