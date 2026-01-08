@@ -1,6 +1,7 @@
 package main
 
 import (
+    "runtime"
     "syscall"
     "unsafe"
 )
@@ -14,11 +15,11 @@ const (
 
     WM_DESTROY = 0x0002
     WM_CLOSE   = 0x0010
-    WM_PAINT   = 0x000F
     WM_QUIT    = 0x0012
 
     PM_REMOVE = 0x0001
 
+    CS_OWNDC     = 0x0020
     IDC_ARROW    = 32512
     COLOR_WINDOW = 5
 
@@ -29,9 +30,10 @@ const (
     PFD_MAIN_PLANE     = 0
 
     GL_COLOR_BUFFER_BIT = 0x00004000
-    GL_TRIANGLES        = 0x0004
-    GL_MODELVIEW        = 0x1700
-    GL_PROJECTION       = 0x1701
+    GL_TRIANGLE_STRIP   = 0x0005
+    GL_FLOAT            = 0x1406
+    GL_COLOR_ARRAY      = 0x8076
+    GL_VERTEX_ARRAY     = 0x8074
 )
 
 type POINT struct {
@@ -97,13 +99,14 @@ var (
     hglrc syscall.Handle
 )
 
-var mainHwnd syscall.Handle
-
 func main() {
+    runtime.LockOSThread()
+
     instance := getModuleHandle()
     cursor := loadCursorResource(IDC_ARROW)
 
     wcx := WNDCLASSEXW{
+        style:      CS_OWNDC,
         wndProc:    syscall.NewCallback(wndProc),
         instance:   instance,
         cursor:     cursor,
@@ -114,10 +117,10 @@ func main() {
 
     registerClassEx(&wcx)
 
-    mainHwnd = createWindow(
+    hwnd := createWindow(
         className,
         "Hello, OpenGL 1.1 (Go) World!",
-        WS_VISIBLE|WS_OVERLAPPEDWINDOW,
+        WS_OVERLAPPEDWINDOW,
         SW_USE_DEFAULT,
         SW_USE_DEFAULT,
         640,
@@ -127,83 +130,95 @@ func main() {
         instance,
     )
 
-    initOpenGL(mainHwnd)
+    showWindow(hwnd, 5) // SW_SHOW = 5
 
-    // GetMessage を使ったメッセージループ
-    for {
-        msg := MSG{}
-        ret := getMessage(&msg, 0, 0, 0)
-        if ret == 0 || ret == -1 {
-            break
-        }
-        translateMessage(&msg)
-        dispatchMessage(&msg)
-    }
-}
-
-func initOpenGL(hwnd syscall.Handle) {
     hdc = getDC(hwnd)
+    hglrc = enableOpenGL(hdc)
 
-    pfd := PIXELFORMATDESCRIPTOR{
-        nVersion:   1,
-        dwFlags:    PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-        iPixelType: PFD_TYPE_RGBA,
-        cColorBits: 32,
-        cDepthBits: 24,
-        iLayerType: PFD_MAIN_PLANE,
+    // PeekMessage を使ったメッセージループ（C言語版と同様）
+    bQuit := false
+    for !bQuit {
+        msg := MSG{}
+        if peekMessage(&msg, 0, 0, 0, PM_REMOVE) {
+            if msg.message == WM_QUIT {
+                bQuit = true
+            } else {
+                translateMessage(&msg)
+                dispatchMessage(&msg)
+            }
+        } else {
+            glClearColor(0.0, 0.0, 0.0, 0.0)
+            glClear(GL_COLOR_BUFFER_BIT)
+
+            drawTriangle()
+
+            swapBuffers(hdc)
+
+            sleep(1)
+        }
     }
-    pfd.nSize = uint16(unsafe.Sizeof(pfd))
 
-    pixelFormat := choosePixelFormat(hdc, &pfd)
-    setPixelFormat(hdc, pixelFormat, &pfd)
-
-    hglrc = wglCreateContext(hdc)
-    wglMakeCurrent(hdc, hglrc)
-}
-
-func drawTriangle() {
-    glClearColor(0.0, 0.0, 0.0, 1.0)
-    glClear(GL_COLOR_BUFFER_BIT)
-
-    glMatrixMode(GL_PROJECTION)
-    glLoadIdentity()
-    glMatrixMode(GL_MODELVIEW)
-    glLoadIdentity()
-
-    glBegin(GL_TRIANGLES)
-
-    glColor3f(1.0, 0.0, 0.0)
-    glVertex2f(0.0, 0.5)
-
-    glColor3f(0.0, 1.0, 0.0)
-    glVertex2f(0.5, -0.5)
-
-    glColor3f(0.0, 0.0, 1.0)
-    glVertex2f(-0.5, -0.5)
-
-    glEnd()
-
-    swapBuffers(hdc)
+    disableOpenGL(hwnd, hdc, hglrc)
+    destroyWindow(hwnd)
 }
 
 func wndProc(hwnd syscall.Handle, msg uint32, wparam, lparam uintptr) uintptr {
     switch msg {
     case WM_CLOSE:
-        wglMakeCurrent(0, 0)
-        wglDeleteContext(hglrc)
-        releaseDC(hwnd, hdc)
-        destroyWindow(hwnd)
-        return 0
-    case WM_DESTROY:
         postQuitMessage(0)
         return 0
-    case WM_PAINT:
-        drawTriangle()
-        validateRect(hwnd)
+    case WM_DESTROY:
         return 0
     default:
         return defWindowProc(hwnd, msg, wparam, lparam)
     }
+}
+
+func enableOpenGL(hDC syscall.Handle) syscall.Handle {
+    pfd := PIXELFORMATDESCRIPTOR{
+        nVersion:   1,
+        dwFlags:    PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+        iPixelType: PFD_TYPE_RGBA,
+        cColorBits: 24,
+        cDepthBits: 16,
+        iLayerType: PFD_MAIN_PLANE,
+    }
+    pfd.nSize = uint16(unsafe.Sizeof(pfd))
+
+    iFormat := choosePixelFormat(hDC, &pfd)
+    setPixelFormat(hDC, iFormat, &pfd)
+
+    hRC := wglCreateContext(hDC)
+    wglMakeCurrent(hDC, hRC)
+
+    return hRC
+}
+
+func disableOpenGL(hwnd, hDC, hRC syscall.Handle) {
+    wglMakeCurrent(0, 0)
+    wglDeleteContext(hRC)
+    releaseDC(hwnd, hDC)
+}
+
+func drawTriangle() {
+    glEnableClientState(GL_COLOR_ARRAY)
+    glEnableClientState(GL_VERTEX_ARRAY)
+
+    colors := []float32{
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0,
+    }
+    vertices := []float32{
+        0.0, 0.5,
+        0.5, -0.5,
+        -0.5, -0.5,
+    }
+
+    glColorPointer(3, GL_FLOAT, 0, unsafe.Pointer(&colors[0]))
+    glVertexPointer(2, GL_FLOAT, 0, unsafe.Pointer(&vertices[0]))
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 3)
 }
 
 // ===== user32.dll =====
@@ -213,15 +228,14 @@ var (
     procDefWindowProcW  = user32.NewProc("DefWindowProcW")
     procDestroyWindow   = user32.NewProc("DestroyWindow")
     procDispatchMessage = user32.NewProc("DispatchMessageW")
-    procGetMessageW     = user32.NewProc("GetMessageW")
     procPeekMessageW    = user32.NewProc("PeekMessageW")
     procLoadCursorW     = user32.NewProc("LoadCursorW")
     procPostQuitMessage = user32.NewProc("PostQuitMessage")
     procRegisterClassEx = user32.NewProc("RegisterClassExW")
+    procShowWindow      = user32.NewProc("ShowWindow")
     procTranslateMsg    = user32.NewProc("TranslateMessage")
     procGetDC           = user32.NewProc("GetDC")
     procReleaseDC       = user32.NewProc("ReleaseDC")
-    procValidateRect    = user32.NewProc("ValidateRect")
 )
 
 func createWindow(className, windowName string, style uint32, x, y, width, height uint32, parent, menu, instance syscall.Handle) syscall.Handle {
@@ -255,6 +269,10 @@ func registerClassEx(wcx *WNDCLASSEXW) {
     procRegisterClassEx.Call(uintptr(unsafe.Pointer(wcx)))
 }
 
+func showWindow(hwnd syscall.Handle, nCmdShow int32) {
+    procShowWindow.Call(uintptr(hwnd), uintptr(nCmdShow))
+}
+
 func translateMessage(msg *MSG) {
     procTranslateMsg.Call(uintptr(unsafe.Pointer(msg)))
 }
@@ -272,16 +290,6 @@ func postQuitMessage(exitCode int32) {
     procPostQuitMessage.Call(uintptr(exitCode))
 }
 
-func getMessage(msg *MSG, hwnd syscall.Handle, msgFilterMin, msgFilterMax uint32) int32 {
-    ret, _, _ := procGetMessageW.Call(
-        uintptr(unsafe.Pointer(msg)),
-        uintptr(hwnd),
-        uintptr(msgFilterMin),
-        uintptr(msgFilterMax),
-    )
-    return int32(ret)
-}
-
 func peekMessage(msg *MSG, hwnd syscall.Handle, msgFilterMin, msgFilterMax, removeMsg uint32) bool {
     ret, _, _ := procPeekMessageW.Call(
         uintptr(unsafe.Pointer(msg)),
@@ -291,10 +299,6 @@ func peekMessage(msg *MSG, hwnd syscall.Handle, msgFilterMin, msgFilterMax, remo
         uintptr(removeMsg),
     )
     return ret != 0
-}
-
-func validateRect(hwnd syscall.Handle) {
-    procValidateRect.Call(uintptr(hwnd), 0)
 }
 
 func getDC(hwnd syscall.Handle) syscall.Handle {
@@ -329,18 +333,16 @@ func swapBuffers(hdc syscall.Handle) {
 
 // ===== opengl32.dll =====
 var (
-    opengl32             = syscall.NewLazyDLL("opengl32.dll")
-    procWglCreateContext = opengl32.NewProc("wglCreateContext")
-    procWglMakeCurrent   = opengl32.NewProc("wglMakeCurrent")
-    procWglDeleteContext = opengl32.NewProc("wglDeleteContext")
-    procGlClearColor     = opengl32.NewProc("glClearColor")
-    procGlClear          = opengl32.NewProc("glClear")
-    procGlBegin          = opengl32.NewProc("glBegin")
-    procGlEnd            = opengl32.NewProc("glEnd")
-    procGlVertex2f       = opengl32.NewProc("glVertex2f")
-    procGlColor3f        = opengl32.NewProc("glColor3f")
-    procGlMatrixMode     = opengl32.NewProc("glMatrixMode")
-    procGlLoadIdentity   = opengl32.NewProc("glLoadIdentity")
+    opengl32                = syscall.NewLazyDLL("opengl32.dll")
+    procWglCreateContext    = opengl32.NewProc("wglCreateContext")
+    procWglMakeCurrent      = opengl32.NewProc("wglMakeCurrent")
+    procWglDeleteContext    = opengl32.NewProc("wglDeleteContext")
+    procGlClearColor        = opengl32.NewProc("glClearColor")
+    procGlClear             = opengl32.NewProc("glClear")
+    procGlEnableClientState = opengl32.NewProc("glEnableClientState")
+    procGlColorPointer      = opengl32.NewProc("glColorPointer")
+    procGlVertexPointer     = opengl32.NewProc("glVertexPointer")
+    procGlDrawArrays        = opengl32.NewProc("glDrawArrays")
 )
 
 func wglCreateContext(hdc syscall.Handle) syscall.Handle {
@@ -369,44 +371,48 @@ func glClear(mask uint32) {
     procGlClear.Call(uintptr(mask))
 }
 
-func glBegin(mode uint32) {
-    procGlBegin.Call(uintptr(mode))
+func glEnableClientState(array uint32) {
+    procGlEnableClientState.Call(uintptr(array))
 }
 
-func glEnd() {
-    procGlEnd.Call()
-}
-
-func glVertex2f(x, y float32) {
-    procGlVertex2f.Call(
-        uintptr(*(*uint32)(unsafe.Pointer(&x))),
-        uintptr(*(*uint32)(unsafe.Pointer(&y))),
+func glColorPointer(size int32, gltype uint32, stride int32, pointer unsafe.Pointer) {
+    procGlColorPointer.Call(
+        uintptr(size),
+        uintptr(gltype),
+        uintptr(stride),
+        uintptr(pointer),
     )
 }
 
-func glColor3f(r, g, b float32) {
-    procGlColor3f.Call(
-        uintptr(*(*uint32)(unsafe.Pointer(&r))),
-        uintptr(*(*uint32)(unsafe.Pointer(&g))),
-        uintptr(*(*uint32)(unsafe.Pointer(&b))),
+func glVertexPointer(size int32, gltype uint32, stride int32, pointer unsafe.Pointer) {
+    procGlVertexPointer.Call(
+        uintptr(size),
+        uintptr(gltype),
+        uintptr(stride),
+        uintptr(pointer),
     )
 }
 
-func glMatrixMode(mode uint32) {
-    procGlMatrixMode.Call(uintptr(mode))
-}
-
-func glLoadIdentity() {
-    procGlLoadIdentity.Call()
+func glDrawArrays(mode uint32, first, count int32) {
+    procGlDrawArrays.Call(
+        uintptr(mode),
+        uintptr(first),
+        uintptr(count),
+    )
 }
 
 // ===== kernel32.dll =====
 var (
     kernel32             = syscall.NewLazyDLL("kernel32.dll")
     procGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
+    procSleep            = kernel32.NewProc("Sleep")
 )
 
 func getModuleHandle() syscall.Handle {
     ret, _, _ := procGetModuleHandleW.Call(uintptr(0))
     return syscall.Handle(ret)
+}
+
+func sleep(milliseconds uint32) {
+    procSleep.Call(uintptr(milliseconds))
 }
