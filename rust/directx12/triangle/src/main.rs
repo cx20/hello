@@ -98,7 +98,7 @@ where
             480,
             None, // no parent window
             None, // no menus
-            instance,
+            Some(instance.into()),
             Some(sample_ptr),
         )
     }?;
