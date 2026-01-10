@@ -1,3 +1,8 @@
+install:
+```
+C:\> python -m pip install pywin32
+```
+
 run:
 ```
 C:\> python hello.pl
