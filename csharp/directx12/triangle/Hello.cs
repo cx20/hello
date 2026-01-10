@@ -1222,7 +1222,7 @@ public class Hello
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     private delegate int GetBufferDelegate([In] IntPtr swapChain, [In] uint Buffer, [In] ref Guid riid, [Out] out IntPtr ppSurface);
 
-    // #30 IDXGISwapChain3::GetCurrentBackBufferIndex
+    // #36 IDXGISwapChain3::GetCurrentBackBufferIndex
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     private delegate uint GetCurrentBackBufferIndexDelegate(IntPtr swapChain);
 
