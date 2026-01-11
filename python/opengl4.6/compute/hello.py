@@ -5,6 +5,21 @@ import random
 import sys
 
 # ============================================================
+# OpenGL 4.6 Compute Shader Harmonograph (ctypes only, no libs)
+# - Creates a Win32 window
+# - Creates an OpenGL 4.6 core profile context via WGL_ARB_create_context
+# - Uses a compute shader to fill SSBOs (positions + colors)
+# - Uses a vertex/fragment shader to render GL_LINE_STRIP from SSBO data
+#
+# Notes:
+# - This is designed to match the behavior of the WGSL snippet you posted:
+#     t = idx * 0.01
+#     harmonograph equations with exp(-d*t)
+#     hue = (t/20*360) % 360, HSV->RGB
+# - For visual stability with exp(-d*t), a moderate VERTEX_COUNT (e.g. 20000) is recommended.
+# ============================================================
+
+# ============================================================
 # DLLs
 # ============================================================
 user32   = ctypes.WinDLL("user32", use_last_error=True)
@@ -58,16 +73,11 @@ WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001
 # ============================================================
 GL_COLOR_BUFFER_BIT = 0x00004000
 GL_DEPTH_BUFFER_BIT = 0x00000100
-GL_POINTS           = 0x0000
+
+GL_LINE_STRIP       = 0x0003
 
 GL_FALSE            = 0
 GL_TRUE             = 1
-
-GL_FLOAT            = 0x1406
-GL_ARRAY_BUFFER     = 0x8892
-
-GL_STATIC_DRAW      = 0x88E4
-GL_DYNAMIC_DRAW     = 0x88E8
 
 GL_VERTEX_SHADER    = 0x8B31
 GL_FRAGMENT_SHADER  = 0x8B30
@@ -81,10 +91,8 @@ GL_VERSION          = 0x1F02
 GL_SHADING_LANGUAGE_VERSION = 0x8B8C
 
 GL_SHADER_STORAGE_BUFFER = 0x90D2
+GL_DYNAMIC_DRAW          = 0x88E8
 GL_SHADER_STORAGE_BARRIER_BIT = 0x2000
-
-GL_DEPTH_TEST       = 0x0B71
-GL_PROGRAM_POINT_SIZE = 0x8642
 
 # ============================================================
 # Structs
@@ -234,14 +242,8 @@ opengl32.glViewport.argtypes = (ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes
 opengl32.glGetString.restype = ctypes.c_char_p
 opengl32.glGetString.argtypes = (wintypes.DWORD,)
 
-opengl32.glEnable.restype = None
-opengl32.glEnable.argtypes = (wintypes.DWORD,)
-
-opengl32.glPointSize.restype = None
-opengl32.glPointSize.argtypes = (ctypes.c_float,)
-
 # ============================================================
-# Helpers: load function pointers
+# Helpers: load function pointers via wglGetProcAddress
 # ============================================================
 def _valid_wgl_addr(addr: int) -> bool:
     return addr not in (0, 1, 2, 3, 0xFFFFFFFF)
@@ -264,16 +266,17 @@ wglCreateContextAttribsARB = None
 glGenVertexArrays = None
 glBindVertexArray = None
 
-glGenBuffers      = None
-glBindBuffer      = None
-glBufferData      = None
-glBindBufferBase  = None
+glGenBuffers     = None
+glBindBuffer     = None
+glBufferData     = None
+glBindBufferBase = None
 
 glCreateShader     = None
 glShaderSource     = None
 glCompileShader    = None
 glGetShaderiv      = None
 glGetShaderInfoLog = None
+glDeleteShader     = None
 
 glCreateProgram      = None
 glAttachShader       = None
@@ -281,7 +284,6 @@ glLinkProgram        = None
 glUseProgram         = None
 glGetProgramiv       = None
 glGetProgramInfoLog  = None
-glDeleteShader       = None
 
 glGetUniformLocation = None
 glUniform1f          = None
@@ -297,12 +299,13 @@ def init_wgl_and_gl_funcs():
     global wglCreateContextAttribsARB
     global glGenVertexArrays, glBindVertexArray
     global glGenBuffers, glBindBuffer, glBufferData, glBindBufferBase
-    global glCreateShader, glShaderSource, glCompileShader, glGetShaderiv, glGetShaderInfoLog
-    global glCreateProgram, glAttachShader, glLinkProgram, glUseProgram, glGetProgramiv, glGetProgramInfoLog, glDeleteShader
+    global glCreateShader, glShaderSource, glCompileShader, glGetShaderiv, glGetShaderInfoLog, glDeleteShader
+    global glCreateProgram, glAttachShader, glLinkProgram, glUseProgram, glGetProgramiv, glGetProgramInfoLog
     global glGetUniformLocation, glUniform1f, glUniform2f, glUniform1ui
     global glDispatchCompute, glMemoryBarrier
     global glDrawArrays
 
+    # WGL extension for core context creation
     wglCreateContextAttribsARB = get_gl_func(
         "wglCreateContextAttribsARB",
         wintypes.HGLRC,
@@ -310,42 +313,54 @@ def init_wgl_and_gl_funcs():
         is_stdcall=True
     )
 
+    # VAO
     glGenVertexArrays = get_gl_func("glGenVertexArrays", None, (ctypes.c_int, ctypes.POINTER(ctypes.c_uint)))
     glBindVertexArray = get_gl_func("glBindVertexArray", None, (ctypes.c_uint,))
 
-    glGenBuffers = get_gl_func("glGenBuffers", None, (ctypes.c_int, ctypes.POINTER(ctypes.c_uint)))
-    glBindBuffer = get_gl_func("glBindBuffer", None, (ctypes.c_uint, ctypes.c_uint))
-    glBufferData = get_gl_func("glBufferData", None, (ctypes.c_uint, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_uint))
+    # Buffers + SSBO binding
+    glGenBuffers     = get_gl_func("glGenBuffers", None, (ctypes.c_int, ctypes.POINTER(ctypes.c_uint)))
+    glBindBuffer     = get_gl_func("glBindBuffer", None, (ctypes.c_uint, ctypes.c_uint))
+    glBufferData     = get_gl_func("glBufferData", None, (ctypes.c_uint, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_uint))
     glBindBufferBase = get_gl_func("glBindBufferBase", None, (ctypes.c_uint, ctypes.c_uint, ctypes.c_uint))
 
+    # Shader compile/link
     glCreateShader     = get_gl_func("glCreateShader", ctypes.c_uint, (ctypes.c_uint,))
-    glShaderSource     = get_gl_func("glShaderSource", None, (ctypes.c_uint, ctypes.c_int,
-                                                             ctypes.POINTER(ctypes.c_char_p),
-                                                             ctypes.POINTER(ctypes.c_int)))
+    glShaderSource     = get_gl_func(
+        "glShaderSource",
+        None,
+        (ctypes.c_uint, ctypes.c_int, ctypes.POINTER(ctypes.c_char_p), ctypes.POINTER(ctypes.c_int))
+    )
     glCompileShader    = get_gl_func("glCompileShader", None, (ctypes.c_uint,))
     glGetShaderiv      = get_gl_func("glGetShaderiv", None, (ctypes.c_uint, ctypes.c_uint, ctypes.POINTER(ctypes.c_int)))
-    glGetShaderInfoLog = get_gl_func("glGetShaderInfoLog", None, (ctypes.c_uint, ctypes.c_int,
-                                                                  ctypes.POINTER(ctypes.c_int),
-                                                                  ctypes.c_char_p))
+    glGetShaderInfoLog = get_gl_func(
+        "glGetShaderInfoLog",
+        None,
+        (ctypes.c_uint, ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.c_char_p)
+    )
+    glDeleteShader     = get_gl_func("glDeleteShader", None, (ctypes.c_uint,))
 
     glCreateProgram     = get_gl_func("glCreateProgram", ctypes.c_uint, ())
     glAttachShader      = get_gl_func("glAttachShader", None, (ctypes.c_uint, ctypes.c_uint))
     glLinkProgram       = get_gl_func("glLinkProgram", None, (ctypes.c_uint,))
     glUseProgram        = get_gl_func("glUseProgram", None, (ctypes.c_uint,))
     glGetProgramiv      = get_gl_func("glGetProgramiv", None, (ctypes.c_uint, ctypes.c_uint, ctypes.POINTER(ctypes.c_int)))
-    glGetProgramInfoLog = get_gl_func("glGetProgramInfoLog", None, (ctypes.c_uint, ctypes.c_int,
-                                                                    ctypes.POINTER(ctypes.c_int),
-                                                                    ctypes.c_char_p))
-    glDeleteShader      = get_gl_func("glDeleteShader", None, (ctypes.c_uint,))
+    glGetProgramInfoLog = get_gl_func(
+        "glGetProgramInfoLog",
+        None,
+        (ctypes.c_uint, ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.c_char_p)
+    )
 
+    # Uniforms
     glGetUniformLocation = get_gl_func("glGetUniformLocation", ctypes.c_int, (ctypes.c_uint, ctypes.c_char_p))
     glUniform1f          = get_gl_func("glUniform1f", None, (ctypes.c_int, ctypes.c_float))
     glUniform2f          = get_gl_func("glUniform2f", None, (ctypes.c_int, ctypes.c_float, ctypes.c_float))
     glUniform1ui         = get_gl_func("glUniform1ui", None, (ctypes.c_int, ctypes.c_uint))
 
+    # Compute + sync
     glDispatchCompute = get_gl_func("glDispatchCompute", None, (ctypes.c_uint, ctypes.c_uint, ctypes.c_uint))
     glMemoryBarrier   = get_gl_func("glMemoryBarrier", None, (ctypes.c_uint,))
 
+    # Draw
     glDrawArrays = get_gl_func("glDrawArrays", None, (ctypes.c_uint, ctypes.c_int, ctypes.c_int))
 
 # ============================================================
@@ -353,9 +368,11 @@ def init_wgl_and_gl_funcs():
 # ============================================================
 def compile_shader(shader_type: int, source: str) -> int:
     shader = glCreateShader(shader_type)
+
     src_bytes = source.encode("utf-8")
-    src_ptr = ctypes.c_char_p(src_bytes)
-    length = ctypes.c_int(len(src_bytes))
+    src_ptr   = ctypes.c_char_p(src_bytes)
+    length    = ctypes.c_int(len(src_bytes))
+
     glShaderSource(shader, 1, ctypes.byref(src_ptr), ctypes.byref(length))
     glCompileShader(shader)
 
@@ -390,19 +407,28 @@ def link_program(shaders) -> int:
             raise RuntimeError("Program link failed:\n" + buf.value.decode("utf-8", "replace"))
         raise RuntimeError("Program link failed (no log).")
 
+    # We can delete shader objects after linking
     for sh in shaders:
         glDeleteShader(sh)
 
     return prog
 
 # ============================================================
-# GLSL sources (SSBO + Compute)
+# GLSL sources
+# - Positions SSBO: binding=7, vec4 pos[]
+# - Colors SSBO:    binding=8, vec4 col[]
+# - Compute fills both buffers, matching your WGSL logic
 # ============================================================
+
 VERT_SRC = r"""
 #version 460 core
 
-layout(std430, binding=7) buffer Particles {
+layout(std430, binding=7) buffer Positions {
     vec4 pos[];
+};
+
+layout(std430, binding=8) buffer Colors {
+    vec4 col[];
 };
 
 uniform vec2 resolution;
@@ -438,6 +464,7 @@ void main(void)
 {
     vec4 p = pos[gl_VertexID];
 
+    // Simple camera (same as earlier samples)
     mat4 pMat = perspective(45.0, resolution.x / resolution.y, 0.1, 200.0);
     vec3 camera = vec3(0, 5, 10);
     vec3 center = vec3(0, 0, 0);
@@ -445,12 +472,8 @@ void main(void)
 
     gl_Position = pMat * vMat * p;
 
-    vColor = vec4(
-        gl_Position.x * 0.08 + 0.5,
-        gl_Position.y * 0.08 + 0.5,
-        gl_Position.z * 0.08 + 0.5,
-        1.0
-    );
+    // Read per-vertex color from SSBO (matching WGSL behavior)
+    vColor = col[gl_VertexID];
 }
 """
 
@@ -467,84 +490,86 @@ void main()
 COMP_SRC = r"""
 #version 460 core
 
-layout(std430, binding=7) buffer Particles {
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding=7) buffer Positions {
     vec4 pos[];
 };
 
-uniform float time;
-uniform uint  max_num;
+layout(std430, binding=8) buffer Colors {
+    vec4 col[];
+};
 
-uniform float f1;
-uniform float f2;
-uniform float f3;
-uniform float f4;
+uniform uint max_num;
 
-layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+// Harmonograph parameters (mirrors your WGSL structure)
+uniform float A1; uniform float f1; uniform float p1; uniform float d1;
+uniform float A2; uniform float f2; uniform float p2; uniform float d2;
+uniform float A3; uniform float f3; uniform float p3; uniform float d3;
+uniform float A4; uniform float f4; uniform float p4; uniform float d4;
 
-#define PI 3.14159265359
-#define PI2 (PI * 2.0)
-
-vec2 rotate2(in vec2 p, in float t)
+// HSV to RGB conversion (h in degrees 0..360)
+vec3 hsv2rgb(float h, float s, float v)
 {
-    float c = cos(-t);
-    float s = sin(-t);
-    return p * c + vec2(p.y, -p.x) * s;
-}
+    float c = v * s;
+    float hp = h / 60.0;
+    float x = c * (1.0 - abs(mod(hp, 2.0) - 1.0));
+    vec3 rgb;
 
-float hash(float n)
-{
-    return fract(sin(n) * 753.5453123);
-}
+    if      (hp < 1.0) rgb = vec3(c, x, 0.0);
+    else if (hp < 2.0) rgb = vec3(x, c, 0.0);
+    else if (hp < 3.0) rgb = vec3(0.0, c, x);
+    else if (hp < 4.0) rgb = vec3(0.0, x, c);
+    else if (hp < 5.0) rgb = vec3(x, 0.0, c);
+    else               rgb = vec3(c, 0.0, x);
 
-float A1 = 0.2, p1 = 1.0/16.0,  d1 = 0.02;
-float A2 = 0.2, p2 = 3.0/2.0,   d2 = 0.0315;
-float A3 = 0.2, p3 = 13.0/15.0, d3 = 0.02;
-float A4 = 0.2, p4 = 1.0,       d4 = 0.02;
+    float m = v - c;
+    return rgb + vec3(m);
+}
 
 void main()
 {
-    uint id = gl_GlobalInvocationID.x;
-    if (id >= max_num) return;
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= max_num) return;
 
-    float theta = hash(float(id) * 0.3123887) * PI2 + time;
+    // Match your WGSL: t depends only on idx
+    float t = float(idx) * 0.001;
+    float PI = 3.14159265;
 
-    p1 = theta;
+    // Harmonograph equations (same structure as WGSL)
+    float x = A1 * sin(f1 * t + PI * p1) * exp(-d1 * t) +
+              A2 * sin(f2 * t + PI * p2) * exp(-d2 * t);
 
-    float t = theta;
+    float y = A3 * sin(f3 * t + PI * p3) * exp(-d3 * t) +
+              A4 * sin(f4 * t + PI * p4) * exp(-d4 * t);
 
-    float x = A1 * sin(f1 * t + PI * p1) * exp(-d1 * t)
-            + A2 * sin(f2 * t + PI * p2) * exp(-d2 * t);
+    float z = A1 * cos(f1 * t + PI * p1) * exp(-d1 * t) +
+              A2 * cos(f2 * t + PI * p2) * exp(-d2 * t);
 
-    float y = A3 * sin(f3 * t + PI * p3) * exp(-d3 * t)
-            + A4 * sin(f4 * t + PI * p4) * exp(-d4 * t);
+    pos[idx] = vec4(x, y, z, 1.0);
 
-    float z = A1 * cos(f1 * t + PI * p1) * exp(-d1 * t)
-            + A2 * cos(f2 * t + PI * p2) * exp(-d2 * t);
-
-    vec4 p = vec4(x, y, z, 1.0);
-
-    p.xz = rotate2(p.xz, hash(float(id) * 0.5123) * PI2);
-
-    p.xyz *= 5.0;
-
-    pos[id] = p;
+    // Color: hue from t, just like WGSL
+    float hue = mod((t / 20.0) * 360.0, 360.0);
+    vec3 rgb = hsv2rgb(hue, 1.0, 1.0);
+    col[idx] = vec4(rgb, 1.0);
 }
 """
 
 # ============================================================
-# GL objects
+# Global GL objects
 # ============================================================
 g_hdc = None
 g_hrc = None
 
 vao = ctypes.c_uint(0)
-ssbo = ctypes.c_uint(0)
+ssbo_pos = ctypes.c_uint(0)
+ssbo_col = ctypes.c_uint(0)
 
 draw_program = ctypes.c_uint(0)
 compute_program = ctypes.c_uint(0)
 
 # ============================================================
-# Context creation
+# Context creation helpers
 # ============================================================
 def set_pixel_format(hdc: wintypes.HDC) -> None:
     pfd = PIXELFORMATDESCRIPTOR()
@@ -565,14 +590,17 @@ def set_pixel_format(hdc: wintypes.HDC) -> None:
         raise ctypes.WinError(ctypes.get_last_error())
 
 def create_gl46_context(hdc: wintypes.HDC) -> wintypes.HGLRC:
+    # Create a legacy context first so we can load wglCreateContextAttribsARB
     hrc_old = opengl32.wglCreateContext(hdc)
     if not hrc_old:
         raise ctypes.WinError(ctypes.get_last_error())
     if not opengl32.wglMakeCurrent(hdc, hrc_old):
         raise ctypes.WinError(ctypes.get_last_error())
 
+    # Load required WGL/GL entry points
     init_wgl_and_gl_funcs()
 
+    # Create a 4.6 core profile context
     attribs = (ctypes.c_int * 9)(
         WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
         WGL_CONTEXT_MINOR_VERSION_ARB, 6,
@@ -611,58 +639,84 @@ def wndproc(hwnd, msg, wparam, lparam):
     return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
 # ============================================================
-# Init GL resources (SSBO + programs)
+# Init GL resources: VAO, SSBOs, programs
 # ============================================================
 def init_resources(width: int, height: int, max_num: int):
-    global draw_program, compute_program, vao, ssbo
+    global draw_program, compute_program, vao, ssbo_pos, ssbo_col
 
-    # VAO
+    # In core profile, a VAO must be bound even if you don't use vertex attributes
     glGenVertexArrays(1, ctypes.byref(vao))
     glBindVertexArray(vao.value)
 
-    # SSBO（vec4 * max_num）
-    glGenBuffers(1, ctypes.byref(ssbo))
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo.value)
+    # Create SSBO for positions: vec4 * max_num (16 bytes each)
+    glGenBuffers(1, ctypes.byref(ssbo_pos))
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_pos.value)
     glBufferData(GL_SHADER_STORAGE_BUFFER, 16 * max_num, None, GL_DYNAMIC_DRAW)
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, ssbo.value)
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, ssbo_pos.value)
 
-    # draw program
+    # Create SSBO for colors: vec4 * max_num (16 bytes each)
+    glGenBuffers(1, ctypes.byref(ssbo_col))
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_col.value)
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 16 * max_num, None, GL_DYNAMIC_DRAW)
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, ssbo_col.value)
+
+    # Build draw program (VS+FS)
     vs = compile_shader(GL_VERTEX_SHADER, VERT_SRC)
     fs = compile_shader(GL_FRAGMENT_SHADER, FRAG_SRC)
     draw_program = ctypes.c_uint(link_program([vs, fs]))
 
-    # compute program
+    # Build compute program (CS)
     cs = compile_shader(GL_COMPUTE_SHADER, COMP_SRC)
     compute_program = ctypes.c_uint(link_program([cs]))
 
-    # uniforms
+    # Set resolution uniform once
     glUseProgram(draw_program.value)
     loc_res = glGetUniformLocation(draw_program.value, b"resolution")
     if loc_res >= 0:
         glUniform2f(loc_res, float(width), float(height))
 
-    glUseProgram(compute_program.value)
-    loc_max = glGetUniformLocation(compute_program.value, b"max_num")
-    if loc_max >= 0:
-        glUniform1ui(loc_max, max_num)
+# ============================================================
+# Helper: set uniforms on the compute program
+# ============================================================
+def set_uniform_f(prog: int, name: bytes, v: float):
+    loc = glGetUniformLocation(prog, name)
+    if loc >= 0:
+        glUniform1f(loc, ctypes.c_float(v))
 
-    opengl32.glEnable(GL_DEPTH_TEST)
-    opengl32.glEnable(GL_PROGRAM_POINT_SIZE)
-    opengl32.glPointSize(2.0)
+def set_uniform_u(prog: int, name: bytes, v: int):
+    loc = glGetUniformLocation(prog, name)
+    if loc >= 0:
+        glUniform1ui(loc, ctypes.c_uint(v))
 
 # ============================================================
-# Main loop
+# Main
 # ============================================================
 def main():
     global g_hdc, g_hrc
 
     WIDTH  = 640
     HEIGHT = 480
-    max_num = 10000
+
+    # Recommended: keep this moderate so exp(-d*t) doesn't collapse too much.
+    # If you really want 1,000,000, consider reducing the "0.01" scale in COMP_SRC.
+    VERTEX_COUNT = 500000
+
     duration_sec = 60.0
 
+    # WGSL-like parameter defaults (same as your snippet)
+    A1, f1, p1, d1 = 50.0, 2.0, 1.0/16.0, 0.02
+    A2, f2, p2, d2 = 50.0, 2.0, 3.0/2.0, 0.0315
+    A3, f3, p3, d3 = 50.0, 2.0, 13.0/15.0, 0.02
+    A4, f4, p4, d4 = 50.0, 2.0, 1.0, 0.02
+
+    # Animation deltas matching your JS
+    PI2 = 6.283185307179586
+
+    # ------------------------------------------------------------
+    # Create a window
+    # ------------------------------------------------------------
     hInstance = kernel32.GetModuleHandleW(None)
-    className = "PyGL46ComputeNoLib"
+    className = "PyGL46ComputeHarmonograph"
 
     wc = WNDCLASSEXW()
     wc.cbSize = ctypes.sizeof(WNDCLASSEXW)
@@ -679,7 +733,7 @@ def main():
         raise ctypes.WinError(ctypes.get_last_error())
 
     hwnd = user32.CreateWindowExW(
-        0, className, "OpenGL 4.6 Compute Shader (ctypes only)",
+        0, className, "OpenGL 4.6 Compute Harmonograph (ctypes only)",
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
         WIDTH, HEIGHT,
@@ -690,6 +744,9 @@ def main():
 
     user32.ShowWindow(hwnd, SW_SHOW)
 
+    # ------------------------------------------------------------
+    # Create OpenGL context
+    # ------------------------------------------------------------
     g_hdc = user32.GetDC(hwnd)
     if not g_hdc:
         raise ctypes.WinError(ctypes.get_last_error())
@@ -701,30 +758,40 @@ def main():
     sl  = opengl32.glGetString(GL_SHADING_LANGUAGE_VERSION)
     print("[GL] Version:", (ver.decode("ascii", "replace") if ver else "(null)"))
     print("[GL] GLSL   :", (sl.decode("ascii", "replace") if sl else "(null)"))
+    print("[Info] VERTEX_COUNT:", VERTEX_COUNT)
 
     opengl32.glViewport(0, 0, WIDTH, HEIGHT)
-    init_resources(WIDTH, HEIGHT, max_num)
 
-    f1 = 2.0
-    f2 = 2.0
-    f3 = 2.0
-    f4 = 2.0
+    init_resources(WIDTH, HEIGHT, VERTEX_COUNT)
 
+    # ------------------------------------------------------------
+    # Initial compute dispatch (optional but useful)
+    # ------------------------------------------------------------
+    glUseProgram(compute_program.value)
+    set_uniform_u(compute_program.value, b"max_num", VERTEX_COUNT)
+
+    # Set initial harmonograph uniforms
+    set_uniform_f(compute_program.value, b"A1", A1); set_uniform_f(compute_program.value, b"f1", f1); set_uniform_f(compute_program.value, b"p1", p1); set_uniform_f(compute_program.value, b"d1", d1)
+    set_uniform_f(compute_program.value, b"A2", A2); set_uniform_f(compute_program.value, b"f2", f2); set_uniform_f(compute_program.value, b"p2", p2); set_uniform_f(compute_program.value, b"d2", d2)
+    set_uniform_f(compute_program.value, b"A3", A3); set_uniform_f(compute_program.value, b"f3", f3); set_uniform_f(compute_program.value, b"p3", p3); set_uniform_f(compute_program.value, b"d3", d3)
+    set_uniform_f(compute_program.value, b"A4", A4); set_uniform_f(compute_program.value, b"f4", f4); set_uniform_f(compute_program.value, b"p4", p4); set_uniform_f(compute_program.value, b"d4", d4)
+
+    groups_x = (VERTEX_COUNT + 63) // 64
+    glDispatchCompute(groups_x, 1, 1)
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT)
+
+    # ------------------------------------------------------------
+    # Main loop
+    # ------------------------------------------------------------
     msg = MSG()
     start = time.perf_counter()
     last_fps_t = start
     frames = 0
     fps = 0
 
-    loc_time = glGetUniformLocation(compute_program.value, b"time")
-    loc_f1 = glGetUniformLocation(compute_program.value, b"f1")
-    loc_f2 = glGetUniformLocation(compute_program.value, b"f2")
-    loc_f3 = glGetUniformLocation(compute_program.value, b"f3")
-    loc_f4 = glGetUniformLocation(compute_program.value, b"f4")
-
     running = True
     while running:
-        # message pump
+        # Process messages
         if user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE):
             if msg.message == WM_QUIT:
                 running = False
@@ -733,57 +800,69 @@ def main():
                 user32.DispatchMessageW(ctypes.byref(msg))
             continue
 
+        # ESC to exit
         if user32.GetAsyncKeyState(VK_ESCAPE) & 0x8000:
             running = False
             continue
 
         now = time.perf_counter()
-        t = float(now - start)
+        elapsed = now - start
+        if elapsed >= duration_sec:
+            running = False
 
-        f1 = (f1 + random.random() / 100.0) % 10.0
-        f2 = (f2 + random.random() / 100.0) % 10.0
-        f3 = (f3 + random.random() / 100.0) % 10.0
-        f4 = (f4 + random.random() / 100.0) % 10.0
+        # --------------------------------------------------------
+        # Animate parameters (matching your JS behavior)
+        # - f1..f4 random drift: +rand/40, mod 10
+        # - p1 increments by 2π * 0.5 / 360
+        # --------------------------------------------------------
+        f1 = (f1 + random.random() / 40.0) % 10.0
+        f2 = (f2 + random.random() / 40.0) % 10.0
+        f3 = (f3 + random.random() / 40.0) % 10.0
+        f4 = (f4 + random.random() / 40.0) % 10.0
+        p1 += (PI2 * 0.5 / 360.0)
 
-        # --- Compute: SSBO update ---
+        # --------------------------------------------------------
+        # Compute pass
+        # --------------------------------------------------------
         glUseProgram(compute_program.value)
-        if loc_time >= 0: glUniform1f(loc_time, t)
-        if loc_f1 >= 0: glUniform1f(loc_f1, f1)
-        if loc_f2 >= 0: glUniform1f(loc_f2, f2)
-        if loc_f3 >= 0: glUniform1f(loc_f3, f3)
-        if loc_f4 >= 0: glUniform1f(loc_f4, f4)
+        set_uniform_u(compute_program.value, b"max_num", VERTEX_COUNT)
 
-        groups_x = (max_num + 127) // 128
+        set_uniform_f(compute_program.value, b"A1", A1); set_uniform_f(compute_program.value, b"f1", f1); set_uniform_f(compute_program.value, b"p1", p1); set_uniform_f(compute_program.value, b"d1", d1)
+        set_uniform_f(compute_program.value, b"A2", A2); set_uniform_f(compute_program.value, b"f2", f2); set_uniform_f(compute_program.value, b"p2", p2); set_uniform_f(compute_program.value, b"d2", d2)
+        set_uniform_f(compute_program.value, b"A3", A3); set_uniform_f(compute_program.value, b"f3", f3); set_uniform_f(compute_program.value, b"p3", p3); set_uniform_f(compute_program.value, b"d3", d3)
+        set_uniform_f(compute_program.value, b"A4", A4); set_uniform_f(compute_program.value, b"f4", f4); set_uniform_f(compute_program.value, b"p4", p4); set_uniform_f(compute_program.value, b"d4", d4)
+
         glDispatchCompute(groups_x, 1, 1)
 
+        # Make SSBO writes visible to the draw stage
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT)
 
-        # --- Draw ---
+        # --------------------------------------------------------
+        # Draw pass (line strip)
+        # --------------------------------------------------------
         opengl32.glClearColor(0.0, 0.0, 0.0, 1.0)
         opengl32.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         glUseProgram(draw_program.value)
         glBindVertexArray(vao.value)
-        glDrawArrays(GL_POINTS, 0, max_num)
+        glDrawArrays(GL_LINE_STRIP, 0, VERTEX_COUNT)
 
         gdi32.SwapBuffers(g_hdc)
 
+        # FPS output
         frames += 1
         if now - last_fps_t >= 1.0:
             fps = frames
             frames = 0
             last_fps_t = now
-            sys.stdout.write(f"\rFPS: {fps}  time: {t:.2f}  max_num: {max_num}    ")
+            sys.stdout.write(f"\rFPS: {fps}   elapsed: {elapsed:5.1f}s   f1..f4=({f1:4.2f},{f2:4.2f},{f3:4.2f},{f4:4.2f})   ")
             sys.stdout.flush()
-
-        if t >= duration_sec:
-            running = False
 
         kernel32.Sleep(1)
 
     print("\n[Exit]")
+
     destroy_context(hwnd, g_hdc, g_hrc)
 
 if __name__ == "__main__":
     main()
-
