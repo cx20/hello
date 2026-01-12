@@ -395,6 +395,14 @@ Private Function SingleToLongPtr(ByVal f As Single) As LongPtr
     SingleToLongPtr = CLngPtr(tmp)
 End Function
 
+' Debug version with logging
+Private Function SingleToLongPtrDebug(ByVal f As Single) As LongPtr
+    Dim tmp As Long
+    CopyMemory VarPtr(tmp), VarPtr(f), 4
+    SingleToLongPtrDebug = CLngPtr(tmp)
+    LogMsg "SingleToLongPtrDebug: f=" & f & " -> bits=0x" & Hex$(tmp) & " (" & tmp & ")"
+End Function
+
 ' ============================================================
 ' CallWindowProc-based generic calls
 ' ============================================================
@@ -550,9 +558,11 @@ End Function
 '   CallWindowProcW(thunk, 0, location, floatBits, 0)
 '   CallWindowProcW calls thunk(hWnd=0, msg=location, wParam=floatBits, lParam=0)
 '   So in thunk: rcx=0, rdx=location, r8=floatBits, r9=0
+'   Windows x64 ABI: glUniform1f(rcx=location, xmm1=v0)
+'   Note: float arg goes to xmm1 (2nd arg position), NOT xmm0!
 ' ============================================================
 Private Function BuildThunk_Uniform1f(ByVal target As LongPtr) As LongPtr
-    Dim code(0 To 40) As Byte
+    Dim code(0 To 44) As Byte
     Dim i As Long: i = 0
 
     ' sub rsp,28h
@@ -565,12 +575,13 @@ Private Function BuildThunk_Uniform1f(ByVal target As LongPtr) As LongPtr
     code(i) = &H89: i = i + 1
     code(i) = &HD1: i = i + 1
 
-    ' movd xmm0, r8d  (float bits from r8 -> xmm0)
+    ' movd xmm1, r8d  (float bits from r8 -> xmm1, 2nd arg position)
+    ' Encoding: 66 41 0F 6E C8
     code(i) = &H66: i = i + 1
     code(i) = &H41: i = i + 1
     code(i) = &HF: i = i + 1
     code(i) = &H6E: i = i + 1
-    code(i) = &HC0: i = i + 1
+    code(i) = &HC8: i = i + 1   ' C8 = xmm1, r8d
 
     ' mov rax, imm64
     code(i) = &H48: i = i + 1
@@ -606,9 +617,11 @@ End Function
 ' ============================================================
 ' Thunk for glUniform2f(int location, float v0, float v1)
 '   CallWindowProcW(thunk, hWnd=location, msg=v0bits, wParam=v1bits, 0)
+'   Windows x64 ABI: glUniform2f(rcx=location, xmm1=v0, xmm2=v1)
+'   Note: float args go to xmm1 (2nd pos) and xmm2 (3rd pos)
 ' ============================================================
 Private Function BuildThunk_Uniform2f(ByVal target As LongPtr) As LongPtr
-    Dim code(0 To 50) As Byte
+    Dim code(0 To 54) As Byte
     Dim i As Long: i = 0
 
     ' sub rsp,28h
@@ -621,19 +634,21 @@ Private Function BuildThunk_Uniform2f(ByVal target As LongPtr) As LongPtr
     code(i) = &H89: i = i + 1
     code(i) = &HD1: i = i + 1
 
-    ' movd xmm0, r8d  (v0)
+    ' movd xmm1, r8d  (v0 -> xmm1, 2nd arg position)
+    ' Encoding: 66 41 0F 6E C8
     code(i) = &H66: i = i + 1
     code(i) = &H41: i = i + 1
     code(i) = &HF: i = i + 1
     code(i) = &H6E: i = i + 1
-    code(i) = &HC0: i = i + 1
+    code(i) = &HC8: i = i + 1   ' C8 = xmm1, r8d
 
-    ' movd xmm1, r9d  (v1)
+    ' movd xmm2, r9d  (v1 -> xmm2, 3rd arg position)
+    ' Encoding: 66 41 0F 6E D1
     code(i) = &H66: i = i + 1
     code(i) = &H41: i = i + 1
     code(i) = &HF: i = i + 1
     code(i) = &H6E: i = i + 1
-    code(i) = &HC9: i = i + 1
+    code(i) = &HD1: i = i + 1   ' D1 = xmm2, r9d
 
     ' mov rax, imm64
     code(i) = &H48: i = i + 1
@@ -717,11 +732,10 @@ Private Function FragSrc() As String
     s = s & "  return mix(b, a, h) - k * h * (1.0 - h);" & vbLf
     s = s & "}" & vbLf
     
-    ' Scene - USE HARDCODED TIME FOR TESTING
+    ' Scene - USE iTime uniform
     s = s & "float GetDist(vec3 p) {" & vbLf
-    s = s & "  float t = 1.0;" & vbLf  ' HARDCODED TIME
-    s = s & "  float sphere = sdSphere(p - vec3(sin(t) * 1.5, 0.5 + sin(t * 2.0) * 0.3, 0.0), 0.5);" & vbLf
-    s = s & "  float angle = t * 0.5;" & vbLf
+    s = s & "  float sphere = sdSphere(p - vec3(sin(iTime) * 1.5, 0.5 + sin(iTime * 2.0) * 0.3, 0.0), 0.5);" & vbLf
+    s = s & "  float angle = iTime * 0.5;" & vbLf
     s = s & "  vec3 tp = p - vec3(0.0, 0.5, 0.0);" & vbLf
     s = s & "  tp.xz = mat2(cos(angle), -sin(angle), sin(angle), cos(angle)) * tp.xz;" & vbLf
     s = s & "  tp.xy = mat2(cos(angle * 0.7), -sin(angle * 0.7), sin(angle * 0.7), cos(angle * 0.7)) * tp.xy;" & vbLf
@@ -777,11 +791,10 @@ Private Function FragSrc() As String
     s = s & "  return clamp(1.0 - 3.0 * occ, 0.0, 1.0);" & vbLf
     s = s & "}" & vbLf
     
-    ' Main - USE HARDCODED RESOLUTION FOR TESTING
+    ' Main - USE iResolution uniform
     s = s & "void main() {" & vbLf
-    s = s & "  vec2 res = vec2(784.0, 561.0);" & vbLf  ' HARDCODED RESOLUTION
     s = s & "  vec2 uv = fragCoord - 0.5;" & vbLf
-    s = s & "  uv.x *= res.x / res.y;" & vbLf
+    s = s & "  uv.x *= iResolution.x / iResolution.y;" & vbLf
     s = s & "  vec3 ro = vec3(0.0, 1.5, -4.0);" & vbLf
     s = s & "  vec3 rd = normalize(vec3(uv.x, uv.y, 1.0));" & vbLf
     s = s & "  vec3 lightPos = vec3(3.0, 5.0, -2.0);" & vbLf
@@ -1205,6 +1218,11 @@ Private Sub RenderFrame()
     If g_frameCount < 3 Then
         LogMsg "RenderFrame[" & g_frameCount & "]: elapsed=" & elapsed & ", width=" & g_width & ", height=" & g_height
         LogMsg "RenderFrame[" & g_frameCount & "]: locTime=" & g_locTime & ", locResolution=" & g_locResolution
+        
+        ' Test SingleToLongPtr conversion
+        Dim testBits As LongPtr
+        testBits = SingleToLongPtrDebug(elapsed)
+        LogMsg "RenderFrame[" & g_frameCount & "]: elapsed bits = 0x" & Hex$(testBits)
     End If
 
     ' glUniform1f(iTime, elapsed)
@@ -1343,3 +1361,5 @@ EH:
     LogMsg "ERROR: " & Err.Number & " / " & Err.Description
     Resume FIN
 End Sub
+
+
