@@ -2,10 +2,15 @@ Attribute VB_Name = "hello"
 Option Explicit
 
 ' ============================================================
-'  Excel VBA (64-bit) + Raw OpenGL 2.0 (Shader) WITHOUT external DLL
-'  - CallWindowProcW trick for calling function pointers (<= 4 args)
-'  - Use compatibility built-ins gl_Vertex / gl_Color with glBegin
-'  - Debug log: C:\TEMP\debug.log (flush each write)
+'  Excel VBA (64-bit) + Raw OpenGL 2.0 (Shader + VBO)
+'  - No external libraries (only Win32 + opengl32.dll)
+'  - Uses VBO + GLSL (#version 110)
+'  - Debug log: C:\TEMP\debug.log
+'
+'  Fix:
+'   glGenBuffers call can freeze if called via CallWindowProcW
+'   with pointer in Msg (RDX). We build a tiny x64 thunk and call
+'   it via CallWindowProcW with Msg=n and wParam=ptr.
 ' ============================================================
 
 ' -----------------------------
@@ -62,11 +67,18 @@ Private Const GL_COMPILE_STATUS  As Long = &H8B81&
 Private Const GL_LINK_STATUS     As Long = &H8B82&
 Private Const GL_INFO_LOG_LENGTH As Long = &H8B84&
 
+Private Const GL_ARRAY_BUFFER As Long = &H8892&
+Private Const GL_STATIC_DRAW  As Long = &H88E4&
+Private Const GL_FLOAT        As Long = &H1406&
+
+Private Const GL_VERTEX_ARRAY As Long = &H8074&
+Private Const GL_COLOR_ARRAY  As Long = &H8076&
+
 ' -----------------------------
 ' Class / window names
 ' -----------------------------
-Private Const CLASS_NAME As String = "helloWindowVBA_GL2_LOG2"
-Private Const WINDOW_NAME As String = "Hello OpenGL 2.0 (VBA64 raw + log2)"
+Private Const CLASS_NAME As String = "helloWindowVBA_GL2_VBO"
+Private Const WINDOW_NAME As String = "Hello OpenGL 2.0 (VBA64 Shader+VBO)"
 
 ' -----------------------------
 ' Types
@@ -143,7 +155,25 @@ Private g_hWnd As LongPtr
 Private g_hDC  As LongPtr
 Private g_hRC  As LongPtr
 
-' Shader-related function pointers (all <= 4 args)
+' Logger
+Private g_log As LongPtr
+Private Const GENERIC_WRITE As Long = &H40000000
+Private Const FILE_SHARE_READ As Long = &H1
+Private Const FILE_SHARE_WRITE As Long = &H2
+Private Const CREATE_ALWAYS As Long = 2
+Private Const FILE_ATTRIBUTE_NORMAL As Long = &H80
+
+' VirtualAlloc
+Private Const MEM_COMMIT As Long = &H1000&
+Private Const MEM_RESERVE As Long = &H2000&
+Private Const MEM_RELEASE As Long = &H8000&
+Private Const PAGE_EXECUTE_READWRITE As Long = &H40&
+
+' GL function pointers
+Private p_glGenBuffers As LongPtr
+Private p_glBindBuffer As LongPtr
+Private p_glBufferData As LongPtr
+
 Private p_glCreateShader As LongPtr
 Private p_glShaderSource As LongPtr
 Private p_glCompileShader As LongPtr
@@ -156,17 +186,13 @@ Private p_glGetShaderInfoLog As LongPtr
 Private p_glGetProgramiv As LongPtr
 Private p_glGetProgramInfoLog As LongPtr
 
-Private g_program As Long
+' Thunk for glGenBuffers (fix freeze)
+Private p_glGenBuffersThunk As LongPtr
+Private p_glGenBuffersThunkSize As LongPtr
 
-' -----------------------------
-' Logger (C:\TEMP\debug.log)
-' -----------------------------
-Private g_log As LongPtr
-Private Const GENERIC_WRITE As Long = &H40000000
-Private Const FILE_SHARE_READ As Long = &H1
-Private Const FILE_SHARE_WRITE As Long = &H2
-Private Const CREATE_ALWAYS As Long = 2
-Private Const FILE_ATTRIBUTE_NORMAL As Long = &H80
+Private g_program As Long
+Private g_vboPos As Long
+Private g_vboCol As Long
 
 #If VBA7 Then
     ' Win32
@@ -203,7 +229,6 @@ Private Const FILE_ATTRIBUTE_NORMAL As Long = &H80
 
     Private Declare PtrSafe Function GetDC Lib "user32" (ByVal hWnd As LongPtr) As LongPtr
     Private Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hWnd As LongPtr, ByVal hDC As LongPtr) As Long
-
     Private Declare PtrSafe Function GetClientRect Lib "user32" (ByVal hWnd As LongPtr, ByRef lpRect As RECT) As Long
 
     Private Declare PtrSafe Function ChoosePixelFormat Lib "gdi32" (ByVal hDC As LongPtr, ByRef pfd As PIXELFORMATDESCRIPTOR) As Long
@@ -213,11 +238,11 @@ Private Const FILE_ATTRIBUTE_NORMAL As Long = &H80
     Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Private Declare PtrSafe Function GetLastError Lib "kernel32" () As Long
 
-    ' This is the key: call arbitrary function pointer with 0..4 args (x64)
+    ' Generic caller (but Msg must stay "message-like" to avoid freezes)
     Private Declare PtrSafe Function CallWindowProcW Lib "user32" ( _
         ByVal lpPrevWndFunc As LongPtr, _
         ByVal hWnd As LongPtr, _
-        ByVal Msg As LongPtr, _
+        ByVal msg As LongPtr, _
         ByVal wParam As LongPtr, _
         ByVal lParam As LongPtr) As LongPtr
 
@@ -233,13 +258,13 @@ Private Const FILE_ATTRIBUTE_NORMAL As Long = &H80
     Private Declare PtrSafe Sub glClearColor Lib "opengl32.dll" (ByVal r As Single, ByVal g As Single, ByVal b As Single, ByVal a As Single)
     Private Declare PtrSafe Function glGetString Lib "opengl32.dll" (ByVal name As Long) As LongPtr
 
-    ' Immediate mode (OpenGL 1.1 exports; ok in compatibility)
-    Private Declare PtrSafe Sub glBegin Lib "opengl32.dll" (ByVal mode As Long)
-    Private Declare PtrSafe Sub glEnd Lib "opengl32.dll" ()
-    Private Declare PtrSafe Sub glColor3f Lib "opengl32.dll" (ByVal r As Single, ByVal g As Single, ByVal b As Single)
-    Private Declare PtrSafe Sub glVertex2f Lib "opengl32.dll" (ByVal x As Single, ByVal y As Single)
+    Private Declare PtrSafe Sub glEnableClientState Lib "opengl32.dll" (ByVal cap As Long)
+    Private Declare PtrSafe Sub glDisableClientState Lib "opengl32.dll" (ByVal cap As Long)
+    Private Declare PtrSafe Sub glVertexPointer Lib "opengl32.dll" (ByVal Size As Long, ByVal glType As Long, ByVal Stride As Long, ByVal Ptr As LongPtr)
+    Private Declare PtrSafe Sub glColorPointer Lib "opengl32.dll" (ByVal Size As Long, ByVal glType As Long, ByVal Stride As Long, ByVal Ptr As LongPtr)
+    Private Declare PtrSafe Sub glDrawArrays Lib "opengl32.dll" (ByVal mode As Long, ByVal first As Long, ByVal count As Long)
 
-    ' Logger (kernel32)
+    ' Logger
     Private Declare PtrSafe Function CreateDirectoryW Lib "kernel32" (ByVal lpPathName As LongPtr, ByVal lpSecurityAttributes As LongPtr) As Long
     Private Declare PtrSafe Function CreateFileW Lib "kernel32" ( _
         ByVal lpFileName As LongPtr, _
@@ -261,7 +286,12 @@ Private Const FILE_ATTRIBUTE_NORMAL As Long = &H80
     Private Declare PtrSafe Function CloseHandle Lib "kernel32" (ByVal hObject As LongPtr) As Long
 
     Private Declare PtrSafe Function lstrlenA Lib "kernel32" (ByVal lpString As LongPtr) As Long
-    Private Declare PtrSafe Sub RtlMoveMemory Lib "kernel32" Alias "RtlMoveMemory" (ByRef Destination As Any, ByVal Source As LongPtr, ByVal Length As Long)
+    Private Declare PtrSafe Sub RtlMoveMemory Lib "kernel32" (ByRef Destination As Any, ByVal Source As LongPtr, ByVal Length As Long)
+    Private Declare PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (ByVal Destination As LongPtr, ByVal Source As LongPtr, ByVal Length As LongPtr)
+
+    ' Thunk memory
+    Private Declare PtrSafe Function VirtualAlloc Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal flAllocationType As Long, ByVal flProtect As Long) As LongPtr
+    Private Declare PtrSafe Function VirtualFree Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal dwFreeType As Long) As Long
 #End If
 
 ' ============================================================
@@ -270,10 +300,8 @@ Private Const FILE_ATTRIBUTE_NORMAL As Long = &H80
 Private Sub LogOpen()
     On Error Resume Next
     CreateDirectoryW StrPtr("C:\TEMP"), 0
-
     g_log = CreateFileW(StrPtr("C:\TEMP\debug.log"), GENERIC_WRITE, FILE_SHARE_READ Or FILE_SHARE_WRITE, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0)
     If g_log = 0 Or g_log = -1 Then g_log = 0
-
     LogMsg "==== LOG START ===="
 End Sub
 
@@ -312,7 +340,7 @@ Private Function PtrToAnsiString(ByVal p As LongPtr) As String
 End Function
 
 ' ============================================================
-' Helper: ANSI-Z buffer pointer for wglGetProcAddress
+' wglGetProcAddress helper
 ' ============================================================
 Private Function AnsiZBytes(ByVal s As String) As Byte()
     AnsiZBytes = StrConv(s & vbNullChar, vbFromUnicode)
@@ -325,31 +353,9 @@ Private Function GetGLProc(ByVal name As String) As LongPtr
 End Function
 
 ' ============================================================
-' Shader sources (desktop GLSL 1.10, no "precision"!)
-' built-in attributes: gl_Vertex / gl_Color (compat profile)
-' ============================================================
-Private Function VertSrc() As String
-    VertSrc = _
-        "#version 110" & vbLf & _
-        "varying vec4 vColor;" & vbLf & _
-        "void main(){" & vbLf & _
-        "  vColor = gl_Color;" & vbLf & _
-        "  gl_Position = gl_Vertex;" & vbLf & _
-        "}"
-End Function
-
-Private Function FragSrc() As String
-    FragSrc = _
-        "#version 110" & vbLf & _
-        "varying vec4 vColor;" & vbLf & _
-        "void main(){" & vbLf & _
-        "  gl_FragColor = vColor;" & vbLf & _
-        "}"
-End Function
-
-' ============================================================
-' CallWindowProc-based GL function pointer calls (<= 4 args)
-' RCX=hWnd, RDX=Msg, R8=wParam, R9=lParam
+' CallWindowProc-based GL calls
+' NOTE: Keep Msg "small" when possible to avoid weird freezes.
+' We use these for shader calls (they already work in your logs).
 ' ============================================================
 Private Function GL_Call0(ByVal proc As LongPtr) As LongPtr
     GL_Call0 = CallWindowProcW(proc, 0, 0, 0, 0)
@@ -372,41 +378,113 @@ Private Function GL_Call4(ByVal proc As LongPtr, ByVal a1 As LongPtr, ByVal a2 A
 End Function
 
 ' ============================================================
-' Shader compile/link helpers
+' Build x64 thunk for glGenBuffers:
+'   WNDPROC signature: (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+'   We pass: hwnd = real window, msg = n, wParam = ptr(buffers)
+'   In thunk: rcx=msg (n), rdx=wParam (ptr), call target glGenBuffers
 ' ============================================================
-Private Function CompileShader(ByVal shaderType As Long, ByVal src As String, ByVal tag As String) As Long
-    LogMsg "CompileShader(" & tag & "): glCreateShader"
-    Dim sh As Long
-    sh = CLng(GL_Call1(p_glCreateShader, shaderType))
-    LogMsg "CompileShader(" & tag & "): id=" & sh
-    If sh = 0 Then Err.Raise vbObjectError + 7000, , "glCreateShader failed (" & tag & ")"
+Private Function BuildThunk_GenBuffers(ByVal target As LongPtr) As LongPtr
+    ' Machine code (x64):
+    ' sub rsp,28h
+    ' mov rcx, rdx      ; rcx = msg (n)
+    ' mov rdx, r8       ; rdx = wParam (ptr)
+    ' mov rax, imm64
+    ' call rax
+    ' add rsp,28h
+    ' xor eax,eax
+    ' ret
 
-    ' glShaderSource(shader, 1, &stringPtr, NULL)
-    Dim srcBytes() As Byte: srcBytes = AnsiZBytes(src)
-    Dim pStr As LongPtr: pStr = VarPtr(srcBytes(0))   ' char*
-    Dim ppStr As LongPtr: ppStr = VarPtr(pStr)        ' char**
+    Dim code(0 To 28) As Byte
+    Dim i As Long: i = 0
 
-    LogMsg "CompileShader(" & tag & "): glShaderSource"
-    Call GL_Call4(p_glShaderSource, sh, 1, ppStr, 0)
+    ' 48 83 EC 28
+    code(i) = &H48: i = i + 1
+    code(i) = &H83: i = i + 1
+    code(i) = &HEC: i = i + 1
+    code(i) = &H28: i = i + 1
 
-    LogMsg "CompileShader(" & tag & "): glCompileShader"
-    Call GL_Call1(p_glCompileShader, sh)
+    ' 48 89 D1  (mov rcx, rdx)
+    code(i) = &H48: i = i + 1
+    code(i) = &H89: i = i + 1
+    code(i) = &HD1: i = i + 1
 
-    ' glGetShaderiv(shader, GL_COMPILE_STATUS, &ok)
-    Dim ok As Long
-    Call GL_Call3(p_glGetShaderiv, sh, GL_COMPILE_STATUS, VarPtr(ok))
-    LogMsg "CompileShader(" & tag & "): COMPILE_STATUS=" & ok
+    ' 4C 89 C2  (mov rdx, r8)
+    code(i) = &H4C: i = i + 1
+    code(i) = &H89: i = i + 1
+    code(i) = &HC2: i = i + 1
 
-    If ok = 0 Then
-        LogMsg "CompileShader(" & tag & "): collecting info log"
-        Dim info As String: info = GetShaderInfoLog(sh)
-        LogMsg "ShaderInfoLog(" & tag & "): " & Replace(info, vbCrLf, "\n")
-        Err.Raise vbObjectError + 7001, , "Shader compile failed (" & tag & ")"
+    ' 48 B8 imm64  (mov rax, target)
+    code(i) = &H48: i = i + 1
+    code(i) = &HB8: i = i + 1
+
+    Dim t As LongLong
+    t = target
+    ' write imm64 into code(i..i+7)
+    RtlMoveMemory code(i), VarPtr(t), 8
+    i = i + 8
+
+    ' FF D0 (call rax)
+    code(i) = &HFF: i = i + 1
+    code(i) = &HD0: i = i + 1
+
+    ' 48 83 C4 28 (add rsp,28h)
+    code(i) = &H48: i = i + 1
+    code(i) = &H83: i = i + 1
+    code(i) = &HC4: i = i + 1
+    code(i) = &H28: i = i + 1
+
+    ' 33 C0 (xor eax,eax)
+    code(i) = &H33: i = i + 1
+    code(i) = &HC0: i = i + 1
+
+    ' C3 (ret)
+    code(i) = &HC3
+
+    p_glGenBuffersThunkSize = 64
+    Dim mem As LongPtr
+    mem = VirtualAlloc(0, p_glGenBuffersThunkSize, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
+    If mem = 0 Then
+        Err.Raise vbObjectError + 9000, , "VirtualAlloc failed for thunk."
     End If
 
-    CompileShader = sh
+    CopyMemory mem, VarPtr(code(0)), 29
+    BuildThunk_GenBuffers = mem
 End Function
 
+Private Sub FreeThunk()
+    On Error Resume Next
+    If p_glGenBuffersThunk <> 0 Then
+        VirtualFree p_glGenBuffersThunk, 0, MEM_RELEASE
+        p_glGenBuffersThunk = 0
+        p_glGenBuffersThunkSize = 0
+    End If
+End Sub
+
+' ============================================================
+' GLSL (OpenGL 2.0 / GLSL 1.10)
+' ============================================================
+Private Function VertSrc() As String
+    VertSrc = _
+        "#version 110" & vbLf & _
+        "varying vec4 vColor;" & vbLf & _
+        "void main(){" & vbLf & _
+        "  vColor = gl_Color;" & vbLf & _
+        "  gl_Position = gl_Vertex;" & vbLf & _
+        "}"
+End Function
+
+Private Function FragSrc() As String
+    FragSrc = _
+        "#version 110" & vbLf & _
+        "varying vec4 vColor;" & vbLf & _
+        "void main(){" & vbLf & _
+        "  gl_FragColor = vColor;" & vbLf & _
+        "}"
+End Function
+
+' ============================================================
+' Shader helpers
+' ============================================================
 Private Function GetShaderInfoLog(ByVal shader As Long) As String
     Dim logLen As Long
     Call GL_Call3(p_glGetShaderiv, shader, GL_INFO_LOG_LENGTH, VarPtr(logLen))
@@ -416,7 +494,6 @@ Private Function GetShaderInfoLog(ByVal shader As Long) As String
     ReDim b(0 To logLen - 1) As Byte
 
     Dim outLen As Long: outLen = 0
-    ' glGetShaderInfoLog(shader, logLen, &outLen, buf)
     Call GL_Call4(p_glGetShaderInfoLog, shader, logLen, VarPtr(outLen), VarPtr(b(0)))
 
     If outLen > 0 Then ReDim Preserve b(0 To outLen - 1)
@@ -432,17 +509,45 @@ Private Function GetProgramInfoLog(ByVal prog As Long) As String
     ReDim b(0 To logLen - 1) As Byte
 
     Dim outLen As Long: outLen = 0
-    ' glGetProgramInfoLog(prog, logLen, &outLen, buf)
     Call GL_Call4(p_glGetProgramInfoLog, prog, logLen, VarPtr(outLen), VarPtr(b(0)))
 
     If outLen > 0 Then ReDim Preserve b(0 To outLen - 1)
     GetProgramInfoLog = StrConv(b, vbUnicode)
 End Function
 
+Private Function CompileShader(ByVal shaderType As Long, ByVal src As String, ByVal tag As String) As Long
+    LogMsg "CompileShader(" & tag & "): glCreateShader"
+    Dim sh As Long
+    sh = CLng(GL_Call1(p_glCreateShader, shaderType))
+    LogMsg "CompileShader(" & tag & "): id=" & sh
+    If sh = 0 Then Err.Raise vbObjectError + 7000, , "glCreateShader failed (" & tag & ")"
+
+    Dim srcBytes() As Byte: srcBytes = AnsiZBytes(src)
+    Dim pStr As LongPtr: pStr = VarPtr(srcBytes(0))  ' char*
+    Dim ppStr As LongPtr: ppStr = VarPtr(pStr)       ' char**
+
+    LogMsg "CompileShader(" & tag & "): glShaderSource"
+    Call GL_Call4(p_glShaderSource, sh, 1, ppStr, 0)
+
+    LogMsg "CompileShader(" & tag & "): glCompileShader"
+    Call GL_Call1(p_glCompileShader, sh)
+
+    Dim ok As Long
+    Call GL_Call3(p_glGetShaderiv, sh, GL_COMPILE_STATUS, VarPtr(ok))
+    LogMsg "CompileShader(" & tag & "): COMPILE_STATUS=" & ok
+
+    If ok = 0 Then
+        Dim info As String: info = GetShaderInfoLog(sh)
+        LogMsg "ShaderInfoLog(" & tag & "): " & Replace(info, vbCrLf, "\n")
+        Err.Raise vbObjectError + 7001, , "Shader compile failed (" & tag & ")"
+    End If
+
+    CompileShader = sh
+End Function
+
 Private Sub InitGL2Shader()
     LogMsg "InitGL2Shader: start"
 
-    ' Load function pointers
     p_glCreateShader = GetGLProc("glCreateShader")
     p_glShaderSource = GetGLProc("glShaderSource")
     p_glCompileShader = GetGLProc("glCompileShader")
@@ -456,25 +561,21 @@ Private Sub InitGL2Shader()
     p_glGetProgramInfoLog = GetGLProc("glGetProgramInfoLog")
 
     LogMsg "Proc glCreateShader=" & Hex$(p_glCreateShader)
-    LogMsg "Proc glShaderSource=" & Hex$(p_glShaderSource)
     LogMsg "Proc glCreateProgram=" & Hex$(p_glCreateProgram)
 
     If p_glCreateShader = 0 Or p_glCreateProgram = 0 Or p_glGetShaderiv = 0 Then
         Err.Raise vbObjectError + 7100, , "OpenGL 2.0 shader entry points not available."
     End If
 
-    ' Log GL strings (current context required)
     LogMsg "glGetString(VENDOR)   = " & PtrToAnsiString(glGetString(GL_VENDOR))
     LogMsg "glGetString(RENDERER) = " & PtrToAnsiString(glGetString(GL_RENDERER))
     LogMsg "glGetString(VERSION)  = " & PtrToAnsiString(glGetString(GL_VERSION))
     LogMsg "glGetString(GLSL)     = " & PtrToAnsiString(glGetString(GL_SHADING_LANGUAGE_VERSION))
 
-    ' Compile shaders
     Dim vs As Long, fs As Long
     vs = CompileShader(GL_VERTEX_SHADER, VertSrc(), "VS")
     fs = CompileShader(GL_FRAGMENT_SHADER, FragSrc(), "FS")
 
-    ' Link program
     LogMsg "InitGL2Shader: glCreateProgram"
     g_program = CLng(GL_Call0(p_glCreateProgram))
     LogMsg "Program id=" & g_program
@@ -503,7 +604,75 @@ Private Sub InitGL2Shader()
 End Sub
 
 ' ============================================================
-' Window procedure
+' VBO init (fix: glGenBuffers via thunk)
+' ============================================================
+Private Sub InitVBO()
+    LogMsg "InitVBO: start"
+
+    p_glGenBuffers = GetGLProc("glGenBuffers")
+    p_glBindBuffer = GetGLProc("glBindBuffer")
+    p_glBufferData = GetGLProc("glBufferData")
+
+    LogMsg "Proc glGenBuffers=" & Hex$(p_glGenBuffers)
+    LogMsg "Proc glBindBuffer=" & Hex$(p_glBindBuffer)
+    LogMsg "Proc glBufferData=" & Hex$(p_glBufferData)
+
+    If p_glGenBuffers = 0 Or p_glBindBuffer = 0 Or p_glBufferData = 0 Then
+        Err.Raise vbObjectError + 7300, , "VBO entry points not available."
+    End If
+
+    ' Build thunk ONLY for glGenBuffers (avoid pointer-in-Msg freeze)
+    If p_glGenBuffersThunk = 0 Then
+        LogMsg "InitVBO: build glGenBuffers thunk..."
+        p_glGenBuffersThunk = BuildThunk_GenBuffers(p_glGenBuffers)
+        LogMsg "InitVBO: glGenBuffersThunk=" & Hex$(p_glGenBuffersThunk)
+    End If
+
+    Dim bufs(0 To 1) As Long ' GLuint[2]
+
+    LogMsg "InitVBO: calling glGenBuffers via thunk..."
+    ' CallWindowProcW(thunk, realHWND, msg=n, wParam=ptr(bufs), lParam=0)
+    CallWindowProcW p_glGenBuffersThunk, g_hWnd, 2, CLngPtr(VarPtr(bufs(0))), 0
+    LogMsg "InitVBO: glGenBuffers returned: bufs(0)=" & bufs(0) & ", bufs(1)=" & bufs(1)
+
+    g_vboPos = bufs(0)
+    g_vboCol = bufs(1)
+    LogMsg "InitVBO: g_vboPos=" & g_vboPos & ", g_vboCol=" & g_vboCol
+
+    ' Triangle data (float)
+    Dim vertices(0 To 8) As Single
+    vertices(0) = 0!:   vertices(1) = 0.6!:  vertices(2) = 0!
+    vertices(3) = 0.6!: vertices(4) = -0.6!: vertices(5) = 0!
+    vertices(6) = -0.6!: vertices(7) = -0.6!: vertices(8) = 0!
+
+    Dim colors(0 To 8) As Single
+    colors(0) = 1!: colors(1) = 0!: colors(2) = 0!
+    colors(3) = 0!: colors(4) = 1!: colors(5) = 0!
+    colors(6) = 0!: colors(7) = 0!: colors(8) = 1!
+
+    Dim bytesVerts As LongPtr: bytesVerts = 9 * 4
+    Dim bytesCols As LongPtr:  bytesCols = 9 * 4
+
+    ' Upload vertices: glBufferData(target, size, dataPtr, usage)
+    LogMsg "InitVBO: upload vertices"
+    Call GL_Call2(p_glBindBuffer, GL_ARRAY_BUFFER, g_vboPos)
+    Call GL_Call4(p_glBufferData, GL_ARRAY_BUFFER, bytesVerts, CLngPtr(VarPtr(vertices(0))), GL_STATIC_DRAW)
+    LogMsg "InitVBO: vertices uploaded"
+
+    ' Upload colors
+    LogMsg "InitVBO: upload colors"
+    Call GL_Call2(p_glBindBuffer, GL_ARRAY_BUFFER, g_vboCol)
+    Call GL_Call4(p_glBufferData, GL_ARRAY_BUFFER, bytesCols, CLngPtr(VarPtr(colors(0))), GL_STATIC_DRAW)
+    LogMsg "InitVBO: colors uploaded"
+
+    ' Unbind
+    Call GL_Call2(p_glBindBuffer, GL_ARRAY_BUFFER, 0)
+
+    LogMsg "InitVBO: done"
+End Sub
+
+' ============================================================
+' Window proc
 ' ============================================================
 Public Function WindowProc(ByVal hWnd As LongPtr, ByVal uMsg As Long, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
     Select Case uMsg
@@ -540,7 +709,7 @@ Public Function WindowProc(ByVal hWnd As LongPtr, ByVal uMsg As Long, ByVal wPar
 End Function
 
 ' ============================================================
-' OpenGL init / shutdown
+' OpenGL context init/shutdown
 ' ============================================================
 Private Function EnableOpenGL(ByVal hWnd As LongPtr, ByVal hDC As LongPtr) As LongPtr
     LogMsg "EnableOpenGL: start"
@@ -605,26 +774,29 @@ Private Sub DisableOpenGL(ByVal hWnd As LongPtr, ByVal hDC As LongPtr, ByVal hRC
 End Sub
 
 ' ============================================================
-' Rendering (uses immediate mode + shader built-ins)
+' Render
 ' ============================================================
-Private Sub DrawTriangle()
-    ' Shader must be bound
+Private Sub RenderFrame()
     If g_program <> 0 Then
         Call GL_Call1(p_glUseProgram, g_program)
     End If
 
-    glBegin GL_TRIANGLES
+    glEnableClientState GL_VERTEX_ARRAY
+    glEnableClientState GL_COLOR_ARRAY
 
-    glColor3f 1!, 0!, 0!
-    glVertex2f 0!, 0.6!
+    ' positions
+    Call GL_Call2(p_glBindBuffer, GL_ARRAY_BUFFER, g_vboPos)
+    glVertexPointer 3, GL_FLOAT, 0, 0
 
-    glColor3f 0!, 1!, 0!
-    glVertex2f 0.6!, -0.6!
+    ' colors
+    Call GL_Call2(p_glBindBuffer, GL_ARRAY_BUFFER, g_vboCol)
+    glColorPointer 3, GL_FLOAT, 0, 0
 
-    glColor3f 0!, 0!, 1!
-    glVertex2f -0.6!, -0.6!
+    glDrawArrays GL_TRIANGLES, 0, 3
 
-    glEnd
+    Call GL_Call2(p_glBindBuffer, GL_ARRAY_BUFFER, 0)
+    glDisableClientState GL_COLOR_ARRAY
+    glDisableClientState GL_VERTEX_ARRAY
 End Sub
 
 ' ============================================================
@@ -692,13 +864,13 @@ Public Sub Main()
     InitGL2Shader
     LogMsg "InitGL2Shader OK"
 
-    ' Message loop + render loop
-    Dim msg As MSGW
-    Dim quit As Boolean
-    quit = False
+    LogMsg "InitVBO..."
+    InitVBO
+    LogMsg "InitVBO OK"
 
-    Dim frame As Long
-    frame = 0
+    Dim msg As MSGW
+    Dim quit As Boolean: quit = False
+    Dim frame As Long: frame = 0
 
     LogMsg "Loop: start"
     Do While Not quit
@@ -716,13 +888,13 @@ Public Sub Main()
             glClearColor 0!, 0!, 0!, 1!
             glClear GL_COLOR_BUFFER_BIT Or GL_DEPTH_BUFFER_BIT
 
-            DrawTriangle
+            RenderFrame
             SwapBuffers g_hDC
 
             frame = frame + 1
             If (frame Mod 60) = 0 Then
                 LogMsg "Loop: frame=" & frame
-                DoEvents ' Excel 側の応答性確保
+                DoEvents
             End If
 
             Sleep 1
@@ -737,8 +909,13 @@ FIN:
     If g_hWnd <> 0 Then
         DestroyWindow g_hWnd
     End If
+
+    FreeThunk
+
     g_program = 0
+    g_vboPos = 0: g_vboCol = 0
     g_hRC = 0: g_hDC = 0: g_hWnd = 0
+
     LogMsg "Cleanup: done"
     LogMsg "Main: end"
     LogClose
@@ -748,3 +925,5 @@ EH:
     LogMsg "ERROR: " & Err.Number & " / " & Err.Description
     Resume FIN
 End Sub
+
+
