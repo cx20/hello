@@ -1,4 +1,4 @@
-Attribute VB_Name = "Harmonograph"
+Attribute VB_Name = "hello"
 Option Explicit
 
 ' ============================================================
@@ -109,8 +109,8 @@ Private Const D3D12_COLOR_WRITE_ENABLE_ALL As Long = 15
 Private Const D3DCOMPILE_ENABLE_STRICTNESS As Long = &H800&
 
 Private Const FRAME_COUNT As Long = 2
-Private Const WIDTH As Long = 800
-Private Const HEIGHT As Long = 600
+Private Const Width As Long = 800
+Private Const Height As Long = 600
 Private Const VERTEX_COUNT As Long = 100000
 
 ' -----------------------------
@@ -262,12 +262,12 @@ Private Type DXGI_MODE_DESC
 End Type
 
 Private Type DXGI_SAMPLE_DESC
-    Count As Long
+    count As Long
     Quality As Long
 End Type
 
 Private Type DXGI_SWAP_CHAIN_DESC
-    BufferDesc As DXGI_MODE_DESC
+    bufferDesc As DXGI_MODE_DESC
     SampleDesc As DXGI_SAMPLE_DESC
     BufferUsage As Long
     BufferCount As Long
@@ -523,12 +523,13 @@ End Type
 
 ' Harmonograph parameters (must match HLSL)
 Private Type HarmonographParams
-    A1 As Single: f1 As Single: p1 As Single: d1 As Single
-    A2 As Single: f2 As Single: p2 As Single: d2 As Single
-    A3 As Single: f3 As Single: p3 As Single: d3 As Single
-    A4 As Single: f4 As Single: p4 As Single: d4 As Single
+    a1 As Single: f1 As Single: p1 As Single: d1 As Single
+    a2 As Single: f2 As Single: p2 As Single: d2 As Single
+    a3 As Single: f3 As Single: p3 As Single: d3 As Single
+    a4 As Single: f4 As Single: p4 As Single: d4 As Single
     max_num As Long
-    padding1 As Single: padding2 As Single: padding3 As Single
+    time As Single       ' Animation time
+    padding2 As Single: padding3 As Single
     resolutionX As Single: resolutionY As Single
     padding4 As Single: padding5 As Single
 End Type
@@ -620,10 +621,11 @@ Private g_pSwapChain As LongPtr
 Private g_pSwapChain3 As LongPtr
 Private g_pRtvHeap As LongPtr
 Private g_pSrvUavHeap As LongPtr
-Private g_pGraphicsCommandAllocator As LongPtr
-Private g_pComputeCommandAllocator As LongPtr
 Private g_pGraphicsCommandList As LongPtr
-Private g_pComputeCommandList As LongPtr
+
+Private g_pCommandAllocators(0 To FRAME_COUNT - 1) As LongPtr
+Private g_fenceValues(0 To FRAME_COUNT - 1) As LongLong
+
 Private g_pComputeRootSignature As LongPtr
 Private g_pGraphicsRootSignature As LongPtr
 Private g_pComputePipelineState As LongPtr
@@ -659,17 +661,27 @@ Private Const MEM_RESERVE As Long = &H2000&
 Private Const MEM_RELEASE As Long = &H8000&
 Private Const PAGE_EXECUTE_READWRITE As Long = &H40&
 
-Private p_thunk1 As LongPtr
-Private p_thunk2 As LongPtr
-Private p_thunk3 As LongPtr
-Private p_thunk4 As LongPtr
-Private p_thunk5 As LongPtr
-Private p_thunk6 As LongPtr
-Private p_thunk7 As LongPtr
-Private p_thunk8 As LongPtr
-Private p_thunk9 As LongPtr
-Private p_thunkRetStruct As LongPtr
-Private p_thunkRetStruct2 As LongPtr
+' Thunk cache - store up to 64 thunks per argument count
+Private Type ThunkCache
+    targets(0 To 63) As LongPtr
+    thunks(0 To 63) As LongPtr
+    count As Long
+End Type
+
+Private g_thunkCache1 As ThunkCache
+Private g_thunkCache2 As ThunkCache
+Private g_thunkCache3 As ThunkCache
+Private g_thunkCache4 As ThunkCache
+Private g_thunkCache5 As ThunkCache
+Private g_thunkCache6 As ThunkCache
+Private g_thunkCache7 As ThunkCache
+Private g_thunkCache8 As ThunkCache
+Private g_thunkCache9 As ThunkCache
+Private g_thunkCacheRetStruct As ThunkCache
+
+' Animation
+Private g_startTime As Double
+Private g_frameCount As Long
 
 #If VBA7 Then
     ' Win32
@@ -1206,72 +1218,265 @@ Private Function BuildThunkRetStruct(ByVal target As LongPtr) As LongPtr
     BuildThunkRetStruct = mem
 End Function
 
-Private Sub FreeThunks()
-    On Error Resume Next
-    If p_thunk1 <> 0 Then VirtualFree p_thunk1, 0, MEM_RELEASE: p_thunk1 = 0
-    If p_thunk2 <> 0 Then VirtualFree p_thunk2, 0, MEM_RELEASE: p_thunk2 = 0
-    If p_thunk3 <> 0 Then VirtualFree p_thunk3, 0, MEM_RELEASE: p_thunk3 = 0
-    If p_thunk4 <> 0 Then VirtualFree p_thunk4, 0, MEM_RELEASE: p_thunk4 = 0
-    If p_thunk5 <> 0 Then VirtualFree p_thunk5, 0, MEM_RELEASE: p_thunk5 = 0
-    If p_thunk6 <> 0 Then VirtualFree p_thunk6, 0, MEM_RELEASE: p_thunk6 = 0
-    If p_thunk7 <> 0 Then VirtualFree p_thunk7, 0, MEM_RELEASE: p_thunk7 = 0
-    If p_thunk8 <> 0 Then VirtualFree p_thunk8, 0, MEM_RELEASE: p_thunk8 = 0
-    If p_thunk9 <> 0 Then VirtualFree p_thunk9, 0, MEM_RELEASE: p_thunk9 = 0
-    If p_thunkRetStruct <> 0 Then VirtualFree p_thunkRetStruct, 0, MEM_RELEASE: p_thunkRetStruct = 0
-    If p_thunkRetStruct2 <> 0 Then VirtualFree p_thunkRetStruct2, 0, MEM_RELEASE: p_thunkRetStruct2 = 0
+Private Sub FreeThunkCache(ByRef cache As ThunkCache)
+    Dim i As Long
+    For i = 0 To cache.count - 1
+        If cache.thunks(i) <> 0 Then
+            VirtualFree cache.thunks(i), 0, MEM_RELEASE
+            cache.thunks(i) = 0
+        End If
+        cache.targets(i) = 0
+    Next i
+    cache.count = 0
 End Sub
 
+Private Sub FreeThunks()
+    On Error Resume Next
+    FreeThunkCache g_thunkCache1
+    FreeThunkCache g_thunkCache2
+    FreeThunkCache g_thunkCache3
+    FreeThunkCache g_thunkCache4
+    FreeThunkCache g_thunkCache5
+    FreeThunkCache g_thunkCache6
+    FreeThunkCache g_thunkCache7
+    FreeThunkCache g_thunkCache8
+    FreeThunkCache g_thunkCache9
+    FreeThunkCache g_thunkCacheRetStruct
+End Sub
+
+' Get or create cached thunk
+Private Function GetCachedThunk1(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache1.count - 1
+        If g_thunkCache1.targets(i) = target Then
+            GetCachedThunk1 = g_thunkCache1.thunks(i)
+            Exit Function
+        End If
+    Next i
+    ' Create new thunk
+    If g_thunkCache1.count < 64 Then
+        g_thunkCache1.targets(g_thunkCache1.count) = target
+        g_thunkCache1.thunks(g_thunkCache1.count) = BuildThunk1(target)
+        GetCachedThunk1 = g_thunkCache1.thunks(g_thunkCache1.count)
+        g_thunkCache1.count = g_thunkCache1.count + 1
+    Else
+        GetCachedThunk1 = BuildThunk1(target)
+    End If
+End Function
+
+Private Function GetCachedThunk2(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache2.count - 1
+        If g_thunkCache2.targets(i) = target Then
+            GetCachedThunk2 = g_thunkCache2.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache2.count < 64 Then
+        g_thunkCache2.targets(g_thunkCache2.count) = target
+        g_thunkCache2.thunks(g_thunkCache2.count) = BuildThunk2(target)
+        GetCachedThunk2 = g_thunkCache2.thunks(g_thunkCache2.count)
+        g_thunkCache2.count = g_thunkCache2.count + 1
+    Else
+        GetCachedThunk2 = BuildThunk2(target)
+    End If
+End Function
+
+Private Function GetCachedThunk3(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache3.count - 1
+        If g_thunkCache3.targets(i) = target Then
+            GetCachedThunk3 = g_thunkCache3.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache3.count < 64 Then
+        g_thunkCache3.targets(g_thunkCache3.count) = target
+        g_thunkCache3.thunks(g_thunkCache3.count) = BuildThunk3(target)
+        GetCachedThunk3 = g_thunkCache3.thunks(g_thunkCache3.count)
+        g_thunkCache3.count = g_thunkCache3.count + 1
+    Else
+        GetCachedThunk3 = BuildThunk3(target)
+    End If
+End Function
+
+Private Function GetCachedThunk4(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache4.count - 1
+        If g_thunkCache4.targets(i) = target Then
+            GetCachedThunk4 = g_thunkCache4.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache4.count < 64 Then
+        g_thunkCache4.targets(g_thunkCache4.count) = target
+        g_thunkCache4.thunks(g_thunkCache4.count) = BuildThunk4(target)
+        GetCachedThunk4 = g_thunkCache4.thunks(g_thunkCache4.count)
+        g_thunkCache4.count = g_thunkCache4.count + 1
+    Else
+        GetCachedThunk4 = BuildThunk4(target)
+    End If
+End Function
+
+Private Function GetCachedThunk5(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache5.count - 1
+        If g_thunkCache5.targets(i) = target Then
+            GetCachedThunk5 = g_thunkCache5.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache5.count < 64 Then
+        g_thunkCache5.targets(g_thunkCache5.count) = target
+        g_thunkCache5.thunks(g_thunkCache5.count) = BuildThunk5(target)
+        GetCachedThunk5 = g_thunkCache5.thunks(g_thunkCache5.count)
+        g_thunkCache5.count = g_thunkCache5.count + 1
+    Else
+        GetCachedThunk5 = BuildThunk5(target)
+    End If
+End Function
+
+Private Function GetCachedThunk6(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache6.count - 1
+        If g_thunkCache6.targets(i) = target Then
+            GetCachedThunk6 = g_thunkCache6.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache6.count < 64 Then
+        g_thunkCache6.targets(g_thunkCache6.count) = target
+        g_thunkCache6.thunks(g_thunkCache6.count) = BuildThunk6(target)
+        GetCachedThunk6 = g_thunkCache6.thunks(g_thunkCache6.count)
+        g_thunkCache6.count = g_thunkCache6.count + 1
+    Else
+        GetCachedThunk6 = BuildThunk6(target)
+    End If
+End Function
+
+Private Function GetCachedThunk7(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache7.count - 1
+        If g_thunkCache7.targets(i) = target Then
+            GetCachedThunk7 = g_thunkCache7.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache7.count < 64 Then
+        g_thunkCache7.targets(g_thunkCache7.count) = target
+        g_thunkCache7.thunks(g_thunkCache7.count) = BuildThunk7(target)
+        GetCachedThunk7 = g_thunkCache7.thunks(g_thunkCache7.count)
+        g_thunkCache7.count = g_thunkCache7.count + 1
+    Else
+        GetCachedThunk7 = BuildThunk7(target)
+    End If
+End Function
+
+Private Function GetCachedThunk8(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache8.count - 1
+        If g_thunkCache8.targets(i) = target Then
+            GetCachedThunk8 = g_thunkCache8.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache8.count < 64 Then
+        g_thunkCache8.targets(g_thunkCache8.count) = target
+        g_thunkCache8.thunks(g_thunkCache8.count) = BuildThunk8(target)
+        GetCachedThunk8 = g_thunkCache8.thunks(g_thunkCache8.count)
+        g_thunkCache8.count = g_thunkCache8.count + 1
+    Else
+        GetCachedThunk8 = BuildThunk8(target)
+    End If
+End Function
+
+Private Function GetCachedThunk9(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache9.count - 1
+        If g_thunkCache9.targets(i) = target Then
+            GetCachedThunk9 = g_thunkCache9.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache9.count < 64 Then
+        g_thunkCache9.targets(g_thunkCache9.count) = target
+        g_thunkCache9.thunks(g_thunkCache9.count) = BuildThunk9(target)
+        GetCachedThunk9 = g_thunkCache9.thunks(g_thunkCache9.count)
+        g_thunkCache9.count = g_thunkCache9.count + 1
+    Else
+        GetCachedThunk9 = BuildThunk9(target)
+    End If
+End Function
+
+Private Function GetCachedThunkRetStruct(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCacheRetStruct.count - 1
+        If g_thunkCacheRetStruct.targets(i) = target Then
+            GetCachedThunkRetStruct = g_thunkCacheRetStruct.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCacheRetStruct.count < 64 Then
+        g_thunkCacheRetStruct.targets(g_thunkCacheRetStruct.count) = target
+        g_thunkCacheRetStruct.thunks(g_thunkCacheRetStruct.count) = BuildThunkRetStruct(target)
+        GetCachedThunkRetStruct = g_thunkCacheRetStruct.thunks(g_thunkCacheRetStruct.count)
+        g_thunkCacheRetStruct.count = g_thunkCacheRetStruct.count + 1
+    Else
+        GetCachedThunkRetStruct = BuildThunkRetStruct(target)
+    End If
+End Function
+
 ' ============================================================
-' COM Call helpers
+' COM Call helpers (using cached thunks)
 ' ============================================================
 Private Function COM_Call1(ByVal pObj As LongPtr, ByVal vtIndex As Long) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk1 <> 0 Then VirtualFree p_thunk1, 0, MEM_RELEASE
-    p_thunk1 = BuildThunk1(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk1(methodAddr)
     
     Dim args As ThunkArgs1
     args.a1 = pObj
     
-    COM_Call1 = CallWindowProcW(p_thunk1, 0, 0, VarPtr(args), 0)
+    COM_Call1 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call2(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk2 <> 0 Then VirtualFree p_thunk2, 0, MEM_RELEASE
-    p_thunk2 = BuildThunk2(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk2(methodAddr)
     
     Dim args As ThunkArgs2
     args.a1 = pObj
     args.a2 = a2
     
-    COM_Call2 = CallWindowProcW(p_thunk2, 0, 0, VarPtr(args), 0)
+    COM_Call2 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call3(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk3 <> 0 Then VirtualFree p_thunk3, 0, MEM_RELEASE
-    p_thunk3 = BuildThunk3(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk3(methodAddr)
     
     Dim args As ThunkArgs3
     args.a1 = pObj
     args.a2 = a2
     args.a3 = a3
     
-    COM_Call3 = CallWindowProcW(p_thunk3, 0, 0, VarPtr(args), 0)
+    COM_Call3 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call4(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk4 <> 0 Then VirtualFree p_thunk4, 0, MEM_RELEASE
-    p_thunk4 = BuildThunk4(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk4(methodAddr)
     
     Dim args As ThunkArgs4
     args.a1 = pObj
@@ -1279,15 +1484,15 @@ Private Function COM_Call4(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a
     args.a3 = a3
     args.a4 = a4
     
-    COM_Call4 = CallWindowProcW(p_thunk4, 0, 0, VarPtr(args), 0)
+    COM_Call4 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call5(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr, ByVal a5 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk5 <> 0 Then VirtualFree p_thunk5, 0, MEM_RELEASE
-    p_thunk5 = BuildThunk5(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk5(methodAddr)
     
     Dim args As ThunkArgs5
     args.a1 = pObj
@@ -1296,15 +1501,15 @@ Private Function COM_Call5(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a
     args.a4 = a4
     args.a5 = a5
     
-    COM_Call5 = CallWindowProcW(p_thunk5, 0, 0, VarPtr(args), 0)
+    COM_Call5 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call6(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr, ByVal a5 As LongPtr, ByVal a6 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk6 <> 0 Then VirtualFree p_thunk6, 0, MEM_RELEASE
-    p_thunk6 = BuildThunk6(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk6(methodAddr)
     
     Dim args As ThunkArgs6
     args.a1 = pObj
@@ -1314,15 +1519,15 @@ Private Function COM_Call6(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a
     args.a5 = a5
     args.a6 = a6
     
-    COM_Call6 = CallWindowProcW(p_thunk6, 0, 0, VarPtr(args), 0)
+    COM_Call6 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call7(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr, ByVal a5 As LongPtr, ByVal a6 As LongPtr, ByVal a7 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk7 <> 0 Then VirtualFree p_thunk7, 0, MEM_RELEASE
-    p_thunk7 = BuildThunk7(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk7(methodAddr)
     
     Dim args As ThunkArgs7
     args.a1 = pObj
@@ -1333,7 +1538,7 @@ Private Function COM_Call7(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a
     args.a6 = a6
     args.a7 = a7
     
-    COM_Call7 = CallWindowProcW(p_thunk7, 0, 0, VarPtr(args), 0)
+    COM_Call7 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Sub COM_Release(ByVal pObj As LongPtr)
@@ -1347,14 +1552,14 @@ Private Sub COM_GetCPUDescriptorHandle(ByVal pHeap As LongPtr, ByRef outHandle A
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pHeap, VTBL_DescHeap_GetCPUDescriptorHandleForHeapStart)
     
-    If p_thunkRetStruct <> 0 Then VirtualFree p_thunkRetStruct, 0, MEM_RELEASE
-    p_thunkRetStruct = BuildThunkRetStruct(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunkRetStruct(methodAddr)
     
     Dim args As ThunkArgs2
     args.a1 = pHeap
     args.a2 = VarPtr(outHandle)
     
-    CallWindowProcW p_thunkRetStruct, 0, 0, VarPtr(args), 0
+    CallWindowProcW thunk, 0, 0, VarPtr(args), 0
 End Sub
 
 ' Special call for GetGPUDescriptorHandleForHeapStart
@@ -1362,14 +1567,14 @@ Private Sub COM_GetGPUDescriptorHandle(ByVal pHeap As LongPtr, ByRef outHandle A
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pHeap, VTBL_DescHeap_GetGPUDescriptorHandleForHeapStart)
     
-    If p_thunkRetStruct2 <> 0 Then VirtualFree p_thunkRetStruct2, 0, MEM_RELEASE
-    p_thunkRetStruct2 = BuildThunkRetStruct(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunkRetStruct(methodAddr)
     
     Dim args As ThunkArgs2
     args.a1 = pHeap
     args.a2 = VarPtr(outHandle)
     
-    CallWindowProcW p_thunkRetStruct2, 0, 0, VarPtr(args), 0
+    CallWindowProcW thunk, 0, 0, VarPtr(args), 0
 End Sub
 
 ' ============================================================
@@ -1394,8 +1599,8 @@ Private Function CompileShaderFromFile(ByVal filePath As String, ByVal entryPoin
         Err.Raise vbObjectError + 8101, , "D3DCompileFromFile not found"
     End If
     
-    If p_thunk9 <> 0 Then VirtualFree p_thunk9, 0, MEM_RELEASE
-    p_thunk9 = BuildThunk9(pD3DCompileFromFile)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk9(pD3DCompileFromFile)
     
     Dim entryBytes() As Byte: entryBytes = AnsiZBytes(entryPoint)
     Dim profileBytes() As Byte: profileBytes = AnsiZBytes(profile)
@@ -1416,7 +1621,7 @@ Private Function CompileShaderFromFile(ByVal filePath As String, ByVal entryPoin
     args.a9 = VarPtr(pErrorBlob)
     
     Dim hr As Long
-    hr = ToHResult(CallWindowProcW(p_thunk9, 0, 0, VarPtr(args), 0))
+    hr = ToHResult(CallWindowProcW(thunk, 0, 0, VarPtr(args), 0))
     LogMsg "D3DCompileFromFile returned: " & Hex$(hr)
     
     If hr < 0 Then
@@ -1499,10 +1704,10 @@ Private Function InitD3D12(ByVal hWnd As LongPtr) As Boolean
     
     ' Create Swap Chain
     Dim swapChainDesc As DXGI_SWAP_CHAIN_DESC
-    swapChainDesc.BufferDesc.Width = WIDTH
-    swapChainDesc.BufferDesc.Height = HEIGHT
-    swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM
-    swapChainDesc.SampleDesc.Count = 1
+    swapChainDesc.bufferDesc.Width = Width
+    swapChainDesc.bufferDesc.Height = Height
+    swapChainDesc.bufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM
+    swapChainDesc.SampleDesc.count = 1
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT
     swapChainDesc.BufferCount = FRAME_COUNT
     swapChainDesc.OutputWindow = hWnd
@@ -1584,24 +1789,20 @@ Private Function InitD3D12(ByVal hWnd As LongPtr) As Boolean
         COM_Call4 g_pDevice, VTBL_Device_CreateRenderTargetView, g_pRenderTargets(frameIdx), 0, rtvHandle.ptr
         rtvHandle.ptr = rtvHandle.ptr + g_rtvDescriptorSize
     Next frameIdx
-    
-    ' Create Command Allocators
+
+    ' Create Command Allocators (for each frame)
     Dim allocIID As GUID: allocIID = IID_ID3D12CommandAllocator()
-    hr = ToHResult(COM_Call4(g_pDevice, VTBL_Device_CreateCommandAllocator, D3D12_COMMAND_LIST_TYPE_DIRECT, VarPtr(allocIID), VarPtr(g_pGraphicsCommandAllocator)))
-    LogMsg "CreateCommandAllocator (Graphics) returned: " & Hex$(hr)
-    If hr < 0 Then
-        COM_Release pFactory
-        InitD3D12 = False
-        Exit Function
-    End If
-    
-    hr = ToHResult(COM_Call4(g_pDevice, VTBL_Device_CreateCommandAllocator, D3D12_COMMAND_LIST_TYPE_DIRECT, VarPtr(allocIID), VarPtr(g_pComputeCommandAllocator)))
-    LogMsg "CreateCommandAllocator (Compute) returned: " & Hex$(hr)
-    If hr < 0 Then
-        COM_Release pFactory
-        InitD3D12 = False
-        Exit Function
-    End If
+    Dim i As Long
+    For i = 0 To FRAME_COUNT - 1
+        hr = ToHResult(COM_Call4(g_pDevice, VTBL_Device_CreateCommandAllocator, D3D12_COMMAND_LIST_TYPE_DIRECT, VarPtr(allocIID), VarPtr(g_pCommandAllocators(i))))
+        LogMsg "CreateCommandAllocator[" & i & "] returned: " & Hex$(hr)
+        If hr < 0 Then
+            COM_Release pFactory
+            InitD3D12 = False
+            Exit Function
+        End If
+        g_fenceValues(i) = 0
+    Next i
     
     COM_Release pFactory
     
@@ -1843,7 +2044,7 @@ Private Function CreatePipelineStates() As Boolean
     graphicsPsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT
     graphicsPsoDesc.NumRenderTargets = 1
     graphicsPsoDesc.RTVFormats(0) = DXGI_FORMAT_R8G8B8A8_UNORM
-    graphicsPsoDesc.SampleDesc.Count = 1
+    graphicsPsoDesc.SampleDesc.count = 1
     
     hr = ToHResult(COM_Call4(g_pDevice, VTBL_Device_CreateGraphicsPipelineState, VarPtr(graphicsPsoDesc), VarPtr(psoIID), VarPtr(g_pGraphicsPipelineState)))
     LogMsg "CreateGraphicsPipelineState returned: " & Hex$(hr)
@@ -1865,27 +2066,18 @@ Private Function CreateCommandLists() As Boolean
     Dim cmdListIID As GUID: cmdListIID = IID_ID3D12GraphicsCommandList()
     Dim hr As Long
     
-    ' Graphics command list
-    hr = ToHResult(COM_Call7(g_pDevice, VTBL_Device_CreateCommandList, 0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pGraphicsCommandAllocator, g_pGraphicsPipelineState, VarPtr(cmdListIID), VarPtr(g_pGraphicsCommandList)))
-    LogMsg "CreateCommandList (Graphics) returned: " & Hex$(hr)
+    ' Create one single command list for both Compute and Graphics
+    ' Use index 0 allocator for initial creation
+    hr = ToHResult(COM_Call7(g_pDevice, VTBL_Device_CreateCommandList, 0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pCommandAllocators(0), 0, VarPtr(cmdListIID), VarPtr(g_pGraphicsCommandList)))
+    
+    LogMsg "CreateCommandList returned: " & Hex$(hr)
     If hr < 0 Then
         CreateCommandLists = False
         Exit Function
     End If
     
-    ' Close graphics command list
+    ' Close it immediately (it will be reset in RenderFrame)
     COM_Call1 g_pGraphicsCommandList, VTBL_CmdList_Close
-    
-    ' Compute command list
-    hr = ToHResult(COM_Call7(g_pDevice, VTBL_Device_CreateCommandList, 0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pComputeCommandAllocator, g_pComputePipelineState, VarPtr(cmdListIID), VarPtr(g_pComputeCommandList)))
-    LogMsg "CreateCommandList (Compute) returned: " & Hex$(hr)
-    If hr < 0 Then
-        CreateCommandLists = False
-        Exit Function
-    End If
-    
-    ' Close compute command list
-    COM_Call1 g_pComputeCommandList, VTBL_CmdList_Close
     
     CreateCommandLists = True
     LogMsg "CreateCommandLists: done"
@@ -1919,7 +2111,7 @@ Private Function CreateBuffers() As Boolean
     bufferDesc.Height = 1
     bufferDesc.DepthOrArraySize = 1
     bufferDesc.MipLevels = 1
-    bufferDesc.SampleDesc.Count = 1
+    bufferDesc.SampleDesc.count = 1
     bufferDesc.Layout = 1  ' ROW_MAJOR
     bufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
     
@@ -1929,8 +2121,9 @@ Private Function CreateBuffers() As Boolean
     ' Create position buffer
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(g_pDevice, VTBL_Device_CreateCommittedResource)
-    If p_thunk8 <> 0 Then VirtualFree p_thunk8, 0, MEM_RELEASE
-    p_thunk8 = BuildThunk8(methodAddr)
+    
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk8(methodAddr)
     
     Dim args8 As ThunkArgs8
     args8.a1 = g_pDevice
@@ -1942,7 +2135,7 @@ Private Function CreateBuffers() As Boolean
     args8.a7 = VarPtr(resourceIID)
     args8.a8 = VarPtr(g_pPositionBuffer)
     
-    hr = ToHResult(CallWindowProcW(p_thunk8, 0, 0, VarPtr(args8), 0))
+    hr = ToHResult(CallWindowProcW(thunk, 0, 0, VarPtr(args8), 0))
     LogMsg "CreateCommittedResource (Position) returned: " & Hex$(hr)
     If hr < 0 Then
         CreateBuffers = False
@@ -1951,7 +2144,7 @@ Private Function CreateBuffers() As Boolean
     
     ' Create color buffer
     args8.a8 = VarPtr(g_pColorBuffer)
-    hr = ToHResult(CallWindowProcW(p_thunk8, 0, 0, VarPtr(args8), 0))
+    hr = ToHResult(CallWindowProcW(thunk, 0, 0, VarPtr(args8), 0))
     LogMsg "CreateCommittedResource (Color) returned: " & Hex$(hr)
     If hr < 0 Then
         CreateBuffers = False
@@ -1965,7 +2158,7 @@ Private Function CreateBuffers() As Boolean
     cbDesc.Height = 1
     cbDesc.DepthOrArraySize = 1
     cbDesc.MipLevels = 1
-    cbDesc.SampleDesc.Count = 1
+    cbDesc.SampleDesc.count = 1
     cbDesc.Layout = 1
     cbDesc.Flags = 0
     
@@ -1974,7 +2167,7 @@ Private Function CreateBuffers() As Boolean
     args8.a5 = D3D12_RESOURCE_STATE_GENERIC_READ
     args8.a8 = VarPtr(g_pConstantBuffer)
     
-    hr = ToHResult(CallWindowProcW(p_thunk8, 0, 0, VarPtr(args8), 0))
+    hr = ToHResult(CallWindowProcW(thunk, 0, 0, VarPtr(args8), 0))
     LogMsg "CreateCommittedResource (ConstantBuffer) returned: " & Hex$(hr)
     If hr < 0 Then
         CreateBuffers = False
@@ -2079,13 +2272,17 @@ Private Sub UpdateConstantBuffer()
     Dim params As HarmonographParams
     
     ' Harmonograph parameters
-    params.A1 = 50!: params.f1 = 2.01!: params.p1 = 0!: params.d1 = 0.004!
-    params.A2 = 50!: params.f2 = 3!: params.p2 = 0!: params.d2 = 0.0065!
-    params.A3 = 50!: params.f3 = 3!: params.p3 = 1.57!: params.d3 = 0.008!
-    params.A4 = 50!: params.f4 = 2!: params.p4 = 0!: params.d4 = 0.019!
+    params.a1 = 50!: params.f1 = 2.01!: params.p1 = 0!: params.d1 = 0.004!
+    params.a2 = 50!: params.f2 = 3!: params.p2 = 0!: params.d2 = 0.0065!
+    params.a3 = 50!: params.f3 = 3!: params.p3 = 1.57!: params.d3 = 0.008!
+    params.a4 = 50!: params.f4 = 2!: params.p4 = 0!: params.d4 = 0.019!
     params.max_num = VERTEX_COUNT
-    params.resolutionX = CSng(WIDTH)
-    params.resolutionY = CSng(HEIGHT)
+    
+    ' Animation time (seconds since start)
+    params.time = CSng((Timer - g_startTime))
+    
+    params.resolutionX = CSng(Width)
+    params.resolutionY = CSng(Height)
     
     CopyMemory g_pConstantBufferPtr, VarPtr(params), CLngPtr(LenB(params))
 End Sub
@@ -2093,22 +2290,44 @@ End Sub
 ' ============================================================
 ' Wait for previous frame
 ' ============================================================
-Private Sub WaitForPreviousFrame()
-    Dim fence As LongLong
-    fence = g_fenceValue
+'Private Sub WaitForPreviousFrame()
+'    Dim fence As LongLong
+'    fence = g_fenceValue
+'
+'    COM_Call3 g_pCommandQueue, VTBL_CmdQueue_Signal, g_pFence, CLngPtr(fence)
+'    g_fenceValue = g_fenceValue + 1
+'
+'    Dim completed As LongLong
+'    completed = COM_Call1(g_pFence, VTBL_Fence_GetCompletedValue)
+'
+'    If completed < fence Then
+'        COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(fence), g_fenceEvent
+'        WaitForSingleObject g_fenceEvent, INFINITE
+'    End If
+'
+'    g_frameIndex = CLng(COM_Call1(g_pSwapChain3, VTBL_SwapChain3_GetCurrentBackBufferIndex))
+'End Sub
+
+
+Private Sub MoveToNextFrame()
+    Dim currentFenceValue As LongLong
+    currentFenceValue = g_fenceValue
+    COM_Call3 g_pCommandQueue, VTBL_CmdQueue_Signal, g_pFence, CLngPtr(currentFenceValue)
     
-    COM_Call3 g_pCommandQueue, VTBL_CmdQueue_Signal, g_pFence, CLngPtr(fence)
-    g_fenceValue = g_fenceValue + 1
+    Dim nextFrameIndex As Long
+    nextFrameIndex = CLng(COM_Call1(g_pSwapChain3, VTBL_SwapChain3_GetCurrentBackBufferIndex))
     
-    Dim completed As LongLong
-    completed = COM_Call1(g_pFence, VTBL_Fence_GetCompletedValue)
+    Dim nextFrameFenceValue As LongLong
+    nextFrameFenceValue = g_fenceValues(nextFrameIndex)
     
-    If completed < fence Then
-        COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(fence), g_fenceEvent
+    If COM_Call1(g_pFence, VTBL_Fence_GetCompletedValue) < nextFrameFenceValue Then
+        COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(nextFrameFenceValue), g_fenceEvent
         WaitForSingleObject g_fenceEvent, INFINITE
     End If
     
-    g_frameIndex = CLng(COM_Call1(g_pSwapChain3, VTBL_SwapChain3_GetCurrentBackBufferIndex))
+    g_fenceValues(nextFrameIndex) = currentFenceValue + 1
+    g_fenceValue = currentFenceValue + 1
+    g_frameIndex = nextFrameIndex
 End Sub
 
 ' ============================================================
@@ -2118,34 +2337,34 @@ Private Sub RenderFrame()
     ' Update constant buffer
     UpdateConstantBuffer
     
-    ' ====== COMPUTE PASS ======
-    COM_Call1 g_pComputeCommandAllocator, VTBL_CmdAlloc_Reset
-    COM_Call3 g_pComputeCommandList, VTBL_CmdList_Reset, g_pComputeCommandAllocator, g_pComputePipelineState
+    COM_Call1 g_pCommandAllocators(g_frameIndex), VTBL_CmdAlloc_Reset
     
-    ' Set descriptor heaps
+    COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_Reset, g_pCommandAllocators(g_frameIndex), g_pComputePipelineState
+    
     Dim heapPtr As LongPtr: heapPtr = g_pSrvUavHeap
-    COM_Call3 g_pComputeCommandList, VTBL_CmdList_SetDescriptorHeaps, 1, VarPtr(heapPtr)
+    COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_SetDescriptorHeaps, 1, VarPtr(heapPtr)
     
-    ' Set compute root signature
-    COM_Call2 g_pComputeCommandList, VTBL_CmdList_SetComputeRootSignature, g_pComputeRootSignature
+    ' ==========================================
+    ' [COMPUTE PASS]
+    ' ==========================================
+    COM_Call2 g_pGraphicsCommandList, VTBL_CmdList_SetComputeRootSignature, g_pComputeRootSignature
     
-    ' Set compute root descriptor tables
     Dim gpuHandle As D3D12_GPU_DESCRIPTOR_HANDLE
     COM_GetGPUDescriptorHandle g_pSrvUavHeap, gpuHandle
     
-    ' Table 0: UAVs (slot 0)
-    COM_Call3 g_pComputeCommandList, VTBL_CmdList_SetComputeRootDescriptorTable, 0, gpuHandle.ptr
-    
-    ' Table 1: CBV (slot 4)
-    gpuHandle.ptr = gpuHandle.ptr + CLngLng(g_srvUavDescriptorSize) * 4
-    COM_Call3 g_pComputeCommandList, VTBL_CmdList_SetComputeRootDescriptorTable, 1, gpuHandle.ptr
+    ' Table 0: UAVs
+    COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_SetComputeRootDescriptorTable, 0, gpuHandle.ptr
+    ' Table 1: CBV
+    Dim cbvOffsetHandle As LongLong
+    cbvOffsetHandle = gpuHandle.ptr + CLngLng(g_srvUavDescriptorSize) * 4
+    COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_SetComputeRootDescriptorTable, 1, cbvOffsetHandle
     
     ' Dispatch
     Dim dispatchX As Long
     dispatchX = (VERTEX_COUNT + 63) \ 64
-    COM_Call4 g_pComputeCommandList, VTBL_CmdList_Dispatch, dispatchX, 1, 1
+    COM_Call4 g_pGraphicsCommandList, VTBL_CmdList_Dispatch, dispatchX, 1, 1
     
-    ' Resource barriers: UAV -> SRV
+    ' Resource Barrier: UAV -> SRV
     Dim barriers(0 To 1) As D3D12_RESOURCE_BARRIER
     barriers(0).cType = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
     barriers(0).Transition.pResource = g_pPositionBuffer
@@ -2159,49 +2378,31 @@ Private Sub RenderFrame()
     barriers(1).Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS
     barriers(1).Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
     
-    COM_Call3 g_pComputeCommandList, VTBL_CmdList_ResourceBarrier, 2, VarPtr(barriers(0))
+    COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_ResourceBarrier, 2, VarPtr(barriers(0))
     
-    ' Close and execute compute command list
-    COM_Call1 g_pComputeCommandList, VTBL_CmdList_Close
-    
-    Dim computeList As LongPtr: computeList = g_pComputeCommandList
-    COM_Call3 g_pCommandQueue, VTBL_CmdQueue_ExecuteCommandLists, 1, VarPtr(computeList)
-    
-    ' ====== GRAPHICS PASS ======
-    COM_Call1 g_pGraphicsCommandAllocator, VTBL_CmdAlloc_Reset
-    COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_Reset, g_pGraphicsCommandAllocator, g_pGraphicsPipelineState
-    
-    ' Set descriptor heaps
-    COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_SetDescriptorHeaps, 1, VarPtr(heapPtr)
-    
-    ' Set graphics root signature
+    ' ==========================================
+    ' [GRAPHICS PASS]
+    ' ==========================================
     COM_Call2 g_pGraphicsCommandList, VTBL_CmdList_SetGraphicsRootSignature, g_pGraphicsRootSignature
+    COM_Call2 g_pGraphicsCommandList, VTBL_CmdList_SetPipelineState, g_pGraphicsPipelineState
     
-    ' Set graphics root descriptor tables
-    COM_GetGPUDescriptorHandle g_pSrvUavHeap, gpuHandle
+    ' Table 0: SRVs
+    Dim srvOffsetHandle As LongLong
+    srvOffsetHandle = gpuHandle.ptr + CLngLng(g_srvUavDescriptorSize) * 2
+    COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_SetGraphicsRootDescriptorTable, 0, srvOffsetHandle
+    ' Table 1: CBV
+    COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_SetGraphicsRootDescriptorTable, 1, cbvOffsetHandle
     
-    ' Table 0: SRVs (slot 2)
-    gpuHandle.ptr = gpuHandle.ptr + CLngLng(g_srvUavDescriptorSize) * 2
-    COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_SetGraphicsRootDescriptorTable, 0, gpuHandle.ptr
-    
-    ' Table 1: CBV (slot 4)
-    gpuHandle.ptr = gpuHandle.ptr + CLngLng(g_srvUavDescriptorSize) * 2
-    COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_SetGraphicsRootDescriptorTable, 1, gpuHandle.ptr
-    
-    ' Set viewport
+    ' Viewport & Scissor
     Dim vp As D3D12_VIEWPORT
-    vp.Width = CSng(WIDTH)
-    vp.Height = CSng(HEIGHT)
-    vp.MaxDepth = 1!
+    vp.Width = CSng(Width): vp.Height = CSng(Height): vp.MaxDepth = 1!
     COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_RSSetViewports, 1, VarPtr(vp)
     
-    ' Set scissor rect
     Dim sr As D3D12_RECT
-    sr.Right = WIDTH
-    sr.Bottom = HEIGHT
+    sr.Right = Width: sr.Bottom = Height
     COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_RSSetScissorRects, 1, VarPtr(sr)
     
-    ' Resource barrier: PRESENT -> RENDER_TARGET
+    ' Barrier: Present -> RenderTarget
     Dim rtBarrier As D3D12_RESOURCE_BARRIER
     rtBarrier.cType = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
     rtBarrier.Transition.pResource = g_pRenderTargets(g_frameIndex)
@@ -2210,48 +2411,58 @@ Private Sub RenderFrame()
     rtBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
     COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_ResourceBarrier, 1, VarPtr(rtBarrier)
     
-    ' Get RTV handle for current frame
+    ' RTV & Clear
     Dim rtvHandle As D3D12_CPU_DESCRIPTOR_HANDLE
     COM_GetCPUDescriptorHandle g_pRtvHeap, rtvHandle
     rtvHandle.ptr = rtvHandle.ptr + CLngPtr(g_frameIndex) * CLngPtr(g_rtvDescriptorSize)
     
-    ' Clear render target (dark blue)
     Dim clearColor(0 To 3) As Single
     clearColor(0) = 0.05!: clearColor(1) = 0.05!: clearColor(2) = 0.1!: clearColor(3) = 1!
+    
+    COM_Call5 g_pGraphicsCommandList, VTBL_CmdList_OMSetRenderTargets, 1, VarPtr(rtvHandle), 1, 0
     COM_Call5 g_pGraphicsCommandList, VTBL_CmdList_ClearRenderTargetView, rtvHandle.ptr, VarPtr(clearColor(0)), 0, 0
     
-    ' Set render target
-    COM_Call5 g_pGraphicsCommandList, VTBL_CmdList_OMSetRenderTargets, 1, VarPtr(rtvHandle), 1, 0
-    
-    ' Set primitive topology (point list)
-    COM_Call2 g_pGraphicsCommandList, VTBL_CmdList_IASetPrimitiveTopology, D3D_PRIMITIVE_TOPOLOGY_POINTLIST
-    
     ' Draw
+    COM_Call2 g_pGraphicsCommandList, VTBL_CmdList_IASetPrimitiveTopology, 1 ' POINTLIST
     COM_Call5 g_pGraphicsCommandList, VTBL_CmdList_DrawInstanced, VERTEX_COUNT, 1, 0, 0
     
-    ' Resource barrier: RENDER_TARGET -> PRESENT
+    ' Barrier: RenderTarget -> Present
     rtBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET
     rtBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT
     COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_ResourceBarrier, 1, VarPtr(rtBarrier)
     
-    ' Resource barriers: SRV -> UAV (for next frame)
+    ' Barrier: SRV -> UAV
     barriers(0).Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
     barriers(0).Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS
     barriers(1).Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
     barriers(1).Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS
     COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_ResourceBarrier, 2, VarPtr(barriers(0))
     
-    ' Close and execute graphics command list
+    ' Close & Execute
     COM_Call1 g_pGraphicsCommandList, VTBL_CmdList_Close
     
-    Dim graphicsList As LongPtr: graphicsList = g_pGraphicsCommandList
-    COM_Call3 g_pCommandQueue, VTBL_CmdQueue_ExecuteCommandLists, 1, VarPtr(graphicsList)
+    Dim ptrList As LongPtr: ptrList = g_pGraphicsCommandList
+    COM_Call3 g_pCommandQueue, VTBL_CmdQueue_ExecuteCommandLists, 1, VarPtr(ptrList)
     
     ' Present
-    COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 1, 0
+    COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 1, 0 ' VSync ON
+    ' COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 0, 0 ' VSync OFF
     
-    ' Wait for frame
-    WaitForPreviousFrame
+    MoveToNextFrame
+End Sub
+
+' ============================================================
+' Wait for GPU to finish all work (for cleanup)
+' ============================================================
+Private Sub WaitForGpu()
+    g_fenceValue = g_fenceValue + 1
+    
+    Call COM_Call3(g_pCommandQueue, VTBL_CmdQueue_Signal, g_pFence, CLngPtr(g_fenceValue))
+    
+    If COM_Call1(g_pFence, VTBL_Fence_GetCompletedValue) < g_fenceValue Then
+        Call COM_Call3(g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(g_fenceValue), g_fenceEvent)
+        WaitForSingleObject g_fenceEvent, INFINITE
+    End If
 End Sub
 
 ' ============================================================
@@ -2260,7 +2471,7 @@ End Sub
 Private Sub CleanupD3D12()
     LogMsg "CleanupD3D12: start"
     
-    WaitForPreviousFrame
+    WaitForGpu
     
     If g_fenceEvent <> 0 Then CloseHandle g_fenceEvent: g_fenceEvent = 0
     
@@ -2273,14 +2484,19 @@ Private Sub CleanupD3D12()
     If g_pColorBuffer <> 0 Then COM_Release g_pColorBuffer: g_pColorBuffer = 0
     If g_pPositionBuffer <> 0 Then COM_Release g_pPositionBuffer: g_pPositionBuffer = 0
     If g_pFence <> 0 Then COM_Release g_pFence: g_pFence = 0
-    If g_pComputeCommandList <> 0 Then COM_Release g_pComputeCommandList: g_pComputeCommandList = 0
+    'If g_pComputeCommandList <> 0 Then COM_Release g_pComputeCommandList: g_pComputeCommandList = 0
     If g_pGraphicsCommandList <> 0 Then COM_Release g_pGraphicsCommandList: g_pGraphicsCommandList = 0
     If g_pGraphicsPipelineState <> 0 Then COM_Release g_pGraphicsPipelineState: g_pGraphicsPipelineState = 0
     If g_pComputePipelineState <> 0 Then COM_Release g_pComputePipelineState: g_pComputePipelineState = 0
     If g_pGraphicsRootSignature <> 0 Then COM_Release g_pGraphicsRootSignature: g_pGraphicsRootSignature = 0
     If g_pComputeRootSignature <> 0 Then COM_Release g_pComputeRootSignature: g_pComputeRootSignature = 0
-    If g_pComputeCommandAllocator <> 0 Then COM_Release g_pComputeCommandAllocator: g_pComputeCommandAllocator = 0
-    If g_pGraphicsCommandAllocator <> 0 Then COM_Release g_pGraphicsCommandAllocator: g_pGraphicsCommandAllocator = 0
+    'If g_pComputeCommandAllocator <> 0 Then COM_Release g_pComputeCommandAllocator: g_pComputeCommandAllocator = 0
+    'If g_pGraphicsCommandAllocator <> 0 Then COM_Release g_pGraphicsCommandAllocator: g_pGraphicsCommandAllocator = 0
+
+    Dim j As Long
+    For j = 0 To FRAME_COUNT - 1
+        If g_pCommandAllocators(j) <> 0 Then COM_Release g_pCommandAllocators(j): g_pCommandAllocators(j) = 0
+    Next j
     
     Dim i As Long
     For i = 0 To FRAME_COUNT - 1
@@ -2336,7 +2552,7 @@ Public Sub Main()
     End If
 
     g_hWnd = CreateWindowExW(0, StrPtr(CLASS_NAME), StrPtr(WINDOW_NAME), WS_OVERLAPPEDWINDOW, _
-                            CW_USEDEFAULT, CW_USEDEFAULT, WIDTH, HEIGHT, 0, 0, hInstance, 0)
+                            CW_USEDEFAULT, CW_USEDEFAULT, Width, Height, 0, 0, hInstance, 0)
     If g_hWnd = 0 Then
         MsgBox "CreateWindowExW failed.", vbCritical
         GoTo FIN
@@ -2385,6 +2601,10 @@ Public Sub Main()
         GoTo FIN
     End If
 
+    ' Initialize animation timer
+    g_startTime = Timer
+    g_frameCount = 0
+
     ' Message loop
     Dim msg As MSGW
     Dim quit As Boolean: quit = False
@@ -2426,3 +2646,5 @@ EH:
     LogMsg "ERROR: " & Err.Number & " / " & Err.Description
     Resume FIN
 End Sub
+
+
