@@ -1,4 +1,4 @@
-Attribute VB_Name = "Harmonograph"
+Attribute VB_Name = "hello"
 Option Explicit
 
 ' ============================================================
@@ -528,7 +528,8 @@ Private Type HarmonographParams
     A3 As Single: f3 As Single: p3 As Single: d3 As Single
     A4 As Single: f4 As Single: p4 As Single: d4 As Single
     max_num As Long
-    padding1 As Single: padding2 As Single: padding3 As Single
+    time As Single       ' Animation time
+    padding2 As Single: padding3 As Single
     resolutionX As Single: resolutionY As Single
     padding4 As Single: padding5 As Single
 End Type
@@ -659,17 +660,27 @@ Private Const MEM_RESERVE As Long = &H2000&
 Private Const MEM_RELEASE As Long = &H8000&
 Private Const PAGE_EXECUTE_READWRITE As Long = &H40&
 
-Private p_thunk1 As LongPtr
-Private p_thunk2 As LongPtr
-Private p_thunk3 As LongPtr
-Private p_thunk4 As LongPtr
-Private p_thunk5 As LongPtr
-Private p_thunk6 As LongPtr
-Private p_thunk7 As LongPtr
-Private p_thunk8 As LongPtr
-Private p_thunk9 As LongPtr
-Private p_thunkRetStruct As LongPtr
-Private p_thunkRetStruct2 As LongPtr
+' Thunk cache - store up to 64 thunks per argument count
+Private Type ThunkCache
+    targets(0 To 63) As LongPtr
+    thunks(0 To 63) As LongPtr
+    count As Long
+End Type
+
+Private g_thunkCache1 As ThunkCache
+Private g_thunkCache2 As ThunkCache
+Private g_thunkCache3 As ThunkCache
+Private g_thunkCache4 As ThunkCache
+Private g_thunkCache5 As ThunkCache
+Private g_thunkCache6 As ThunkCache
+Private g_thunkCache7 As ThunkCache
+Private g_thunkCache8 As ThunkCache
+Private g_thunkCache9 As ThunkCache
+Private g_thunkCacheRetStruct As ThunkCache
+
+' Animation
+Private g_startTime As Double
+Private g_frameCount As Long
 
 #If VBA7 Then
     ' Win32
@@ -1206,72 +1217,265 @@ Private Function BuildThunkRetStruct(ByVal target As LongPtr) As LongPtr
     BuildThunkRetStruct = mem
 End Function
 
-Private Sub FreeThunks()
-    On Error Resume Next
-    If p_thunk1 <> 0 Then VirtualFree p_thunk1, 0, MEM_RELEASE: p_thunk1 = 0
-    If p_thunk2 <> 0 Then VirtualFree p_thunk2, 0, MEM_RELEASE: p_thunk2 = 0
-    If p_thunk3 <> 0 Then VirtualFree p_thunk3, 0, MEM_RELEASE: p_thunk3 = 0
-    If p_thunk4 <> 0 Then VirtualFree p_thunk4, 0, MEM_RELEASE: p_thunk4 = 0
-    If p_thunk5 <> 0 Then VirtualFree p_thunk5, 0, MEM_RELEASE: p_thunk5 = 0
-    If p_thunk6 <> 0 Then VirtualFree p_thunk6, 0, MEM_RELEASE: p_thunk6 = 0
-    If p_thunk7 <> 0 Then VirtualFree p_thunk7, 0, MEM_RELEASE: p_thunk7 = 0
-    If p_thunk8 <> 0 Then VirtualFree p_thunk8, 0, MEM_RELEASE: p_thunk8 = 0
-    If p_thunk9 <> 0 Then VirtualFree p_thunk9, 0, MEM_RELEASE: p_thunk9 = 0
-    If p_thunkRetStruct <> 0 Then VirtualFree p_thunkRetStruct, 0, MEM_RELEASE: p_thunkRetStruct = 0
-    If p_thunkRetStruct2 <> 0 Then VirtualFree p_thunkRetStruct2, 0, MEM_RELEASE: p_thunkRetStruct2 = 0
+Private Sub FreeThunkCache(ByRef cache As ThunkCache)
+    Dim i As Long
+    For i = 0 To cache.count - 1
+        If cache.thunks(i) <> 0 Then
+            VirtualFree cache.thunks(i), 0, MEM_RELEASE
+            cache.thunks(i) = 0
+        End If
+        cache.targets(i) = 0
+    Next i
+    cache.count = 0
 End Sub
 
+Private Sub FreeThunks()
+    On Error Resume Next
+    FreeThunkCache g_thunkCache1
+    FreeThunkCache g_thunkCache2
+    FreeThunkCache g_thunkCache3
+    FreeThunkCache g_thunkCache4
+    FreeThunkCache g_thunkCache5
+    FreeThunkCache g_thunkCache6
+    FreeThunkCache g_thunkCache7
+    FreeThunkCache g_thunkCache8
+    FreeThunkCache g_thunkCache9
+    FreeThunkCache g_thunkCacheRetStruct
+End Sub
+
+' Get or create cached thunk
+Private Function GetCachedThunk1(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache1.count - 1
+        If g_thunkCache1.targets(i) = target Then
+            GetCachedThunk1 = g_thunkCache1.thunks(i)
+            Exit Function
+        End If
+    Next i
+    ' Create new thunk
+    If g_thunkCache1.count < 64 Then
+        g_thunkCache1.targets(g_thunkCache1.count) = target
+        g_thunkCache1.thunks(g_thunkCache1.count) = BuildThunk1(target)
+        GetCachedThunk1 = g_thunkCache1.thunks(g_thunkCache1.count)
+        g_thunkCache1.count = g_thunkCache1.count + 1
+    Else
+        GetCachedThunk1 = BuildThunk1(target)
+    End If
+End Function
+
+Private Function GetCachedThunk2(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache2.count - 1
+        If g_thunkCache2.targets(i) = target Then
+            GetCachedThunk2 = g_thunkCache2.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache2.count < 64 Then
+        g_thunkCache2.targets(g_thunkCache2.count) = target
+        g_thunkCache2.thunks(g_thunkCache2.count) = BuildThunk2(target)
+        GetCachedThunk2 = g_thunkCache2.thunks(g_thunkCache2.count)
+        g_thunkCache2.count = g_thunkCache2.count + 1
+    Else
+        GetCachedThunk2 = BuildThunk2(target)
+    End If
+End Function
+
+Private Function GetCachedThunk3(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache3.count - 1
+        If g_thunkCache3.targets(i) = target Then
+            GetCachedThunk3 = g_thunkCache3.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache3.count < 64 Then
+        g_thunkCache3.targets(g_thunkCache3.count) = target
+        g_thunkCache3.thunks(g_thunkCache3.count) = BuildThunk3(target)
+        GetCachedThunk3 = g_thunkCache3.thunks(g_thunkCache3.count)
+        g_thunkCache3.count = g_thunkCache3.count + 1
+    Else
+        GetCachedThunk3 = BuildThunk3(target)
+    End If
+End Function
+
+Private Function GetCachedThunk4(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache4.count - 1
+        If g_thunkCache4.targets(i) = target Then
+            GetCachedThunk4 = g_thunkCache4.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache4.count < 64 Then
+        g_thunkCache4.targets(g_thunkCache4.count) = target
+        g_thunkCache4.thunks(g_thunkCache4.count) = BuildThunk4(target)
+        GetCachedThunk4 = g_thunkCache4.thunks(g_thunkCache4.count)
+        g_thunkCache4.count = g_thunkCache4.count + 1
+    Else
+        GetCachedThunk4 = BuildThunk4(target)
+    End If
+End Function
+
+Private Function GetCachedThunk5(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache5.count - 1
+        If g_thunkCache5.targets(i) = target Then
+            GetCachedThunk5 = g_thunkCache5.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache5.count < 64 Then
+        g_thunkCache5.targets(g_thunkCache5.count) = target
+        g_thunkCache5.thunks(g_thunkCache5.count) = BuildThunk5(target)
+        GetCachedThunk5 = g_thunkCache5.thunks(g_thunkCache5.count)
+        g_thunkCache5.count = g_thunkCache5.count + 1
+    Else
+        GetCachedThunk5 = BuildThunk5(target)
+    End If
+End Function
+
+Private Function GetCachedThunk6(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache6.count - 1
+        If g_thunkCache6.targets(i) = target Then
+            GetCachedThunk6 = g_thunkCache6.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache6.count < 64 Then
+        g_thunkCache6.targets(g_thunkCache6.count) = target
+        g_thunkCache6.thunks(g_thunkCache6.count) = BuildThunk6(target)
+        GetCachedThunk6 = g_thunkCache6.thunks(g_thunkCache6.count)
+        g_thunkCache6.count = g_thunkCache6.count + 1
+    Else
+        GetCachedThunk6 = BuildThunk6(target)
+    End If
+End Function
+
+Private Function GetCachedThunk7(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache7.count - 1
+        If g_thunkCache7.targets(i) = target Then
+            GetCachedThunk7 = g_thunkCache7.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache7.count < 64 Then
+        g_thunkCache7.targets(g_thunkCache7.count) = target
+        g_thunkCache7.thunks(g_thunkCache7.count) = BuildThunk7(target)
+        GetCachedThunk7 = g_thunkCache7.thunks(g_thunkCache7.count)
+        g_thunkCache7.count = g_thunkCache7.count + 1
+    Else
+        GetCachedThunk7 = BuildThunk7(target)
+    End If
+End Function
+
+Private Function GetCachedThunk8(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache8.count - 1
+        If g_thunkCache8.targets(i) = target Then
+            GetCachedThunk8 = g_thunkCache8.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache8.count < 64 Then
+        g_thunkCache8.targets(g_thunkCache8.count) = target
+        g_thunkCache8.thunks(g_thunkCache8.count) = BuildThunk8(target)
+        GetCachedThunk8 = g_thunkCache8.thunks(g_thunkCache8.count)
+        g_thunkCache8.count = g_thunkCache8.count + 1
+    Else
+        GetCachedThunk8 = BuildThunk8(target)
+    End If
+End Function
+
+Private Function GetCachedThunk9(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCache9.count - 1
+        If g_thunkCache9.targets(i) = target Then
+            GetCachedThunk9 = g_thunkCache9.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCache9.count < 64 Then
+        g_thunkCache9.targets(g_thunkCache9.count) = target
+        g_thunkCache9.thunks(g_thunkCache9.count) = BuildThunk9(target)
+        GetCachedThunk9 = g_thunkCache9.thunks(g_thunkCache9.count)
+        g_thunkCache9.count = g_thunkCache9.count + 1
+    Else
+        GetCachedThunk9 = BuildThunk9(target)
+    End If
+End Function
+
+Private Function GetCachedThunkRetStruct(ByVal target As LongPtr) As LongPtr
+    Dim i As Long
+    For i = 0 To g_thunkCacheRetStruct.count - 1
+        If g_thunkCacheRetStruct.targets(i) = target Then
+            GetCachedThunkRetStruct = g_thunkCacheRetStruct.thunks(i)
+            Exit Function
+        End If
+    Next i
+    If g_thunkCacheRetStruct.count < 64 Then
+        g_thunkCacheRetStruct.targets(g_thunkCacheRetStruct.count) = target
+        g_thunkCacheRetStruct.thunks(g_thunkCacheRetStruct.count) = BuildThunkRetStruct(target)
+        GetCachedThunkRetStruct = g_thunkCacheRetStruct.thunks(g_thunkCacheRetStruct.count)
+        g_thunkCacheRetStruct.count = g_thunkCacheRetStruct.count + 1
+    Else
+        GetCachedThunkRetStruct = BuildThunkRetStruct(target)
+    End If
+End Function
+
 ' ============================================================
-' COM Call helpers
+' COM Call helpers (using cached thunks)
 ' ============================================================
 Private Function COM_Call1(ByVal pObj As LongPtr, ByVal vtIndex As Long) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk1 <> 0 Then VirtualFree p_thunk1, 0, MEM_RELEASE
-    p_thunk1 = BuildThunk1(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk1(methodAddr)
     
     Dim args As ThunkArgs1
     args.a1 = pObj
     
-    COM_Call1 = CallWindowProcW(p_thunk1, 0, 0, VarPtr(args), 0)
+    COM_Call1 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call2(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk2 <> 0 Then VirtualFree p_thunk2, 0, MEM_RELEASE
-    p_thunk2 = BuildThunk2(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk2(methodAddr)
     
     Dim args As ThunkArgs2
     args.a1 = pObj
     args.a2 = a2
     
-    COM_Call2 = CallWindowProcW(p_thunk2, 0, 0, VarPtr(args), 0)
+    COM_Call2 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call3(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk3 <> 0 Then VirtualFree p_thunk3, 0, MEM_RELEASE
-    p_thunk3 = BuildThunk3(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk3(methodAddr)
     
     Dim args As ThunkArgs3
     args.a1 = pObj
     args.a2 = a2
     args.a3 = a3
     
-    COM_Call3 = CallWindowProcW(p_thunk3, 0, 0, VarPtr(args), 0)
+    COM_Call3 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call4(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk4 <> 0 Then VirtualFree p_thunk4, 0, MEM_RELEASE
-    p_thunk4 = BuildThunk4(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk4(methodAddr)
     
     Dim args As ThunkArgs4
     args.a1 = pObj
@@ -1279,15 +1483,15 @@ Private Function COM_Call4(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a
     args.a3 = a3
     args.a4 = a4
     
-    COM_Call4 = CallWindowProcW(p_thunk4, 0, 0, VarPtr(args), 0)
+    COM_Call4 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call5(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr, ByVal a5 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk5 <> 0 Then VirtualFree p_thunk5, 0, MEM_RELEASE
-    p_thunk5 = BuildThunk5(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk5(methodAddr)
     
     Dim args As ThunkArgs5
     args.a1 = pObj
@@ -1296,15 +1500,15 @@ Private Function COM_Call5(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a
     args.a4 = a4
     args.a5 = a5
     
-    COM_Call5 = CallWindowProcW(p_thunk5, 0, 0, VarPtr(args), 0)
+    COM_Call5 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call6(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr, ByVal a5 As LongPtr, ByVal a6 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk6 <> 0 Then VirtualFree p_thunk6, 0, MEM_RELEASE
-    p_thunk6 = BuildThunk6(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk6(methodAddr)
     
     Dim args As ThunkArgs6
     args.a1 = pObj
@@ -1314,15 +1518,15 @@ Private Function COM_Call6(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a
     args.a5 = a5
     args.a6 = a6
     
-    COM_Call6 = CallWindowProcW(p_thunk6, 0, 0, VarPtr(args), 0)
+    COM_Call6 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call7(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr, ByVal a5 As LongPtr, ByVal a6 As LongPtr, ByVal a7 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pObj, vtIndex)
     
-    If p_thunk7 <> 0 Then VirtualFree p_thunk7, 0, MEM_RELEASE
-    p_thunk7 = BuildThunk7(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk7(methodAddr)
     
     Dim args As ThunkArgs7
     args.a1 = pObj
@@ -1333,7 +1537,7 @@ Private Function COM_Call7(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a
     args.a6 = a6
     args.a7 = a7
     
-    COM_Call7 = CallWindowProcW(p_thunk7, 0, 0, VarPtr(args), 0)
+    COM_Call7 = CallWindowProcW(thunk, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Sub COM_Release(ByVal pObj As LongPtr)
@@ -1347,14 +1551,14 @@ Private Sub COM_GetCPUDescriptorHandle(ByVal pHeap As LongPtr, ByRef outHandle A
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pHeap, VTBL_DescHeap_GetCPUDescriptorHandleForHeapStart)
     
-    If p_thunkRetStruct <> 0 Then VirtualFree p_thunkRetStruct, 0, MEM_RELEASE
-    p_thunkRetStruct = BuildThunkRetStruct(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunkRetStruct(methodAddr)
     
     Dim args As ThunkArgs2
     args.a1 = pHeap
     args.a2 = VarPtr(outHandle)
     
-    CallWindowProcW p_thunkRetStruct, 0, 0, VarPtr(args), 0
+    CallWindowProcW thunk, 0, 0, VarPtr(args), 0
 End Sub
 
 ' Special call for GetGPUDescriptorHandleForHeapStart
@@ -1362,14 +1566,14 @@ Private Sub COM_GetGPUDescriptorHandle(ByVal pHeap As LongPtr, ByRef outHandle A
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(pHeap, VTBL_DescHeap_GetGPUDescriptorHandleForHeapStart)
     
-    If p_thunkRetStruct2 <> 0 Then VirtualFree p_thunkRetStruct2, 0, MEM_RELEASE
-    p_thunkRetStruct2 = BuildThunkRetStruct(methodAddr)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunkRetStruct(methodAddr)
     
     Dim args As ThunkArgs2
     args.a1 = pHeap
     args.a2 = VarPtr(outHandle)
     
-    CallWindowProcW p_thunkRetStruct2, 0, 0, VarPtr(args), 0
+    CallWindowProcW thunk, 0, 0, VarPtr(args), 0
 End Sub
 
 ' ============================================================
@@ -1394,8 +1598,8 @@ Private Function CompileShaderFromFile(ByVal filePath As String, ByVal entryPoin
         Err.Raise vbObjectError + 8101, , "D3DCompileFromFile not found"
     End If
     
-    If p_thunk9 <> 0 Then VirtualFree p_thunk9, 0, MEM_RELEASE
-    p_thunk9 = BuildThunk9(pD3DCompileFromFile)
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk9(pD3DCompileFromFile)
     
     Dim entryBytes() As Byte: entryBytes = AnsiZBytes(entryPoint)
     Dim profileBytes() As Byte: profileBytes = AnsiZBytes(profile)
@@ -1416,7 +1620,7 @@ Private Function CompileShaderFromFile(ByVal filePath As String, ByVal entryPoin
     args.a9 = VarPtr(pErrorBlob)
     
     Dim hr As Long
-    hr = ToHResult(CallWindowProcW(p_thunk9, 0, 0, VarPtr(args), 0))
+    hr = ToHResult(CallWindowProcW(thunk, 0, 0, VarPtr(args), 0))
     LogMsg "D3DCompileFromFile returned: " & Hex$(hr)
     
     If hr < 0 Then
@@ -1929,8 +2133,9 @@ Private Function CreateBuffers() As Boolean
     ' Create position buffer
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(g_pDevice, VTBL_Device_CreateCommittedResource)
-    If p_thunk8 <> 0 Then VirtualFree p_thunk8, 0, MEM_RELEASE
-    p_thunk8 = BuildThunk8(methodAddr)
+    
+    Dim thunk As LongPtr
+    thunk = GetCachedThunk8(methodAddr)
     
     Dim args8 As ThunkArgs8
     args8.a1 = g_pDevice
@@ -1942,7 +2147,7 @@ Private Function CreateBuffers() As Boolean
     args8.a7 = VarPtr(resourceIID)
     args8.a8 = VarPtr(g_pPositionBuffer)
     
-    hr = ToHResult(CallWindowProcW(p_thunk8, 0, 0, VarPtr(args8), 0))
+    hr = ToHResult(CallWindowProcW(thunk, 0, 0, VarPtr(args8), 0))
     LogMsg "CreateCommittedResource (Position) returned: " & Hex$(hr)
     If hr < 0 Then
         CreateBuffers = False
@@ -1951,7 +2156,7 @@ Private Function CreateBuffers() As Boolean
     
     ' Create color buffer
     args8.a8 = VarPtr(g_pColorBuffer)
-    hr = ToHResult(CallWindowProcW(p_thunk8, 0, 0, VarPtr(args8), 0))
+    hr = ToHResult(CallWindowProcW(thunk, 0, 0, VarPtr(args8), 0))
     LogMsg "CreateCommittedResource (Color) returned: " & Hex$(hr)
     If hr < 0 Then
         CreateBuffers = False
@@ -1974,7 +2179,7 @@ Private Function CreateBuffers() As Boolean
     args8.a5 = D3D12_RESOURCE_STATE_GENERIC_READ
     args8.a8 = VarPtr(g_pConstantBuffer)
     
-    hr = ToHResult(CallWindowProcW(p_thunk8, 0, 0, VarPtr(args8), 0))
+    hr = ToHResult(CallWindowProcW(thunk, 0, 0, VarPtr(args8), 0))
     LogMsg "CreateCommittedResource (ConstantBuffer) returned: " & Hex$(hr)
     If hr < 0 Then
         CreateBuffers = False
@@ -2084,6 +2289,10 @@ Private Sub UpdateConstantBuffer()
     params.A3 = 50!: params.f3 = 3!: params.p3 = 1.57!: params.d3 = 0.008!
     params.A4 = 50!: params.f4 = 2!: params.p4 = 0!: params.d4 = 0.019!
     params.max_num = VERTEX_COUNT
+    
+    ' Animation time (seconds since start)
+    params.time = CSng((Timer - g_startTime))
+    
     params.resolutionX = CSng(WIDTH)
     params.resolutionY = CSng(HEIGHT)
     
@@ -2384,6 +2593,10 @@ Public Sub Main()
         MsgBox "Failed to create fence.", vbCritical
         GoTo FIN
     End If
+
+    ' Initialize animation timer
+    g_startTime = Timer
+    g_frameCount = 0
 
     ' Message loop
     Dim msg As MSGW
