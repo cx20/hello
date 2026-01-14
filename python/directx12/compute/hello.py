@@ -122,6 +122,7 @@ D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT    = 1
 D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE     = 2
 D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE = 3
 D3D_PRIMITIVE_TOPOLOGY_POINTLIST       = 1
+D3D_PRIMITIVE_TOPOLOGY_LINESTRIP       = 3
 D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST    = 4
 
 D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA = 0
@@ -1492,7 +1493,7 @@ def init_d3d():
     pso_desc.InputLayout.pInputElementDescs = None
     pso_desc.InputLayout.NumElements = 0
 
-    pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT
+    pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE
     pso_desc.NumRenderTargets = 1
     pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM
     pso_desc.SampleDesc.Count = 1
@@ -1784,7 +1785,7 @@ def render():
     # Set primitive topology
     # VTable index 20
     set_topo = com_method(g_command_list, 20, None, (ctypes.c_void_p, wintypes.UINT))
-    set_topo(g_command_list, D3D_PRIMITIVE_TOPOLOGY_POINTLIST)
+    set_topo(g_command_list, D3D_PRIMITIVE_TOPOLOGY_LINESTRIP)
 
     # Draw
     # VTable index 12
