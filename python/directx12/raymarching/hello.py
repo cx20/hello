@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 Python (ctypes only) + DirectX 12
-Pixel Shader Raymarching sample (fullscreen triangle)
+Pixel Shader Raymarching sample (IA input POSITION version)
 
-- Uses external shader file: hello.hlsl
-  Entry points: VSMain / PSMain
-  Targets: vs_5_0 / ps_5_0
+Shader: hello.hlsl
+  VSMain(float2 position : POSITION)
+  PSMain(PSInput input)
 
-- Constant buffer b0: { float2 iResolution; float iTime; float pad; }
-
-VTable indices are aligned to the uploaded vtable.txt.  :contentReference[oaicite:1]{index=1}
+ConstantBuffer b0:
+  float iTime;
+  float2 iResolution;
+  float padding;
 """
 
 import os
@@ -75,6 +76,8 @@ INFINITE  = 0xFFFFFFFF
 FRAME_COUNT = 2
 
 DXGI_FORMAT_R8G8B8A8_UNORM = 28
+DXGI_FORMAT_R32G32_FLOAT   = 16
+
 DXGI_SWAP_EFFECT_FLIP_DISCARD = 4
 DXGI_USAGE_RENDER_TARGET_OUTPUT = 0x20
 
@@ -115,9 +118,13 @@ D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES = 0xFFFFFFFF
 
 # Root signature
 D3D12_ROOT_SIGNATURE_FLAG_NONE = 0
+D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT = 0x1
 D3D12_ROOT_PARAMETER_TYPE_CBV = 2
 D3D12_SHADER_VISIBILITY_PIXEL = 5
 D3D_ROOT_SIGNATURE_VERSION_1 = 1
+
+# Input layout
+D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA = 0
 
 # Shader compile flags
 D3DCOMPILE_ENABLE_STRICTNESS = 0x00000002
@@ -290,14 +297,14 @@ class D3D12_RESOURCE_BARRIER(ctypes.Structure):
         ("u", D3D12_RESOURCE_BARRIER_UNION),
     ]
 
-# ---- Root signature (ctypes layout FIX: 32 bytes on x64) ----
+# ---- Root signature ----
 class D3D12_ROOT_DESCRIPTOR(ctypes.Structure):
     _fields_ = [("ShaderRegister", wintypes.UINT), ("RegisterSpace", wintypes.UINT)]
 
 class D3D12_ROOT_PARAMETER_UNION(ctypes.Union):
     _fields_ = [
         ("Descriptor", D3D12_ROOT_DESCRIPTOR),
-        ("_bytes", ctypes.c_ubyte * 16),  # keep union size 16
+        ("_bytes", ctypes.c_ubyte * 16),
     ]
 
 class D3D12_ROOT_PARAMETER(ctypes.Structure):
@@ -316,6 +323,25 @@ class D3D12_ROOT_SIGNATURE_DESC(ctypes.Structure):
         ("NumStaticSamplers", wintypes.UINT),
         ("pStaticSamplers", ctypes.c_void_p),
         ("Flags", wintypes.UINT),
+    ]
+
+# ---- Input layout / VB view ----
+class D3D12_INPUT_ELEMENT_DESC(ctypes.Structure):
+    _fields_ = [
+        ("SemanticName", ctypes.c_char_p),
+        ("SemanticIndex", wintypes.UINT),
+        ("Format", wintypes.UINT),
+        ("InputSlot", wintypes.UINT),
+        ("AlignedByteOffset", wintypes.UINT),
+        ("InputSlotClass", wintypes.UINT),
+        ("InstanceDataStepRate", wintypes.UINT),
+    ]
+
+class D3D12_VERTEX_BUFFER_VIEW(ctypes.Structure):
+    _fields_ = [
+        ("BufferLocation", ctypes.c_uint64),
+        ("SizeInBytes", wintypes.UINT),
+        ("StrideInBytes", wintypes.UINT),
     ]
 
 # ---- PSO structs ----
@@ -419,13 +445,16 @@ class D3D12_GRAPHICS_PIPELINE_STATE_DESC(ctypes.Structure):
     ]
 
 # ============================================================
-# Constant buffer struct (b0)
+# Constant buffer struct (MUST match your HLSL layout)
+#   float iTime;
+#   float2 iResolution;
+#   float padding;
 # ============================================================
 class CBParams(ctypes.Structure):
     _fields_ = [
+        ("iTime",        ctypes.c_float),
         ("iResolutionX", ctypes.c_float),
         ("iResolutionY", ctypes.c_float),
-        ("iTime",        ctypes.c_float),
         ("_pad",         ctypes.c_float),
     ]
 
@@ -505,25 +534,21 @@ D3D12SerializeRootSignature.argtypes = (
 D3DCompileFromFile = d3dcompiler.D3DCompileFromFile
 D3DCompileFromFile.restype = wintypes.HRESULT
 D3DCompileFromFile.argtypes = (
-    wintypes.LPCWSTR,          # pFileName
-    ctypes.c_void_p,           # pDefines
-    ctypes.c_void_p,           # pInclude (ID3DInclude*)
-    ctypes.c_char_p,           # pEntrypoint
-    ctypes.c_char_p,           # pTarget
-    wintypes.UINT,             # Flags1
-    wintypes.UINT,             # Flags2
-    ctypes.POINTER(ctypes.c_void_p),  # ppCode (ID3DBlob**)
-    ctypes.POINTER(ctypes.c_void_p),  # ppErrorMsgs (ID3DBlob**)
+    wintypes.LPCWSTR,
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+    ctypes.c_char_p,
+    ctypes.c_char_p,
+    wintypes.UINT,
+    wintypes.UINT,
+    ctypes.POINTER(ctypes.c_void_p),
+    ctypes.POINTER(ctypes.c_void_p),
 )
 
 # ============================================================
-# COM vtbl helpers
+# COM vtbl helpers (indices are from vtable.txt)
 # ============================================================
 def com_method(obj_ptr, index: int, restype, argtypes):
-    """
-    obj_ptr can be ctypes.c_void_p or int address.
-    vtbl[index] is taken as function pointer.
-    """
     if not obj_ptr:
         raise RuntimeError("com_method: null this")
     this = obj_ptr if isinstance(obj_ptr, ctypes.c_void_p) else ctypes.c_void_p(int(obj_ptr))
@@ -565,12 +590,11 @@ g_swap_chain = ctypes.c_void_p()
 g_rtv_heap = ctypes.c_void_p()
 g_rtv_descriptor_size = 0
 
-# IMPORTANT: these arrays store *int addresses* (ctypes returns int for c_void_p arrays)
+# store addresses (int) in c_void_p arrays
 g_render_targets = (ctypes.c_void_p * FRAME_COUNT)()
 g_command_allocators = (ctypes.c_void_p * FRAME_COUNT)()
 
 g_command_list = ctypes.c_void_p()
-
 g_root_signature = ctypes.c_void_p()
 g_pipeline_state = ctypes.c_void_p()
 
@@ -584,9 +608,16 @@ g_cb_resource = ctypes.c_void_p()
 g_cb_mapped_ptr = ctypes.c_void_p()
 g_cb_gpu_va = 0
 g_start_time = 0.0
-
-# keep-alive for root params array
 g_root_params = None
+
+# vertex buffer (POSITION float2 x 3)
+g_vb_resource = ctypes.c_void_p()
+g_vb_mapped_ptr = ctypes.c_void_p()
+g_vb_view = D3D12_VERTEX_BUFFER_VIEW()
+
+# input layout keep-alives
+g_sem_position = None
+g_input_elems = None
 
 # ============================================================
 # Debug layer
@@ -612,7 +643,6 @@ def compile_hlsl_from_file(path: str, entry: str, target: str) -> ctypes.c_void_
 
     code = ctypes.c_void_p()
     err  = ctypes.c_void_p()
-
     flags1 = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION
 
     hr = D3DCompileFromFile(
@@ -650,6 +680,8 @@ def init_d3d12():
     global g_fence, g_fence_event, g_start_time
     global g_cb_resource, g_cb_mapped_ptr, g_cb_gpu_va
     global g_root_params
+    global g_vb_resource, g_vb_mapped_ptr, g_vb_view
+    global g_sem_position, g_input_elems
 
     debug("=== Initializing D3D12 ===")
     enable_debug_layer()
@@ -671,7 +703,7 @@ def init_d3d12():
     if hr != 0:
         raise RuntimeError(f"D3D12CreateDevice failed: 0x{hr & 0xFFFFFFFF:08X}")
 
-    # ID3D12Device::CreateCommandQueue index 8 :contentReference[oaicite:2]{index=2}
+    # CreateCommandQueue index 8
     queue_desc = D3D12_COMMAND_QUEUE_DESC()
     queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT
     queue_desc.Priority = 0
@@ -686,7 +718,7 @@ def init_d3d12():
     if hr != 0:
         raise RuntimeError(f"CreateCommandQueue failed: 0x{hr & 0xFFFFFFFF:08X}")
 
-    # IDXGIFactory2::CreateSwapChainForHwnd index 15 :contentReference[oaicite:3]{index=3}
+    # CreateSwapChainForHwnd index 15 (IDXGIFactory)
     swap_desc = DXGI_SWAP_CHAIN_DESC1()
     swap_desc.Width = g_width
     swap_desc.Height = g_height
@@ -719,11 +751,11 @@ def init_d3d12():
     if hr != 0:
         raise RuntimeError(f"QueryInterface IDXGISwapChain3 failed: 0x{hr & 0xFFFFFFFF:08X}")
 
-    # IDXGISwapChain3::GetCurrentBackBufferIndex index 36 :contentReference[oaicite:4]{index=4}
+    # GetCurrentBackBufferIndex index 36
     get_idx = com_method(g_swap_chain, 36, wintypes.UINT, (ctypes.c_void_p,))
     g_frame_index = int(get_idx(g_swap_chain))
 
-    # RTV heap: ID3D12Device::CreateDescriptorHeap index 14 :contentReference[oaicite:5]{index=5}
+    # RTV heap CreateDescriptorHeap index 14
     rtv_heap_desc = D3D12_DESCRIPTOR_HEAP_DESC()
     rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV
     rtv_heap_desc.NumDescriptors = FRAME_COUNT
@@ -738,21 +770,21 @@ def init_d3d12():
     if hr != 0:
         raise RuntimeError(f"CreateDescriptorHeap(RTV) failed: 0x{hr & 0xFFFFFFFF:08X}")
 
-    # ID3D12Device::GetDescriptorHandleIncrementSize index 15 :contentReference[oaicite:6]{index=6}
+    # GetDescriptorHandleIncrementSize index 15
     get_inc = com_method(g_device, 15, wintypes.UINT, (ctypes.c_void_p, wintypes.UINT))
     g_rtv_descriptor_size = int(get_inc(g_device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV))
 
-    # ID3D12DescriptorHeap::GetCPUDescriptorHandleForHeapStart index 9 :contentReference[oaicite:7]{index=7}
+    # GetCPUDescriptorHandleForHeapStart index 9
     get_cpu_handle = com_method(g_rtv_heap, 9, None, (ctypes.c_void_p, ctypes.POINTER(D3D12_CPU_DESCRIPTOR_HANDLE)))
     rtv_start = D3D12_CPU_DESCRIPTOR_HANDLE()
     get_cpu_handle(g_rtv_heap, ctypes.byref(rtv_start))
 
-    # back buffers: IDXGISwapChain::GetBuffer index 9 :contentReference[oaicite:8]{index=8}
+    # GetBuffer index 9
     get_buffer = com_method(
         g_swap_chain, 9, wintypes.HRESULT,
         (ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p))
     )
-    # RTV: ID3D12Device::CreateRenderTargetView index 20 :contentReference[oaicite:9]{index=9}
+    # CreateRenderTargetView index 20
     create_rtv = com_method(
         g_device, 20, None,
         (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, D3D12_CPU_DESCRIPTOR_HANDLE)
@@ -764,13 +796,11 @@ def init_d3d12():
         if hr != 0:
             raise RuntimeError(f"GetBuffer({i}) failed: 0x{hr & 0xFFFFFFFF:08X}")
 
-        # store as int address
         g_render_targets[i] = rt.value
-
         handle = D3D12_CPU_DESCRIPTOR_HANDLE(rtv_start.ptr + i * g_rtv_descriptor_size)
-        create_rtv(g_device, ctypes.c_void_p(g_render_targets[i]), None, handle)
+        create_rtv(g_device, ctypes.c_void_p(int(g_render_targets[i])), None, handle)
 
-    # command allocators: ID3D12Device::CreateCommandAllocator index 9 :contentReference[oaicite:10]{index=10}
+    # CreateCommandAllocator index 9
     create_ca = com_method(
         g_device, 9, wintypes.HRESULT,
         (ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p))
@@ -789,7 +819,7 @@ def init_d3d12():
     root_param = D3D12_ROOT_PARAMETER()
     root_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV
     root_param._pad0 = 0
-    root_param.u.Descriptor = D3D12_ROOT_DESCRIPTOR(0, 0)  # b0, space0
+    root_param.u.Descriptor = D3D12_ROOT_DESCRIPTOR(0, 0)  # b0
     root_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL
     root_param._pad1 = 0
 
@@ -800,7 +830,7 @@ def init_d3d12():
     rs_desc.pParameters = ctypes.cast(g_root_params, ctypes.c_void_p)
     rs_desc.NumStaticSamplers = 0
     rs_desc.pStaticSamplers = None
-    rs_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE
+    rs_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
 
     rs_blob = ctypes.c_void_p()
     err_blob = ctypes.c_void_p()
@@ -814,7 +844,7 @@ def init_d3d12():
     if err_blob:
         com_release(err_blob)
 
-    # ID3D12Device::CreateRootSignature index 16 :contentReference[oaicite:11]{index=11}
+    # CreateRootSignature index 16
     create_rs = com_method(
         g_device, 16, wintypes.HRESULT,
         (ctypes.c_void_p, wintypes.UINT, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p))
@@ -829,7 +859,21 @@ def init_d3d12():
     vs_blob = compile_hlsl_from_file(hlsl_path, "VSMain", "vs_5_0")
     ps_blob = compile_hlsl_from_file(hlsl_path, "PSMain", "ps_5_0")
 
-    # PSO: ID3D12Device::CreateGraphicsPipelineState index 10 :contentReference[oaicite:12]{index=12}
+    # ----------------------------
+    # InputLayout for VSMain(float2 position : POSITION)
+    # ----------------------------
+    g_sem_position = ctypes.create_string_buffer(b"POSITION")
+    elem = D3D12_INPUT_ELEMENT_DESC()
+    elem.SemanticName = ctypes.cast(g_sem_position, ctypes.c_char_p)
+    elem.SemanticIndex = 0
+    elem.Format = DXGI_FORMAT_R32G32_FLOAT
+    elem.InputSlot = 0
+    elem.AlignedByteOffset = 0
+    elem.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA
+    elem.InstanceDataStepRate = 0
+    g_input_elems = (D3D12_INPUT_ELEMENT_DESC * 1)(elem)
+
+    # PSO CreateGraphicsPipelineState index 10
     pso_desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC()
     ctypes.memset(ctypes.byref(pso_desc), 0, ctypes.sizeof(pso_desc))
 
@@ -866,9 +910,9 @@ def init_d3d12():
     pso_desc.DepthStencilState.DepthEnable = False
     pso_desc.DepthStencilState.StencilEnable = False
 
-    # No input layout
-    pso_desc.InputLayout.pInputElementDescs = None
-    pso_desc.InputLayout.NumElements = 0
+    # Input layout (IMPORTANT)
+    pso_desc.InputLayout.pInputElementDescs = ctypes.cast(g_input_elems, ctypes.c_void_p)
+    pso_desc.InputLayout.NumElements = 1
 
     pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
     pso_desc.NumRenderTargets = 1
@@ -886,15 +930,14 @@ def init_d3d12():
     if hr != 0:
         raise RuntimeError(f"CreateGraphicsPipelineState failed: 0x{hr & 0xFFFFFFFF:08X}")
 
-    # Command list: ID3D12Device::CreateCommandList index 12 :contentReference[oaicite:13]{index=13}
-    # Correct signature: (nodeMask, type, allocator, initialState, iid, out)
+    # Command list CreateCommandList index 12 (nodeMask, type, allocator, initialState, iid, out)
     create_cl = com_method(
         g_device, 12, wintypes.HRESULT,
         (ctypes.c_void_p, wintypes.UINT, wintypes.UINT, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p))
     )
     hr = create_cl(
         g_device,
-        0,  # nodeMask
+        0,
         D3D12_COMMAND_LIST_TYPE_DIRECT,
         ctypes.c_void_p(int(g_command_allocators[g_frame_index])),
         g_pipeline_state,
@@ -904,11 +947,11 @@ def init_d3d12():
     if hr != 0:
         raise RuntimeError(f"CreateCommandList failed: 0x{hr & 0xFFFFFFFF:08X}")
 
-    # Close once: ID3D12GraphicsCommandList::Close index 9 :contentReference[oaicite:14]{index=14}
+    # Close once index 9
     close = com_method(g_command_list, 9, wintypes.HRESULT, (ctypes.c_void_p,))
     close(g_command_list)
 
-    # Fence: ID3D12Device::CreateFence index 36 :contentReference[oaicite:15]{index=15}
+    # Fence CreateFence index 36
     create_fence = com_method(
         g_device, 36, wintypes.HRESULT,
         (ctypes.c_void_p, ctypes.c_uint64, wintypes.UINT, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p))
@@ -921,7 +964,7 @@ def init_d3d12():
     if not g_fence_event:
         raise winerr()
 
-    # Constant buffer (upload heap) : ID3D12Device::CreateCommittedResource index 27 :contentReference[oaicite:16]{index=16}
+    # CreateCommittedResource index 27 (Constant Buffer)
     cb_size = align_up(ctypes.sizeof(CBParams), 256)
 
     heap_props = D3D12_HEAP_PROPERTIES()
@@ -963,7 +1006,7 @@ def init_d3d12():
     if hr != 0:
         raise RuntimeError(f"CreateCommittedResource(CB) failed: 0x{hr & 0xFFFFFFFF:08X}")
 
-    # Map: ID3D12Resource::Map index 8 :contentReference[oaicite:17]{index=17}
+    # Map index 8
     map_fn = com_method(
         g_cb_resource, 8, wintypes.HRESULT,
         (ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(D3D12_RANGE), ctypes.POINTER(ctypes.c_void_p))
@@ -975,17 +1018,72 @@ def init_d3d12():
         raise RuntimeError(f"CB Map failed: 0x{hr & 0xFFFFFFFF:08X}")
     g_cb_mapped_ptr = mapped
 
-    # GetGPUVirtualAddress: ID3D12Resource::GetGPUVirtualAddress index 11 :contentReference[oaicite:18]{index=18}
+    # GetGPUVirtualAddress index 11
     get_va = com_method(g_cb_resource, 11, ctypes.c_uint64, (ctypes.c_void_p,))
     g_cb_gpu_va = int(get_va(g_cb_resource))
 
-    g_start_time = time.perf_counter()
+    # ----------------------------
+    # Vertex buffer (3 vertices, float2 POSITION)
+    # ----------------------------
+    vb_bytes = 3 * 2 * 4  # 3 * float2
+    vb_desc = D3D12_RESOURCE_DESC()
+    vb_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER
+    vb_desc.Alignment = 0
+    vb_desc.Width = vb_bytes
+    vb_desc.Height = 1
+    vb_desc.DepthOrArraySize = 1
+    vb_desc.MipLevels = 1
+    vb_desc.Format = 0
+    vb_desc.SampleDesc.Count = 1
+    vb_desc.SampleDesc.Quality = 0
+    vb_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
+    vb_desc.Flags = D3D12_RESOURCE_FLAG_NONE
 
+    hr = create_res(
+        g_device,
+        ctypes.byref(heap_props),
+        D3D12_HEAP_FLAG_NONE,
+        ctypes.byref(vb_desc),
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        None,
+        ctypes.byref(IID_ID3D12Resource),
+        ctypes.byref(g_vb_resource),
+    )
+    if hr != 0:
+        raise RuntimeError(f"CreateCommittedResource(VB) failed: 0x{hr & 0xFFFFFFFF:08X}")
+
+    map_vb = com_method(
+        g_vb_resource, 8, wintypes.HRESULT,
+        (ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(D3D12_RANGE), ctypes.POINTER(ctypes.c_void_p))
+    )
+    vb_mapped = ctypes.c_void_p()
+    hr = map_vb(g_vb_resource, 0, ctypes.byref(read_range), ctypes.byref(vb_mapped))
+    if hr != 0:
+        raise RuntimeError(f"VB Map failed: 0x{hr & 0xFFFFFFFF:08X}")
+    g_vb_mapped_ptr = vb_mapped
+
+    # Fullscreen triangle in clip-space (matches your VS: float4(position,0,1))
+    # (-1,-1), (-1, 3), ( 3,-1)
+    verts = (ctypes.c_float * 6)(
+        -1.0, -1.0,
+        -1.0,  3.0,
+         3.0, -1.0,
+    )
+    ctypes.memmove(g_vb_mapped_ptr, verts, vb_bytes)
+
+    get_vb_va = com_method(g_vb_resource, 11, ctypes.c_uint64, (ctypes.c_void_p,))
+    vb_gpu_va = int(get_vb_va(g_vb_resource))
+
+    g_vb_view.BufferLocation = ctypes.c_uint64(vb_gpu_va)
+    g_vb_view.SizeInBytes = vb_bytes
+    g_vb_view.StrideInBytes = 8  # float2
+
+    g_start_time = time.perf_counter()
     debug("=== D3D12 Initialization Complete ===")
 
 def update_constant_buffer():
     t = float(time.perf_counter() - g_start_time)
-    cb = CBParams(float(g_width), float(g_height), t, 0.0)
+    cb = CBParams(t, float(g_width), float(g_height), 0.0)
     ctypes.memmove(g_cb_mapped_ptr, ctypes.byref(cb), ctypes.sizeof(CBParams))
 
 def wait_for_previous_frame():
@@ -993,7 +1091,7 @@ def wait_for_previous_frame():
 
     current_value = g_fence_values[g_frame_index]
 
-    # ID3D12CommandQueue::Signal index 14 :contentReference[oaicite:19]{index=19}
+    # Signal index 14
     signal = com_method(g_command_queue, 14, wintypes.HRESULT, (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64))
     hr = signal(g_command_queue, g_fence, current_value)
     if hr != 0:
@@ -1003,10 +1101,10 @@ def wait_for_previous_frame():
     get_idx = com_method(g_swap_chain, 36, wintypes.UINT, (ctypes.c_void_p,))
     g_frame_index = int(get_idx(g_swap_chain))
 
-    # ID3D12Fence::GetCompletedValue index 8 :contentReference[oaicite:20]{index=20}
+    # GetCompletedValue index 8
     get_completed = com_method(g_fence, 8, ctypes.c_uint64, (ctypes.c_void_p,))
     if int(get_completed(g_fence)) < g_fence_values[g_frame_index]:
-        # ID3D12Fence::SetEventOnCompletion index 9 :contentReference[oaicite:21]{index=21}
+        # SetEventOnCompletion index 9
         set_event = com_method(g_fence, 9, wintypes.HRESULT, (ctypes.c_void_p, ctypes.c_uint64, wintypes.HANDLE))
         hr = set_event(g_fence, g_fence_values[g_frame_index], g_fence_event)
         if hr != 0:
@@ -1018,43 +1116,55 @@ def wait_for_previous_frame():
 def render():
     update_constant_buffer()
 
-    # ID3D12CommandAllocator::Reset index 8 :contentReference[oaicite:22]{index=22}
-    reset_ca = com_method(ctypes.c_void_p(int(g_command_allocators[g_frame_index])), 8, wintypes.HRESULT, (ctypes.c_void_p,))
-    hr = reset_ca(ctypes.c_void_p(int(g_command_allocators[g_frame_index])))
+    alloc = ctypes.c_void_p(int(g_command_allocators[g_frame_index]))
+
+    # CommandAllocator::Reset index 8
+    reset_ca = com_method(alloc, 8, wintypes.HRESULT, (ctypes.c_void_p,))
+    hr = reset_ca(alloc)
     if hr != 0:
         raise RuntimeError(f"CommandAllocator::Reset failed: 0x{hr & 0xFFFFFFFF:08X}")
 
-    # ID3D12GraphicsCommandList::Reset index 10 :contentReference[oaicite:23]{index=23}
+    # CommandList::Reset index 10
     reset_cl = com_method(g_command_list, 10, wintypes.HRESULT, (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p))
-    hr = reset_cl(g_command_list, ctypes.c_void_p(int(g_command_allocators[g_frame_index])), g_pipeline_state)
+    hr = reset_cl(g_command_list, alloc, g_pipeline_state)
     if hr != 0:
         raise RuntimeError(f"CommandList::Reset failed: 0x{hr & 0xFFFFFFFF:08X}")
 
-    # SetGraphicsRootSignature index 30 :contentReference[oaicite:24]{index=24}
+    # SetGraphicsRootSignature index 30
     set_rs = com_method(g_command_list, 30, None, (ctypes.c_void_p, ctypes.c_void_p))
     set_rs(g_command_list, g_root_signature)
 
-    # SetGraphicsRootConstantBufferView index 38 :contentReference[oaicite:25]{index=25}
+    # SetGraphicsRootConstantBufferView index 38
     set_cbv = com_method(g_command_list, 38, None, (ctypes.c_void_p, wintypes.UINT, ctypes.c_uint64))
     set_cbv(g_command_list, 0, ctypes.c_uint64(g_cb_gpu_va))
 
-    # RSSetViewports index 21 :contentReference[oaicite:26]{index=26}
+    # RSSetViewports index 21
     vp = D3D12_VIEWPORT(0.0, 0.0, float(g_width), float(g_height), 0.0, 1.0)
     rs_viewports = com_method(g_command_list, 21, None, (ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(D3D12_VIEWPORT)))
     rs_viewports(g_command_list, 1, ctypes.byref(vp))
 
-    # RSSetScissorRects index 22 :contentReference[oaicite:27]{index=27}
+    # RSSetScissorRects index 22
     sc = D3D12_RECT(0, 0, g_width, g_height)
     rs_scissors = com_method(g_command_list, 22, None, (ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(D3D12_RECT)))
     rs_scissors(g_command_list, 1, ctypes.byref(sc))
 
-    # ResourceBarrier index 26 :contentReference[oaicite:28]{index=28}
+    # IASetVertexBuffers index 44  (IMPORTANT)
+    ia_set_vb = com_method(
+        g_command_list, 44, None,
+        (ctypes.c_void_p, wintypes.UINT, wintypes.UINT, ctypes.POINTER(D3D12_VERTEX_BUFFER_VIEW))
+    )
+    ia_set_vb(g_command_list, 0, 1, ctypes.byref(g_vb_view))
+
+    # IASetPrimitiveTopology index 20
+    ia_topo = com_method(g_command_list, 20, None, (ctypes.c_void_p, wintypes.UINT))
+    ia_topo(g_command_list, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
+
+    # ResourceBarrier index 26
     resource_barrier = com_method(g_command_list, 26, None, (ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(D3D12_RESOURCE_BARRIER)))
 
     barrier = D3D12_RESOURCE_BARRIER()
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
     barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE
-    # FIX: render_targets[] is int, so do NOT use .value
     barrier.u.Transition.pResource = ctypes.c_void_p(int(g_render_targets[g_frame_index]))
     barrier.u.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
     barrier.u.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT
@@ -1067,14 +1177,14 @@ def render():
     get_cpu_handle(g_rtv_heap, ctypes.byref(rtv_start))
     rtv = D3D12_CPU_DESCRIPTOR_HANDLE(rtv_start.ptr + g_frame_index * g_rtv_descriptor_size)
 
-    # OMSetRenderTargets index 46 :contentReference[oaicite:29]{index=29}
+    # OMSetRenderTargets index 46
     om_set = com_method(
         g_command_list, 46, None,
         (ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(D3D12_CPU_DESCRIPTOR_HANDLE), wintypes.BOOL, ctypes.c_void_p)
     )
     om_set(g_command_list, 1, ctypes.byref(rtv), False, None)
 
-    # ClearRenderTargetView index 48 :contentReference[oaicite:30]{index=30}
+    # ClearRenderTargetView index 48
     clear = com_method(
         g_command_list, 48, None,
         (ctypes.c_void_p, D3D12_CPU_DESCRIPTOR_HANDLE, ctypes.POINTER(ctypes.c_float), wintypes.UINT, ctypes.c_void_p)
@@ -1082,11 +1192,7 @@ def render():
     clear_color = (ctypes.c_float * 4)(0.0, 0.0, 0.0, 1.0)
     clear(g_command_list, rtv, clear_color, 0, None)
 
-    # IASetPrimitiveTopology index 20 :contentReference[oaicite:31]{index=31}
-    ia_topo = com_method(g_command_list, 20, None, (ctypes.c_void_p, wintypes.UINT))
-    ia_topo(g_command_list, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
-
-    # DrawInstanced index 12 :contentReference[oaicite:32]{index=32}
+    # DrawInstanced index 12
     draw = com_method(g_command_list, 12, None, (ctypes.c_void_p, wintypes.UINT, wintypes.UINT, wintypes.UINT, wintypes.UINT))
     draw(g_command_list, 3, 1, 0, 0)
 
@@ -1095,18 +1201,18 @@ def render():
     barrier.u.Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT
     resource_barrier(g_command_list, 1, ctypes.byref(barrier))
 
-    # Close index 9 :contentReference[oaicite:33]{index=33}
+    # Close index 9
     close = com_method(g_command_list, 9, wintypes.HRESULT, (ctypes.c_void_p,))
     hr = close(g_command_list)
     if hr != 0:
         raise RuntimeError(f"CommandList::Close failed: 0x{hr & 0xFFFFFFFF:08X}")
 
-    # ExecuteCommandLists: ID3D12CommandQueue::ExecuteCommandLists index 10 :contentReference[oaicite:34]{index=34}
+    # ExecuteCommandLists index 10
     cmd_lists = (ctypes.c_void_p * 1)(g_command_list.value)
     execute = com_method(g_command_queue, 10, None, (ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(ctypes.c_void_p)))
     execute(g_command_queue, 1, cmd_lists)
 
-    # Present: IDXGISwapChain::Present index 8 :contentReference[oaicite:35]{index=35}
+    # Present index 8
     present = com_method(g_swap_chain, 8, wintypes.HRESULT, (ctypes.c_void_p, wintypes.UINT, wintypes.UINT))
     hr = present(g_swap_chain, 1, 0)
     if hr != 0:
@@ -1120,15 +1226,19 @@ def cleanup():
     except:
         pass
 
+    # Unmap CB/VB
     if g_cb_resource:
-        # Unmap: ID3D12Resource::Unmap index 9 :contentReference[oaicite:36]{index=36}
         unmap = com_method(g_cb_resource, 9, None, (ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(D3D12_RANGE)))
         unmap(g_cb_resource, 0, None)
+    if g_vb_resource:
+        unmap = com_method(g_vb_resource, 9, None, (ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(D3D12_RANGE)))
+        unmap(g_vb_resource, 0, None)
 
     if g_fence_event:
         kernel32.CloseHandle(g_fence_event)
 
     # Release COM
+    com_release(g_vb_resource)
     com_release(g_cb_resource)
     com_release(g_pipeline_state)
     com_release(g_root_signature)
@@ -1164,7 +1274,7 @@ def main():
     ole32.CoInitialize(None)
 
     hInstance = kernel32.GetModuleHandleW(None)
-    class_name = "PyDX12Raymarch"
+    class_name = "PyDX12RaymarchIA"
 
     wc = WNDCLASSEXW()
     wc.cbSize = ctypes.sizeof(WNDCLASSEXW)
@@ -1181,7 +1291,7 @@ def main():
     g_hwnd = user32.CreateWindowExW(
         0,
         class_name,
-        "DirectX12 Raymarching (ctypes only)",
+        "DirectX12 Raymarching (ctypes only / IA POSITION)",
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
         960, 540,
