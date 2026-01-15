@@ -3,6 +3,7 @@ Option Explicit
 
 ' ============================================================
 '  Excel VBA (64-bit) + DirectX 12 - Raymarching Rendering
+'   - OPTIMIZED VERSION: Thunk caching for better performance
 '   - Creates a Win32 window
 '   - Creates D3D12 Device, CommandQueue, SwapChain
 '   - Creates RootSignature with CBV, PipelineState
@@ -627,23 +628,40 @@ Private Const OPEN_EXISTING As Long = 3
 Private Const FILE_ATTRIBUTE_NORMAL As Long = &H80
 Private Const INVALID_HANDLE_VALUE As LongPtr = -1
 
-' Thunk memory
+' Thunk memory - CACHED (allocated once, reused)
 Private Const MEM_COMMIT As Long = &H1000&
 Private Const MEM_RESERVE As Long = &H2000&
 Private Const MEM_RELEASE As Long = &H8000&
 Private Const PAGE_EXECUTE_READWRITE As Long = &H40&
 
-Private p_thunk1 As LongPtr
-Private p_thunk2 As LongPtr
-Private p_thunk3 As LongPtr
-Private p_thunk4 As LongPtr
-Private p_thunk5 As LongPtr
-Private p_thunk6 As LongPtr
-Private p_thunk7 As LongPtr
-Private p_thunk8 As LongPtr
-Private p_thunk9 As LongPtr
-Private p_thunkRetStruct As LongPtr
-Private p_thunkRetStructGPU As LongPtr
+' Cached thunk pointers
+Private g_thunk1 As LongPtr
+Private g_thunk2 As LongPtr
+Private g_thunk3 As LongPtr
+Private g_thunk4 As LongPtr
+Private g_thunk5 As LongPtr
+Private g_thunk6 As LongPtr
+Private g_thunk7 As LongPtr
+Private g_thunk8 As LongPtr
+Private g_thunk9 As LongPtr
+Private g_thunkRetStruct As LongPtr
+Private g_thunkRetStructGPU As LongPtr
+
+' Target address offsets within each thunk
+Private Const THUNK1_TARGET_OFFSET As Long = 12
+Private Const THUNK2_TARGET_OFFSET As Long = 16
+Private Const THUNK3_TARGET_OFFSET As Long = 20
+Private Const THUNK4_TARGET_OFFSET As Long = 24
+Private Const THUNK5_TARGET_OFFSET As Long = 33
+Private Const THUNK6_TARGET_OFFSET As Long = 42
+Private Const THUNK7_TARGET_OFFSET As Long = 51
+Private Const THUNK8_TARGET_OFFSET As Long = 60
+Private Const THUNK9_TARGET_OFFSET As Long = 69
+Private Const THUNK_RETSTRUCT_TARGET_OFFSET As Long = 16
+Private Const THUNK_RETSTRUCT_GPU_TARGET_OFFSET As Long = 16
+
+' Thunks initialized flag
+Private g_thunksInitialized As Boolean
 
 #If VBA7 Then
     ' Win32
@@ -773,7 +791,7 @@ Private Sub LogOpen()
     CreateDirectoryW StrPtr("C:\TEMP"), 0
     g_log = CreateFileW(StrPtr("C:\TEMP\dx12_raymarching.log"), GENERIC_WRITE, FILE_SHARE_READ Or FILE_SHARE_WRITE, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0)
     If g_log = 0 Or g_log = -1 Then g_log = 0
-    LogMsg "==== DX12 RAYMARCHING LOG START ===="
+    LogMsg "==== DX12 RAYMARCHING LOG START (OPTIMIZED) ===="
 End Sub
 
 Private Sub LogClose()
@@ -931,71 +949,88 @@ Private Function GetVTableMethod(ByVal pObj As LongPtr, ByVal vtIndex As Long) A
 End Function
 
 ' ============================================================
-' Thunk builders (same as original)
+' CACHED Thunk builders - Build once, reuse many times
+' Each thunk has a placeholder for the target address
 ' ============================================================
-Private Function BuildThunk1(ByVal target As LongPtr) As LongPtr
+Private Function BuildThunk1Cached() As LongPtr
+    ' Thunk for 1 argument COM call
+    ' Target address at offset 12
     Dim code(0 To 39) As Byte
     Dim i As Long: i = 0
+    
+    ' sub rsp, 0x28
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H28: i = i + 1
+    ' mov r10, r8 (args pointer)
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
+    ' mov rcx, [r10] (this pointer)
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &HA: i = i + 1
+    ' mov rax, target (placeholder - 8 bytes at offset 12)
     code(i) = &H48: i = i + 1: code(i) = &HB8: i = i + 1
-    Dim t As LongLong: t = target
-    RtlMoveMemoryFromPtr VarPtr(code(i)), t, 8: i = i + 8
+    ' Target address placeholder (8 bytes of zeros)
+    Dim j As Long
+    For j = 0 To 7: code(i + j) = 0: Next j
+    i = i + 8
+    ' call rax
     code(i) = &HFF: i = i + 1: code(i) = &HD0: i = i + 1
+    ' add rsp, 0x28
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HC4: i = i + 1: code(i) = &H28: i = i + 1
+    ' ret
     code(i) = &HC3
+    
     Dim mem As LongPtr
     mem = VirtualAlloc(0, 64, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 8996, , "VirtualAlloc failed"
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk1 = mem
+    BuildThunk1Cached = mem
 End Function
 
-Private Function BuildThunk2(ByVal target As LongPtr) As LongPtr
+Private Function BuildThunk2Cached() As LongPtr
     Dim code(0 To 47) As Byte
     Dim i As Long: i = 0
+    
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &HA: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &H52: i = i + 1: code(i) = &H8: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &HB8: i = i + 1
-    Dim t As LongLong: t = target
-    RtlMoveMemoryFromPtr VarPtr(code(i)), t, 8: i = i + 8
+    Dim j As Long: For j = 0 To 7: code(i + j) = 0: Next j: i = i + 8
     code(i) = &HFF: i = i + 1: code(i) = &HD0: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HC4: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &HC3
+    
     Dim mem As LongPtr
     mem = VirtualAlloc(0, 64, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 8997, , "VirtualAlloc failed"
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk2 = mem
+    BuildThunk2Cached = mem
 End Function
 
-Private Function BuildThunk3(ByVal target As LongPtr) As LongPtr
+Private Function BuildThunk3Cached() As LongPtr
     Dim code(0 To 55) As Byte
     Dim i As Long: i = 0
+    
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &HA: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &H52: i = i + 1: code(i) = &H8: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &H42: i = i + 1: code(i) = &H10: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &HB8: i = i + 1
-    Dim t As LongLong: t = target
-    RtlMoveMemoryFromPtr VarPtr(code(i)), t, 8: i = i + 8
+    Dim j As Long: For j = 0 To 7: code(i + j) = 0: Next j: i = i + 8
     code(i) = &HFF: i = i + 1: code(i) = &HD0: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HC4: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &HC3
+    
     Dim mem As LongPtr
     mem = VirtualAlloc(0, 64, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 8998, , "VirtualAlloc failed"
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk3 = mem
+    BuildThunk3Cached = mem
 End Function
 
-Private Function BuildThunk4(ByVal target As LongPtr) As LongPtr
+Private Function BuildThunk4Cached() As LongPtr
     Dim code(0 To 63) As Byte
     Dim i As Long: i = 0
+    
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &HA: i = i + 1
@@ -1003,21 +1038,22 @@ Private Function BuildThunk4(ByVal target As LongPtr) As LongPtr
     code(i) = &H4D: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &H42: i = i + 1: code(i) = &H10: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &H4A: i = i + 1: code(i) = &H18: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &HB8: i = i + 1
-    Dim t As LongLong: t = target
-    RtlMoveMemoryFromPtr VarPtr(code(i)), t, 8: i = i + 8
+    Dim j As Long: For j = 0 To 7: code(i + j) = 0: Next j: i = i + 8
     code(i) = &HFF: i = i + 1: code(i) = &HD0: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HC4: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &HC3
+    
     Dim mem As LongPtr
     mem = VirtualAlloc(0, 128, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 8999, , "VirtualAlloc failed"
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk4 = mem
+    BuildThunk4Cached = mem
 End Function
 
-Private Function BuildThunk5(ByVal target As LongPtr) As LongPtr
+Private Function BuildThunk5Cached() As LongPtr
     Dim code(0 To 79) As Byte
     Dim i As Long: i = 0
+    
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H38: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &HA: i = i + 1
@@ -1027,21 +1063,22 @@ Private Function BuildThunk5(ByVal target As LongPtr) As LongPtr
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &H42: i = i + 1: code(i) = &H20: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &H44: i = i + 1: code(i) = &H24: i = i + 1: code(i) = &H20: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &HB8: i = i + 1
-    Dim t As LongLong: t = target
-    RtlMoveMemoryFromPtr VarPtr(code(i)), t, 8: i = i + 8
+    Dim j As Long: For j = 0 To 7: code(i + j) = 0: Next j: i = i + 8
     code(i) = &HFF: i = i + 1: code(i) = &HD0: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HC4: i = i + 1: code(i) = &H38: i = i + 1
     code(i) = &HC3
+    
     Dim mem As LongPtr
     mem = VirtualAlloc(0, 128, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9000, , "VirtualAlloc failed"
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk5 = mem
+    BuildThunk5Cached = mem
 End Function
 
-Private Function BuildThunk6(ByVal target As LongPtr) As LongPtr
+Private Function BuildThunk6Cached() As LongPtr
     Dim code(0 To 99) As Byte
     Dim i As Long: i = 0
+    
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H48: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &HA: i = i + 1
@@ -1053,21 +1090,22 @@ Private Function BuildThunk6(ByVal target As LongPtr) As LongPtr
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &H42: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &H44: i = i + 1: code(i) = &H24: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &HB8: i = i + 1
-    Dim t As LongLong: t = target
-    RtlMoveMemoryFromPtr VarPtr(code(i)), t, 8: i = i + 8
+    Dim j As Long: For j = 0 To 7: code(i + j) = 0: Next j: i = i + 8
     code(i) = &HFF: i = i + 1: code(i) = &HD0: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HC4: i = i + 1: code(i) = &H48: i = i + 1
     code(i) = &HC3
+    
     Dim mem As LongPtr
     mem = VirtualAlloc(0, 128, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9001, , "VirtualAlloc failed"
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk6 = mem
+    BuildThunk6Cached = mem
 End Function
 
-Private Function BuildThunk7(ByVal target As LongPtr) As LongPtr
+Private Function BuildThunk7Cached() As LongPtr
     Dim code(0 To 119) As Byte
     Dim i As Long: i = 0
+    
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H58: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &HA: i = i + 1
@@ -1081,21 +1119,22 @@ Private Function BuildThunk7(ByVal target As LongPtr) As LongPtr
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &H42: i = i + 1: code(i) = &H30: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &H44: i = i + 1: code(i) = &H24: i = i + 1: code(i) = &H30: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &HB8: i = i + 1
-    Dim t As LongLong: t = target
-    RtlMoveMemoryFromPtr VarPtr(code(i)), t, 8: i = i + 8
+    Dim j As Long: For j = 0 To 7: code(i + j) = 0: Next j: i = i + 8
     code(i) = &HFF: i = i + 1: code(i) = &HD0: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HC4: i = i + 1: code(i) = &H58: i = i + 1
     code(i) = &HC3
+    
     Dim mem As LongPtr
     mem = VirtualAlloc(0, 128, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9002, , "VirtualAlloc failed"
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk7 = mem
+    BuildThunk7Cached = mem
 End Function
 
-Private Function BuildThunk8(ByVal target As LongPtr) As LongPtr
+Private Function BuildThunk8Cached() As LongPtr
     Dim code(0 To 127) As Byte
     Dim i As Long: i = 0
+    
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H68: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &HA: i = i + 1
@@ -1111,21 +1150,22 @@ Private Function BuildThunk8(ByVal target As LongPtr) As LongPtr
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &H42: i = i + 1: code(i) = &H38: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &H44: i = i + 1: code(i) = &H24: i = i + 1: code(i) = &H38: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &HB8: i = i + 1
-    Dim t As LongLong: t = target
-    RtlMoveMemoryFromPtr VarPtr(code(i)), t, 8: i = i + 8
+    Dim j As Long: For j = 0 To 7: code(i + j) = 0: Next j: i = i + 8
     code(i) = &HFF: i = i + 1: code(i) = &HD0: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HC4: i = i + 1: code(i) = &H68: i = i + 1
     code(i) = &HC3
+    
     Dim mem As LongPtr
     mem = VirtualAlloc(0, 160, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9003, , "VirtualAlloc failed"
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk8 = mem
+    BuildThunk8Cached = mem
 End Function
 
-Private Function BuildThunk9(ByVal target As LongPtr) As LongPtr
+Private Function BuildThunk9Cached() As LongPtr
     Dim code(0 To 143) As Byte
     Dim i As Long: i = 0
+    
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H68: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &HA: i = i + 1
@@ -1143,110 +1183,141 @@ Private Function BuildThunk9(ByVal target As LongPtr) As LongPtr
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &H42: i = i + 1: code(i) = &H40: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &H44: i = i + 1: code(i) = &H24: i = i + 1: code(i) = &H40: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &HB8: i = i + 1
-    Dim t As LongLong: t = target
-    RtlMoveMemoryFromPtr VarPtr(code(i)), t, 8: i = i + 8
+    Dim j As Long: For j = 0 To 7: code(i + j) = 0: Next j: i = i + 8
     code(i) = &HFF: i = i + 1: code(i) = &HD0: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HC4: i = i + 1: code(i) = &H68: i = i + 1
     code(i) = &HC3
+    
     Dim mem As LongPtr
     mem = VirtualAlloc(0, 160, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9004, , "VirtualAlloc failed"
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk9 = mem
+    BuildThunk9Cached = mem
 End Function
 
-Private Function BuildThunkRetStruct(ByVal target As LongPtr) As LongPtr
+Private Function BuildThunkRetStructCached() As LongPtr
     Dim code(0 To 47) As Byte
     Dim i As Long: i = 0
+    
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &HA: i = i + 1
     code(i) = &H49: i = i + 1: code(i) = &H8B: i = i + 1: code(i) = &H52: i = i + 1: code(i) = &H8: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &HB8: i = i + 1
-    Dim t As LongLong: t = target
-    RtlMoveMemoryFromPtr VarPtr(code(i)), t, 8: i = i + 8
+    Dim j As Long: For j = 0 To 7: code(i + j) = 0: Next j: i = i + 8
     code(i) = &HFF: i = i + 1: code(i) = &HD0: i = i + 1
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HC4: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &HC3
+    
     Dim mem As LongPtr
     mem = VirtualAlloc(0, 64, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9005, , "VirtualAlloc failed"
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunkRetStruct = mem
+    BuildThunkRetStructCached = mem
 End Function
 
-Private Sub FreeThunks()
-    On Error Resume Next
-    If p_thunk1 <> 0 Then VirtualFree p_thunk1, 0, MEM_RELEASE: p_thunk1 = 0
-    If p_thunk2 <> 0 Then VirtualFree p_thunk2, 0, MEM_RELEASE: p_thunk2 = 0
-    If p_thunk3 <> 0 Then VirtualFree p_thunk3, 0, MEM_RELEASE: p_thunk3 = 0
-    If p_thunk4 <> 0 Then VirtualFree p_thunk4, 0, MEM_RELEASE: p_thunk4 = 0
-    If p_thunk5 <> 0 Then VirtualFree p_thunk5, 0, MEM_RELEASE: p_thunk5 = 0
-    If p_thunk6 <> 0 Then VirtualFree p_thunk6, 0, MEM_RELEASE: p_thunk6 = 0
-    If p_thunk7 <> 0 Then VirtualFree p_thunk7, 0, MEM_RELEASE: p_thunk7 = 0
-    If p_thunk8 <> 0 Then VirtualFree p_thunk8, 0, MEM_RELEASE: p_thunk8 = 0
-    If p_thunk9 <> 0 Then VirtualFree p_thunk9, 0, MEM_RELEASE: p_thunk9 = 0
-    If p_thunkRetStruct <> 0 Then VirtualFree p_thunkRetStruct, 0, MEM_RELEASE: p_thunkRetStruct = 0
-    If p_thunkRetStructGPU <> 0 Then VirtualFree p_thunkRetStructGPU, 0, MEM_RELEASE: p_thunkRetStructGPU = 0
+' ============================================================
+' Initialize all cached thunks (call once at startup)
+' ============================================================
+Private Sub InitThunks()
+    If g_thunksInitialized Then Exit Sub
+    
+    LogMsg "InitThunks: Building cached thunks..."
+    
+    g_thunk1 = BuildThunk1Cached()
+    g_thunk2 = BuildThunk2Cached()
+    g_thunk3 = BuildThunk3Cached()
+    g_thunk4 = BuildThunk4Cached()
+    g_thunk5 = BuildThunk5Cached()
+    g_thunk6 = BuildThunk6Cached()
+    g_thunk7 = BuildThunk7Cached()
+    g_thunk8 = BuildThunk8Cached()
+    g_thunk9 = BuildThunk9Cached()
+    g_thunkRetStruct = BuildThunkRetStructCached()
+    g_thunkRetStructGPU = BuildThunkRetStructCached()
+    
+    g_thunksInitialized = True
+    LogMsg "InitThunks: All thunks cached successfully"
 End Sub
 
 ' ============================================================
-' COM Call helpers
+' Free all cached thunks (call once at cleanup)
+' ============================================================
+Private Sub FreeThunks()
+    On Error Resume Next
+    
+    If g_thunk1 <> 0 Then VirtualFree g_thunk1, 0, MEM_RELEASE: g_thunk1 = 0
+    If g_thunk2 <> 0 Then VirtualFree g_thunk2, 0, MEM_RELEASE: g_thunk2 = 0
+    If g_thunk3 <> 0 Then VirtualFree g_thunk3, 0, MEM_RELEASE: g_thunk3 = 0
+    If g_thunk4 <> 0 Then VirtualFree g_thunk4, 0, MEM_RELEASE: g_thunk4 = 0
+    If g_thunk5 <> 0 Then VirtualFree g_thunk5, 0, MEM_RELEASE: g_thunk5 = 0
+    If g_thunk6 <> 0 Then VirtualFree g_thunk6, 0, MEM_RELEASE: g_thunk6 = 0
+    If g_thunk7 <> 0 Then VirtualFree g_thunk7, 0, MEM_RELEASE: g_thunk7 = 0
+    If g_thunk8 <> 0 Then VirtualFree g_thunk8, 0, MEM_RELEASE: g_thunk8 = 0
+    If g_thunk9 <> 0 Then VirtualFree g_thunk9, 0, MEM_RELEASE: g_thunk9 = 0
+    If g_thunkRetStruct <> 0 Then VirtualFree g_thunkRetStruct, 0, MEM_RELEASE: g_thunkRetStruct = 0
+    If g_thunkRetStructGPU <> 0 Then VirtualFree g_thunkRetStructGPU, 0, MEM_RELEASE: g_thunkRetStructGPU = 0
+    
+    g_thunksInitialized = False
+End Sub
+
+' ============================================================
+' Update target address in cached thunk (fast - just 8 bytes write)
+' ============================================================
+Private Sub SetThunkTarget(ByVal pThunk As LongPtr, ByVal offset As Long, ByVal target As LongPtr)
+    CopyMemory pThunk + CLngPtr(offset), VarPtr(target), 8
+End Sub
+
+' ============================================================
+' COM Call helpers - OPTIMIZED (no VirtualAlloc/Free per call)
 ' ============================================================
 Private Function COM_Call1(ByVal pObj As LongPtr, ByVal vtIndex As Long) As LongPtr
     Dim methodAddr As LongPtr: methodAddr = GetVTableMethod(pObj, vtIndex)
-    If p_thunk1 <> 0 Then VirtualFree p_thunk1, 0, MEM_RELEASE
-    p_thunk1 = BuildThunk1(methodAddr)
+    SetThunkTarget g_thunk1, THUNK1_TARGET_OFFSET, methodAddr
     Dim args As ThunkArgs1: args.a1 = pObj
-    COM_Call1 = CallWindowProcW(p_thunk1, 0, 0, VarPtr(args), 0)
+    COM_Call1 = CallWindowProcW(g_thunk1, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call2(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr: methodAddr = GetVTableMethod(pObj, vtIndex)
-    If p_thunk2 <> 0 Then VirtualFree p_thunk2, 0, MEM_RELEASE
-    p_thunk2 = BuildThunk2(methodAddr)
+    SetThunkTarget g_thunk2, THUNK2_TARGET_OFFSET, methodAddr
     Dim args As ThunkArgs2: args.a1 = pObj: args.a2 = a2
-    COM_Call2 = CallWindowProcW(p_thunk2, 0, 0, VarPtr(args), 0)
+    COM_Call2 = CallWindowProcW(g_thunk2, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call3(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr: methodAddr = GetVTableMethod(pObj, vtIndex)
-    If p_thunk3 <> 0 Then VirtualFree p_thunk3, 0, MEM_RELEASE
-    p_thunk3 = BuildThunk3(methodAddr)
+    SetThunkTarget g_thunk3, THUNK3_TARGET_OFFSET, methodAddr
     Dim args As ThunkArgs3: args.a1 = pObj: args.a2 = a2: args.a3 = a3
-    COM_Call3 = CallWindowProcW(p_thunk3, 0, 0, VarPtr(args), 0)
+    COM_Call3 = CallWindowProcW(g_thunk3, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call4(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr: methodAddr = GetVTableMethod(pObj, vtIndex)
-    If p_thunk4 <> 0 Then VirtualFree p_thunk4, 0, MEM_RELEASE
-    p_thunk4 = BuildThunk4(methodAddr)
+    SetThunkTarget g_thunk4, THUNK4_TARGET_OFFSET, methodAddr
     Dim args As ThunkArgs4: args.a1 = pObj: args.a2 = a2: args.a3 = a3: args.a4 = a4
-    COM_Call4 = CallWindowProcW(p_thunk4, 0, 0, VarPtr(args), 0)
+    COM_Call4 = CallWindowProcW(g_thunk4, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call5(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr, ByVal a5 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr: methodAddr = GetVTableMethod(pObj, vtIndex)
-    If p_thunk5 <> 0 Then VirtualFree p_thunk5, 0, MEM_RELEASE
-    p_thunk5 = BuildThunk5(methodAddr)
+    SetThunkTarget g_thunk5, THUNK5_TARGET_OFFSET, methodAddr
     Dim args As ThunkArgs5: args.a1 = pObj: args.a2 = a2: args.a3 = a3: args.a4 = a4: args.a5 = a5
-    COM_Call5 = CallWindowProcW(p_thunk5, 0, 0, VarPtr(args), 0)
+    COM_Call5 = CallWindowProcW(g_thunk5, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call6(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr, ByVal a5 As LongPtr, ByVal a6 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr: methodAddr = GetVTableMethod(pObj, vtIndex)
-    If p_thunk6 <> 0 Then VirtualFree p_thunk6, 0, MEM_RELEASE
-    p_thunk6 = BuildThunk6(methodAddr)
+    SetThunkTarget g_thunk6, THUNK6_TARGET_OFFSET, methodAddr
     Dim args As ThunkArgs6: args.a1 = pObj: args.a2 = a2: args.a3 = a3: args.a4 = a4: args.a5 = a5: args.a6 = a6
-    COM_Call6 = CallWindowProcW(p_thunk6, 0, 0, VarPtr(args), 0)
+    COM_Call6 = CallWindowProcW(g_thunk6, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Function COM_Call7(ByVal pObj As LongPtr, ByVal vtIndex As Long, ByVal a2 As LongPtr, ByVal a3 As LongPtr, ByVal a4 As LongPtr, ByVal a5 As LongPtr, ByVal a6 As LongPtr, ByVal a7 As LongPtr) As LongPtr
     Dim methodAddr As LongPtr: methodAddr = GetVTableMethod(pObj, vtIndex)
-    If p_thunk7 <> 0 Then VirtualFree p_thunk7, 0, MEM_RELEASE
-    p_thunk7 = BuildThunk7(methodAddr)
+    SetThunkTarget g_thunk7, THUNK7_TARGET_OFFSET, methodAddr
     Dim args As ThunkArgs7: args.a1 = pObj: args.a2 = a2: args.a3 = a3: args.a4 = a4: args.a5 = a5: args.a6 = a6: args.a7 = a7
-    COM_Call7 = CallWindowProcW(p_thunk7, 0, 0, VarPtr(args), 0)
+    COM_Call7 = CallWindowProcW(g_thunk7, 0, 0, VarPtr(args), 0)
 End Function
 
 Private Sub COM_Release(ByVal pObj As LongPtr)
@@ -1255,18 +1326,16 @@ End Sub
 
 Private Sub COM_GetCPUDescriptorHandle(ByVal pHeap As LongPtr, ByRef outHandle As D3D12_CPU_DESCRIPTOR_HANDLE)
     Dim methodAddr As LongPtr: methodAddr = GetVTableMethod(pHeap, VTBL_DescHeap_GetCPUDescriptorHandleForHeapStart)
-    If p_thunkRetStruct <> 0 Then VirtualFree p_thunkRetStruct, 0, MEM_RELEASE
-    p_thunkRetStruct = BuildThunkRetStruct(methodAddr)
+    SetThunkTarget g_thunkRetStruct, THUNK_RETSTRUCT_TARGET_OFFSET, methodAddr
     Dim args As ThunkArgs2: args.a1 = pHeap: args.a2 = VarPtr(outHandle)
-    CallWindowProcW p_thunkRetStruct, 0, 0, VarPtr(args), 0
+    CallWindowProcW g_thunkRetStruct, 0, 0, VarPtr(args), 0
 End Sub
 
 Private Sub COM_GetGPUDescriptorHandle(ByVal pHeap As LongPtr, ByRef outHandle As D3D12_GPU_DESCRIPTOR_HANDLE)
     Dim methodAddr As LongPtr: methodAddr = GetVTableMethod(pHeap, VTBL_DescHeap_GetGPUDescriptorHandleForHeapStart)
-    If p_thunkRetStructGPU <> 0 Then VirtualFree p_thunkRetStructGPU, 0, MEM_RELEASE
-    p_thunkRetStructGPU = BuildThunkRetStruct(methodAddr)
+    SetThunkTarget g_thunkRetStructGPU, THUNK_RETSTRUCT_GPU_TARGET_OFFSET, methodAddr
     Dim args As ThunkArgs2: args.a1 = pHeap: args.a2 = VarPtr(outHandle)
-    CallWindowProcW p_thunkRetStructGPU, 0, 0, VarPtr(args), 0
+    CallWindowProcW g_thunkRetStructGPU, 0, 0, VarPtr(args), 0
 End Sub
 
 ' ============================================================
@@ -1335,8 +1404,8 @@ Private Function CompileShaderFromFile(ByVal filePath As String, ByVal entryPoin
         Err.Raise vbObjectError + 8101, , "D3DCompileFromFile not found"
     End If
     
-    If p_thunk9 <> 0 Then VirtualFree p_thunk9, 0, MEM_RELEASE
-    p_thunk9 = BuildThunk9(pD3DCompileFromFile)
+    ' Use cached thunk9
+    SetThunkTarget g_thunk9, THUNK9_TARGET_OFFSET, pD3DCompileFromFile
     
     Dim entryBytes() As Byte: entryBytes = AnsiZBytes(entryPoint)
     Dim profileBytes() As Byte: profileBytes = AnsiZBytes(profile)
@@ -1357,7 +1426,7 @@ Private Function CompileShaderFromFile(ByVal filePath As String, ByVal entryPoin
     args9.a9 = VarPtr(pErrorBlob)
     
     Dim hr As Long
-    hr = ToHResult(CallWindowProcW(p_thunk9, 0, 0, VarPtr(args9), 0))
+    hr = ToHResult(CallWindowProcW(g_thunk9, 0, 0, VarPtr(args9), 0))
     LogMsg "D3DCompileFromFile returned: " & Hex$(hr)
     
     If hr < 0 Then
@@ -1721,8 +1790,8 @@ Private Function CreateVertexBuffer() As Boolean
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(g_pDevice, VTBL_Device_CreateCommittedResource)
     
-    If p_thunk8 <> 0 Then VirtualFree p_thunk8, 0, MEM_RELEASE
-    p_thunk8 = BuildThunk8(methodAddr)
+    ' Use cached thunk8
+    SetThunkTarget g_thunk8, THUNK8_TARGET_OFFSET, methodAddr
     
     Dim args8 As ThunkArgs8
     args8.a1 = g_pDevice
@@ -1734,7 +1803,7 @@ Private Function CreateVertexBuffer() As Boolean
     args8.a7 = VarPtr(resourceIID)
     args8.a8 = VarPtr(g_pVertexBuffer)
     
-    hr = ToHResult(CallWindowProcW(p_thunk8, 0, 0, VarPtr(args8), 0))
+    hr = ToHResult(CallWindowProcW(g_thunk8, 0, 0, VarPtr(args8), 0))
     LogMsg "CreateCommittedResource (VB) returned: " & Hex$(hr)
     
     If hr < 0 Or g_pVertexBuffer = 0 Then CreateVertexBuffer = False: Exit Function
@@ -1789,8 +1858,8 @@ Private Function CreateConstantBuffer() As Boolean
     Dim methodAddr As LongPtr
     methodAddr = GetVTableMethod(g_pDevice, VTBL_Device_CreateCommittedResource)
     
-    If p_thunk8 <> 0 Then VirtualFree p_thunk8, 0, MEM_RELEASE
-    p_thunk8 = BuildThunk8(methodAddr)
+    ' Use cached thunk8
+    SetThunkTarget g_thunk8, THUNK8_TARGET_OFFSET, methodAddr
     
     Dim args8 As ThunkArgs8
     args8.a1 = g_pDevice
@@ -1802,7 +1871,7 @@ Private Function CreateConstantBuffer() As Boolean
     args8.a7 = VarPtr(resourceIID)
     args8.a8 = VarPtr(g_pConstantBuffer)
     
-    hr = ToHResult(CallWindowProcW(p_thunk8, 0, 0, VarPtr(args8), 0))
+    hr = ToHResult(CallWindowProcW(g_thunk8, 0, 0, VarPtr(args8), 0))
     LogMsg "CreateCommittedResource (CB) returned: " & Hex$(hr)
     
     If hr < 0 Or g_pConstantBuffer = 0 Then CreateConstantBuffer = False: Exit Function
@@ -2012,7 +2081,10 @@ Public Sub Main()
     LogOpen
     On Error GoTo EH
 
-    LogMsg "Main: start"
+    LogMsg "Main: start (OPTIMIZED VERSION)"
+    
+    ' Initialize cached thunks FIRST (before any COM calls)
+    InitThunks
     
     ' Shader file path (same directory as Excel file)
     Dim shaderPath As String
@@ -2121,8 +2193,8 @@ Public Sub Main()
 
 FIN:
     LogMsg "Cleanup: start"
-    FreeThunks
     CleanupD3D12
+    FreeThunks  ' Free cached thunks at the very end
     If g_hWnd <> 0 Then DestroyWindow g_hWnd
     g_hWnd = 0
 
