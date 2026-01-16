@@ -106,9 +106,9 @@ Private Const D3D12_SHADER_VISIBILITY_PIXEL As Long = 5
 Private Const D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND As Long = &HFFFFFFFF
 
 ' Frame management constants
-Private Const FRAME_COUNT As Long = 2
-Private Const WIDTH As Long = 800
-Private Const HEIGHT As Long = 600
+Private Const FRAME_COUNT As Long = 3
+Private Const Width As Long = 800
+Private Const Height As Long = 600
 
 ' -----------------------------
 ' vtable indices
@@ -576,8 +576,11 @@ Private g_rtvDescriptorSize As Long
 Private g_cbvDescriptorSize As Long
 Private g_pRenderTargets(0 To FRAME_COUNT - 1) As LongPtr
 Private g_pVertexBuffer As LongPtr
-Private g_pConstantBuffer As LongPtr
-Private g_constantBufferDataBegin As LongPtr
+'Private g_pConstantBuffer As LongPtr
+'Private g_constantBufferDataBegin As LongPtr
+Private g_pConstantBuffers(0 To FRAME_COUNT - 1) As LongPtr
+Private g_constantBufferDataBegins(0 To FRAME_COUNT - 1) As LongPtr
+
 Private g_vertexBufferView As D3D12_VERTEX_BUFFER_VIEW
 
 ' *** KEY CHANGE: Per-frame resources for pipelining ***
@@ -1171,7 +1174,7 @@ Private Function InitD3D12(ByVal hWnd As LongPtr) As Boolean
     If hr < 0 Or g_pCommandQueue = 0 Then COM_Release pFactory: InitD3D12 = False: Exit Function
     
     Dim swapChainDesc As DXGI_SWAP_CHAIN_DESC
-    swapChainDesc.BufferDesc.Width = WIDTH: swapChainDesc.BufferDesc.Height = HEIGHT
+    swapChainDesc.BufferDesc.Width = Width: swapChainDesc.BufferDesc.Height = Height
     swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM
     swapChainDesc.SampleDesc.Count = 1: swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT
     swapChainDesc.BufferCount = FRAME_COUNT: swapChainDesc.OutputWindow = hWnd
@@ -1195,7 +1198,9 @@ Private Function InitD3D12(ByVal hWnd As LongPtr) As Boolean
     g_rtvDescriptorSize = CLng(COM_Call2(g_pDevice, VTBL_Device_GetDescriptorHandleIncrementSize, D3D12_DESCRIPTOR_HEAP_TYPE_RTV))
     
     Dim cbvHeapDesc As D3D12_DESCRIPTOR_HEAP_DESC
-    cbvHeapDesc.cType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV: cbvHeapDesc.NumDescriptors = 1
+    cbvHeapDesc.cType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+    '(cbvHeapDesc.NumDescriptors = 1
+    cbvHeapDesc.NumDescriptors = FRAME_COUNT
     cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
     hr = ToHResult(COM_Call4(g_pDevice, VTBL_Device_CreateDescriptorHeap, VarPtr(cbvHeapDesc), VarPtr(heapIID), VarPtr(g_pCbvHeap)))
     If hr < 0 Then COM_Release pFactory: InitD3D12 = False: Exit Function
@@ -1338,28 +1343,55 @@ End Function
 
 Private Function CreateConstantBuffer() As Boolean
     Dim cbSize As LongLong: cbSize = 256
-    Dim heapProps As D3D12_HEAP_PROPERTIES: heapProps.cType = D3D12_HEAP_TYPE_UPLOAD: heapProps.CreationNodeMask = 1: heapProps.VisibleNodeMask = 1
+    Dim heapProps As D3D12_HEAP_PROPERTIES
+    heapProps.cType = D3D12_HEAP_TYPE_UPLOAD
+    heapProps.CreationNodeMask = 1
+    heapProps.VisibleNodeMask = 1
+    
     Dim resourceDesc As D3D12_RESOURCE_DESC
-    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER: resourceDesc.Width = cbSize: resourceDesc.Height = 1
-    resourceDesc.DepthOrArraySize = 1: resourceDesc.MipLevels = 1: resourceDesc.SampleDesc.Count = 1: resourceDesc.Layout = 1
+    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER
+    resourceDesc.Width = cbSize
+    resourceDesc.Height = 1
+    resourceDesc.DepthOrArraySize = 1
+    resourceDesc.MipLevels = 1
+    resourceDesc.SampleDesc.Count = 1
+    resourceDesc.Layout = 1
     
     Dim resourceIID As GUID: resourceIID = IID_ID3D12Resource()
-    SetThunkTarget g_thunk8, THUNK8_TARGET_OFFSET, GetVTableMethod(g_pDevice, VTBL_Device_CreateCommittedResource)
-    Dim args8 As ThunkArgs8
-    args8.a1 = g_pDevice: args8.a2 = VarPtr(heapProps): args8.a3 = D3D12_HEAP_FLAG_NONE: args8.a4 = VarPtr(resourceDesc)
-    args8.a5 = D3D12_RESOURCE_STATE_GENERIC_READ: args8.a6 = 0: args8.a7 = VarPtr(resourceIID): args8.a8 = VarPtr(g_pConstantBuffer)
-    Dim hr As Long: hr = ToHResult(CallWindowProcW(g_thunk8, 0, 0, VarPtr(args8), 0))
-    If hr < 0 Or g_pConstantBuffer = 0 Then CreateConstantBuffer = False: Exit Function
-    
-    hr = ToHResult(COM_Call4(g_pConstantBuffer, VTBL_Resource_Map, 0, 0, VarPtr(g_constantBufferDataBegin)))
-    If hr < 0 Then CreateConstantBuffer = False: Exit Function
-    
-    Dim cbvDesc As D3D12_CONSTANT_BUFFER_VIEW_DESC
-    cbvDesc.BufferLocation = COM_Call1(g_pConstantBuffer, VTBL_Resource_GetGPUVirtualAddress)
-    cbvDesc.SizeInBytes = CLng(cbSize)
     Dim cbvHandle As D3D12_CPU_DESCRIPTOR_HANDLE
     COM_GetCPUDescriptorHandle g_pCbvHeap, cbvHandle
-    COM_Call3 g_pDevice, VTBL_Device_CreateConstantBufferView, VarPtr(cbvDesc), cbvHandle.ptr
+    
+    g_cbvDescriptorSize = CLng(COM_Call2(g_pDevice, VTBL_Device_GetDescriptorHandleIncrementSize, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV))
+    
+    Dim frameIdx As Long
+    For frameIdx = 0 To FRAME_COUNT - 1
+        SetThunkTarget g_thunk8, THUNK8_TARGET_OFFSET, GetVTableMethod(g_pDevice, VTBL_Device_CreateCommittedResource)
+        Dim args8 As ThunkArgs8
+        args8.a1 = g_pDevice
+        args8.a2 = VarPtr(heapProps)
+        args8.a3 = D3D12_HEAP_FLAG_NONE
+        args8.a4 = VarPtr(resourceDesc)
+        args8.a5 = D3D12_RESOURCE_STATE_GENERIC_READ
+        args8.a6 = 0
+        args8.a7 = VarPtr(resourceIID)
+        args8.a8 = VarPtr(g_pConstantBuffers(frameIdx))
+        
+        Dim hr As Long: hr = ToHResult(CallWindowProcW(g_thunk8, 0, 0, VarPtr(args8), 0))
+        If hr < 0 Or g_pConstantBuffers(frameIdx) = 0 Then
+            CreateConstantBuffer = False: Exit Function
+        End If
+        
+        hr = ToHResult(COM_Call4(g_pConstantBuffers(frameIdx), VTBL_Resource_Map, 0, 0, VarPtr(g_constantBufferDataBegins(frameIdx))))
+        If hr < 0 Then CreateConstantBuffer = False: Exit Function
+        
+        Dim cbvDesc As D3D12_CONSTANT_BUFFER_VIEW_DESC
+        cbvDesc.BufferLocation = COM_Call1(g_pConstantBuffers(frameIdx), VTBL_Resource_GetGPUVirtualAddress)
+        cbvDesc.SizeInBytes = CLng(cbSize)
+        
+        COM_Call3 g_pDevice, VTBL_Device_CreateConstantBufferView, VarPtr(cbvDesc), cbvHandle.ptr
+        cbvHandle.ptr = cbvHandle.ptr + g_cbvDescriptorSize
+    Next frameIdx
+    
     CreateConstantBuffer = True
 End Function
 
@@ -1372,23 +1404,60 @@ Private Function CreateFence() As Boolean
     CreateFence = (g_fenceEvent <> 0)
 End Function
 
+' UINT64を正しく取得するための専用サンク
+Private Function GetFenceCompletedValue(ByVal pFence As LongPtr) As LongLong
+    ' GetCompletedValueはUINT64を返す - RAXレジスタから直接取得
+    Dim result As LongLong
+    SetThunkTarget g_thunk1, THUNK1_TARGET_OFFSET, GetVTableMethod(pFence, VTBL_Fence_GetCompletedValue)
+    Dim args As ThunkArgs1: args.a1 = pFence
+    
+    ' 戻り値を直接LongLongとして受け取る
+    Dim retVal As LongPtr
+    retVal = CallWindowProcW(g_thunk1, 0, 0, VarPtr(args), 0)
+    CopyMemory VarPtr(result), VarPtr(retVal), 8
+    GetFenceCompletedValue = result
+End Function
+
 ' ============================================================
 ' *** KEY CHANGE: Wait only for the specific frame's resources ***
 ' This allows pipelining - we only wait when we need to reuse resources
 ' ============================================================
+'Private Sub WaitForFrame(ByVal frameIdx As Long)
+'    Dim fenceValue As LongLong
+'    fenceValue = g_frameFenceValues(frameIdx)
+'
+'    ' Only wait if GPU hasn't completed this frame yet
+'    If fenceValue <> 0 Then
+'        Dim completed As LongLong
+'        completed = COM_Call1(g_pFence, VTBL_Fence_GetCompletedValue)
+'
+'        If completed < fenceValue Then
+'            COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(fenceValue), g_fenceEvent
+'            'WaitForSingleObject g_fenceEvent, INFINITE
+'        End If
+'    End If
+'End Sub
+
+
 Private Sub WaitForFrame(ByVal frameIdx As Long)
     Dim fenceValue As LongLong
     fenceValue = g_frameFenceValues(frameIdx)
     
-    ' Only wait if GPU hasn't completed this frame yet
-    If fenceValue <> 0 Then
-        Dim completed As LongLong
-        completed = COM_Call1(g_pFence, VTBL_Fence_GetCompletedValue)
-        
-        If completed < fenceValue Then
-            COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(fenceValue), g_fenceEvent
-            WaitForSingleObject g_fenceEvent, INFINITE
-        End If
+    If fenceValue = 0 Then Exit Sub  ' 初回は待機不要
+    
+    Dim completed As LongLong
+    completed = GetFenceCompletedValue(g_pFence)
+    
+    ' 既に完了していれば待機しない
+    If completed >= fenceValue Then Exit Sub
+    
+    ' タイムアウト付き待機（無限待機を避ける）
+    COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(fenceValue), g_fenceEvent
+    Dim waitResult As Long
+    waitResult = WaitForSingleObject(g_fenceEvent, 100)  ' 100ms timeout
+    
+    If waitResult <> WAIT_OBJECT_0 Then
+        LogMsg "WaitForFrame: timeout or error for frame " & frameIdx
     End If
 End Sub
 
@@ -1396,39 +1465,36 @@ End Sub
 ' Render frame with pipelining
 ' ============================================================
 Private Sub RenderFrame()
-    ' Get current back buffer index
     g_frameIndex = CLng(COM_Call1(g_pSwapChain3, VTBL_SwapChain3_GetCurrentBackBufferIndex))
     
-    ' *** Wait only for THIS frame's resources to be free ***
-    ' This is the key difference - we don't wait for ALL GPU work
     WaitForFrame g_frameIndex
     
-    ' Update constant buffer
+    ' *** フレーム固有の定数バッファを更新 ***
     Dim cbData As CONSTANT_BUFFER_DATA
     cbData.iTime = CSng(GetTime() - g_startTime)
-    cbData.iResolutionX = CSng(WIDTH)
-    cbData.iResolutionY = CSng(HEIGHT)
-    CopyMemory g_constantBufferDataBegin, VarPtr(cbData), CLngPtr(LenB(cbData))
+    cbData.iResolutionX = CSng(Width)
+    cbData.iResolutionY = CSng(Height)
+    CopyMemory g_constantBufferDataBegins(g_frameIndex), VarPtr(cbData), CLngPtr(LenB(cbData))
     
-    ' Reset THIS frame's command allocator (now safe to reuse)
     COM_Call1 g_pCommandAllocators(g_frameIndex), VTBL_CmdAlloc_Reset
     COM_Call3 g_pCommandList, VTBL_CmdList_Reset, g_pCommandAllocators(g_frameIndex), g_pPipelineState
     
-    ' Set root signature and descriptor heaps
     COM_Call2 g_pCommandList, VTBL_CmdList_SetGraphicsRootSignature, g_pRootSignature
     Dim ppHeaps As LongPtr: ppHeaps = g_pCbvHeap
     COM_Call3 g_pCommandList, VTBL_CmdList_SetDescriptorHeaps, 1, VarPtr(ppHeaps)
+    
+    ' *** フレーム固有のCBVを使用 ***
     Dim gpuHandle As D3D12_GPU_DESCRIPTOR_HANDLE
     COM_GetGPUDescriptorHandle g_pCbvHeap, gpuHandle
+    gpuHandle.ptr = gpuHandle.ptr + CLngLng(g_frameIndex) * CLngLng(g_cbvDescriptorSize)
     COM_Call3 g_pCommandList, VTBL_CmdList_SetGraphicsRootDescriptorTable, 0, CLngPtr(gpuHandle.ptr)
     
-    ' Set viewport and scissor
-    Dim vp As D3D12_VIEWPORT: vp.Width = CSng(WIDTH): vp.Height = CSng(HEIGHT): vp.MaxDepth = 1!
+    ' 以下は同じ...
+    Dim vp As D3D12_VIEWPORT: vp.Width = CSng(Width): vp.Height = CSng(Height): vp.MaxDepth = 1!
     COM_Call3 g_pCommandList, VTBL_CmdList_RSSetViewports, 1, VarPtr(vp)
-    Dim sr As D3D12_RECT: sr.Right = WIDTH: sr.Bottom = HEIGHT
+    Dim sr As D3D12_RECT: sr.Right = Width: sr.Bottom = Height
     COM_Call3 g_pCommandList, VTBL_CmdList_RSSetScissorRects, 1, VarPtr(sr)
     
-    ' Transition to render target
     Dim barrierToRT As D3D12_RESOURCE_BARRIER
     barrierToRT.cType = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
     barrierToRT.Transition.pResource = g_pRenderTargets(g_frameIndex)
@@ -1437,22 +1503,18 @@ Private Sub RenderFrame()
     barrierToRT.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
     COM_Call3 g_pCommandList, VTBL_CmdList_ResourceBarrier, 1, VarPtr(barrierToRT)
     
-    ' Get RTV handle
     Dim rtvHandle As D3D12_CPU_DESCRIPTOR_HANDLE
     COM_GetCPUDescriptorHandle g_pRtvHeap, rtvHandle
     rtvHandle.ptr = rtvHandle.ptr + CLngPtr(g_frameIndex) * CLngPtr(g_rtvDescriptorSize)
     
-    ' Clear and set render target
     Dim clearColor(0 To 3) As Single: clearColor(3) = 1!
     COM_Call5 g_pCommandList, VTBL_CmdList_ClearRenderTargetView, rtvHandle.ptr, VarPtr(clearColor(0)), 0, 0
     COM_Call5 g_pCommandList, VTBL_CmdList_OMSetRenderTargets, 1, VarPtr(rtvHandle), 1, 0
     
-    ' Draw
     COM_Call2 g_pCommandList, VTBL_CmdList_IASetPrimitiveTopology, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST
     COM_Call4 g_pCommandList, VTBL_CmdList_IASetVertexBuffers, 0, 1, VarPtr(g_vertexBufferView)
     COM_Call5 g_pCommandList, VTBL_CmdList_DrawInstanced, 6, 1, 0, 0
     
-    ' Transition to present
     Dim barrierToPresent As D3D12_RESOURCE_BARRIER
     barrierToPresent.cType = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
     barrierToPresent.Transition.pResource = g_pRenderTargets(g_frameIndex)
@@ -1461,18 +1523,15 @@ Private Sub RenderFrame()
     barrierToPresent.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT
     COM_Call3 g_pCommandList, VTBL_CmdList_ResourceBarrier, 1, VarPtr(barrierToPresent)
     
-    ' Close and execute
     COM_Call1 g_pCommandList, VTBL_CmdList_Close
     Dim ppCommandLists As LongPtr: ppCommandLists = g_pCommandList
     COM_Call3 g_pCommandQueue, VTBL_CmdQueue_ExecuteCommandLists, 1, VarPtr(ppCommandLists)
     
-    ' *** Signal fence for THIS frame ***
     g_frameFenceValues(g_frameIndex) = g_currentFenceValue
     COM_Call3 g_pCommandQueue, VTBL_CmdQueue_Signal, g_pFence, CLngPtr(g_currentFenceValue)
     g_currentFenceValue = g_currentFenceValue + 1
     
-    ' Present (VSync=1 for 60fps cap, change to 0 for uncapped)
-    COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 1, 0
+    COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 0, 0
 End Sub
 
 ' ============================================================
@@ -1493,18 +1552,16 @@ Private Sub CleanupD3D12()
     WaitForAllFrames
     
     If g_fenceEvent <> 0 Then CloseHandle g_fenceEvent: g_fenceEvent = 0
-    If g_pConstantBuffer <> 0 Then COM_Release g_pConstantBuffer: g_pConstantBuffer = 0
+    'If g_pConstantBuffer <> 0 Then COM_Release g_pConstantBuffer: g_pConstantBuffer = 0
     If g_pVertexBuffer <> 0 Then COM_Release g_pVertexBuffer: g_pVertexBuffer = 0
     If g_pFence <> 0 Then COM_Release g_pFence: g_pFence = 0
     If g_pCommandList <> 0 Then COM_Release g_pCommandList: g_pCommandList = 0
     If g_pPipelineState <> 0 Then COM_Release g_pPipelineState: g_pPipelineState = 0
     If g_pRootSignature <> 0 Then COM_Release g_pRootSignature: g_pRootSignature = 0
     
-    ' Release per-frame command allocators
     Dim i As Long
     For i = 0 To FRAME_COUNT - 1
-        If g_pCommandAllocators(i) <> 0 Then COM_Release g_pCommandAllocators(i): g_pCommandAllocators(i) = 0
-        If g_pRenderTargets(i) <> 0 Then COM_Release g_pRenderTargets(i): g_pRenderTargets(i) = 0
+        If g_pConstantBuffers(i) <> 0 Then COM_Release g_pConstantBuffers(i): g_pConstantBuffers(i) = 0
     Next i
     
     If g_pCbvHeap <> 0 Then COM_Release g_pCbvHeap: g_pCbvHeap = 0
@@ -1543,7 +1600,7 @@ Public Sub Main()
 
     If RegisterClassExW(wcex) = 0 Then MsgBox "RegisterClassExW failed.", vbCritical: GoTo FIN
 
-    g_hWnd = CreateWindowExW(0, StrPtr(CLASS_NAME), StrPtr(WINDOW_NAME), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, WIDTH, HEIGHT, 0, 0, hInstance, 0)
+    g_hWnd = CreateWindowExW(0, StrPtr(CLASS_NAME), StrPtr(WINDOW_NAME), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, Width, Height, 0, 0, hInstance, 0)
     If g_hWnd = 0 Then MsgBox "CreateWindowExW failed.", vbCritical: GoTo FIN
 
     ShowWindow g_hWnd, SW_SHOWDEFAULT
@@ -1570,6 +1627,8 @@ Public Sub Main()
         Else
             RenderFrame
             frame = frame + 1
+            Sleep 1
+            
             If (frame Mod 60) = 0 Then DoEvents
         End If
     Loop
@@ -1588,3 +1647,4 @@ EH:
     LogMsg "ERROR: " & Err.Number & " / " & Err.Description
     Resume FIN
 End Sub
+
