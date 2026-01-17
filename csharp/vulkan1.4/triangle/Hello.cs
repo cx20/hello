@@ -6,6 +6,130 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
+using System.Text;
+
+// ========================================================================================================
+// Shader Compiler Class (Using shaderc_shared.dll)
+// ========================================================================================================
+public class ShaderCompiler
+{
+    private const string LibName = "shaderc_shared.dll";
+
+    public enum ShaderKind : int
+    {
+        Vertex = 0,
+        Fragment = 1,
+        Compute = 2,
+        Geometry = 3,
+        TessControl = 4,
+        TessEvaluation = 5
+    }
+
+    private enum CompilationStatus : int
+    {
+        Success = 0,
+        InvalidStage = 1,
+        CompilationError = 2,
+        InternalError = 3,
+        NullResultObject = 4,
+        InvalidAssembly = 5,
+        ValidationError = 6,
+        TransformationError = 7,
+        ConfigurationError = 8
+    }
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr shaderc_compiler_initialize();
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void shaderc_compiler_release(IntPtr compiler);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr shaderc_compile_options_initialize();
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void shaderc_compile_options_set_optimization_level(IntPtr options, int level); // 0:Zero, 1:Size, 2:Performance
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void shaderc_compile_options_release(IntPtr options);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr shaderc_compile_into_spv(
+        IntPtr compiler,
+        [MarshalAs(UnmanagedType.LPStr)] string source_text,
+        UIntPtr source_text_size,
+        int shader_kind,
+        [MarshalAs(UnmanagedType.LPStr)] string input_file_name,
+        [MarshalAs(UnmanagedType.LPStr)] string entry_point_name,
+        IntPtr additional_options);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void shaderc_result_release(IntPtr result);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern UIntPtr shaderc_result_get_length(IntPtr result);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr shaderc_result_get_bytes(IntPtr result);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern CompilationStatus shaderc_result_get_compilation_status(IntPtr result);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr shaderc_result_get_error_message(IntPtr result);
+
+    public static byte[] Compile(string source, ShaderKind kind, string fileName = "shader.glsl", string entryPoint = "main")
+    {
+        IntPtr compiler = shaderc_compiler_initialize();
+        IntPtr options = shaderc_compile_options_initialize();
+
+        // Optimization Level: Performance
+        shaderc_compile_options_set_optimization_level(options, 2); 
+
+        try
+        {
+            IntPtr result = shaderc_compile_into_spv(
+                compiler,
+                source,
+                (UIntPtr)Encoding.UTF8.GetByteCount(source),
+                (int)kind,
+                fileName,
+                entryPoint,
+                options
+            );
+
+            try
+            {
+                var status = shaderc_result_get_compilation_status(result);
+                if (status != CompilationStatus.Success)
+                {
+                    string errorMsg = Marshal.PtrToStringAnsi(shaderc_result_get_error_message(result));
+                    throw new Exception($"Shader compilation failed: {errorMsg}");
+                }
+
+                ulong length = (ulong)shaderc_result_get_length(result);
+                IntPtr bytesPtr = shaderc_result_get_bytes(result);
+
+                byte[] bytecode = new byte[length];
+                Marshal.Copy(bytesPtr, bytecode, 0, (int)length);
+                return bytecode;
+            }
+            finally
+            {
+                shaderc_result_release(result);
+            }
+        }
+        finally
+        {
+            shaderc_compile_options_release(options);
+            shaderc_compiler_release(compiler);
+        }
+    }
+}
+
+// ========================================================================================================
+// Main Application
+// ========================================================================================================
 
 class HelloForm : Form
 {
@@ -1997,7 +2121,7 @@ class HelloForm : Form
     public HelloForm()
     {
         this.Size = new Size( 640, 480 );
-        this.Text = "Hello, World!";
+        this.Text = "Hello, Vulkan (Runtime Shader Compile)";
     }
     protected override void OnHandleCreated(EventArgs e)
     {
@@ -2083,7 +2207,8 @@ class HelloForm : Form
                 applicationVersion = VkVersion.MakeVersion(1, 0, 0),
                 pEngineName = engineNamePtr,
                 engineVersion = VkVersion.MakeVersion(1, 0, 0),
-                apiVersion = VkVersion.MakeVersion(1, 3, 0)
+                // Requesting Vulkan 1.4
+                apiVersion = VkVersion.MakeVersion(1, 4, 0)
             };
 
             string[] layers = { "VK_LAYER_KHRONOS_validation" };
@@ -2415,12 +2540,20 @@ class HelloForm : Form
         Console.WriteLine("----------------------------------------");
         Console.WriteLine("[HelloForm::CreateGraphicsPipeline] - Start");
 
-        vertShaderModule = LoadShaderModule("hello_vert.spv");
-        fragShaderModule = LoadShaderModule("hello_frag.spv");
+        // Load GLSL source code from text files
+        string vertSource = File.ReadAllText("hello.vert");
+        string fragSource = File.ReadAllText("hello.frag");
+
+        // Compile GLSL to SPIR-V at runtime
+        byte[] vertSpirv = ShaderCompiler.Compile(vertSource, ShaderCompiler.ShaderKind.Vertex, "hello.vert");
+        byte[] fragSpirv = ShaderCompiler.Compile(fragSource, ShaderCompiler.ShaderKind.Fragment, "hello.frag");
+
+        vertShaderModule = CreateShaderModuleFromBytes(vertSpirv);
+        fragShaderModule = CreateShaderModuleFromBytes(fragSpirv);
 
         if (vertShaderModule == IntPtr.Zero || fragShaderModule == IntPtr.Zero)
         {
-            throw new Exception("Failed to load shader modules.");
+            throw new Exception("Failed to create shader modules.");
         }
 
         Console.WriteLine($"Vertex Shader Module: {vertShaderModule}");
@@ -2867,9 +3000,14 @@ class HelloForm : Form
 
             var requiredExtensions = new HashSet<string> { "VK_KHR_swapchain" };
             var availableExtensions = extensions
-                .Select(e => System.Text.Encoding.UTF8.GetString(e.extensionName).TrimEnd('\0'))
+                .Select(e => 
+                {
+                    int length = Array.IndexOf(e.extensionName, (byte)0);
+                    if (length < 0) length = e.extensionName.Length;
+                    return System.Text.Encoding.UTF8.GetString(e.extensionName, 0, length);
+                })
                 .ToHashSet();
-
+            
             if (requiredExtensions.All(ext => availableExtensions.Contains(ext)))
             {
                 Console.WriteLine("All required extensions are supported.");
@@ -3265,14 +3403,12 @@ class HelloForm : Form
         throw new Exception("Failed to find a suitable depth format!");
     }
 
-    private IntPtr LoadShaderModule(string filePath)
+    // Modified to take byte array directly
+    private IntPtr CreateShaderModuleFromBytes(byte[] code)
     {
         Console.WriteLine("----------------------------------------");
-        Console.WriteLine("[HelloForm::LoadShaderModule] - Start");
-        Console.WriteLine($"filePath : {filePath}");
-
-        byte[] code = File.ReadAllBytes(filePath);
-
+        Console.WriteLine("[HelloForm::CreateShaderModuleFromBytes] - Start");
+        
         var createInfo = new VkShaderModuleCreateInfo
         {
             sType = VkStructureType.VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -3282,10 +3418,10 @@ class HelloForm : Form
 
         if (vkCreateShaderModule(device, ref createInfo, IntPtr.Zero, out IntPtr shaderModule) != VkResult.VK_SUCCESS)
         {
-            throw new Exception($"Failed to create shader module for {filePath}");
+            throw new Exception("Failed to create shader module");
         }
 
-        Console.WriteLine("[HelloForm::LoadShaderModule] - End");
+        Console.WriteLine("[HelloForm::CreateShaderModuleFromBytes] - End");
 
         return shaderModule;
     }
