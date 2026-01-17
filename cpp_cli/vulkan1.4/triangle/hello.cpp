@@ -1,12 +1,24 @@
+// hello_vulkan_runtime_shader.cpp
+// Vulkan Triangle Sample for C++/CLI (Win32 API - Runtime Shader Compilation)
+//
+// Compilation:
+// cl hello.cpp /clr /std:c++20 /EHa /link user32.lib gdi32.lib vulkan-1.lib shaderc_combined.lib /SUBSYSTEM:WINDOWS
+
+// ============================================================================
+// Important: Compile Vulkan code as unmanaged
+// ============================================================================
 #pragma managed(push, off)
 
 #define VK_USE_PLATFORM_WIN32_KHR
 #define WIN32_LEAN_AND_MEAN
-#define NOMINMAX 
+#define NOMINMAX
 #include <windows.h>
 #include <tchar.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
+
+// For runtime shader compilation
+#include <shaderc/shaderc.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -18,11 +30,56 @@
 #include <cstdint>
 #include <optional>
 #include <set>
+#include <string>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
+
+// ============================================================================
+// Shader Compiler Class
+// ============================================================================
+
+class ShaderCompiler {
+public:
+    // Compile GLSL to SPIR-V
+    static std::vector<uint32_t> compileGLSL(
+        const std::string& source,
+        shaderc_shader_kind kind,
+        const char* name)
+    {
+        shaderc::Compiler compiler;
+        shaderc::CompileOptions options;
+
+        // Set optimization level
+        options.SetOptimizationLevel(shaderc_optimization_level_performance);
+
+        // Execute compilation
+        shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
+            source, kind, name, options);
+
+        if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
+            std::string errorMsg = "Shader compilation failed: ";
+            errorMsg += result.GetErrorMessage();
+            throw std::runtime_error(errorMsg);
+        }
+
+        return { result.cbegin(), result.cend() };
+    }
+
+    // Compile Vertex Shader
+    static std::vector<uint32_t> compileVertexShader(const std::string& source) {
+        return compileGLSL(source, shaderc_glsl_vertex_shader, "vertex_shader");
+    }
+
+    // Compile Fragment Shader
+    static std::vector<uint32_t> compileFragmentShader(const std::string& source) {
+        return compileGLSL(source, shaderc_glsl_fragment_shader, "fragment_shader");
+    }
+};
+
+// ============================================================================
 
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
@@ -132,6 +189,24 @@ private:
         return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
 
+    // Helper to read file content
+    static std::string readFile(const std::string& filename) {
+        std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+        if (!file.is_open()) {
+            throw std::runtime_error("Failed to open file: " + filename);
+        }
+
+        size_t fileSize = (size_t)file.tellg();
+        std::vector<char> buffer(fileSize);
+
+        file.seekg(0);
+        file.read(buffer.data(), fileSize);
+        file.close();
+
+        return std::string(buffer.begin(), buffer.end());
+    }
+
     void initWindow() {
         hInstance = GetModuleHandle(nullptr);
 
@@ -153,7 +228,7 @@ private:
         hwnd = CreateWindowEx(
             0,
             _T("VulkanWindowClass"),
-            _T("Hello, Vulkan (C++/CLI Win32)!"),
+            _T("Hello, Vulkan (Runtime Shader Compile)"),
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT, CW_USEDEFAULT,
             windowRect.right - windowRect.left,
@@ -282,7 +357,7 @@ private:
 
     void createInstance() {
         if (enableValidationLayers && !checkValidationLayerSupport()) {
-            throw std::runtime_error("validation layers requested, but not available!");
+            throw std::runtime_error("Validation layers requested, but not available!");
         }
 
         VkApplicationInfo appInfo{};
@@ -291,7 +366,8 @@ private:
         appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.pEngineName = "No Engine";
         appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        appInfo.apiVersion = VK_API_VERSION_1_0;
+        // Request Vulkan 1.4
+        appInfo.apiVersion = VK_API_VERSION_1_4;
 
         VkInstanceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -315,7 +391,7 @@ private:
         }
 
         if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create instance!");
+            throw std::runtime_error("Failed to create instance!");
         }
     }
 
@@ -334,7 +410,7 @@ private:
         populateDebugMessengerCreateInfo(createInfo);
 
         if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
-            throw std::runtime_error("failed to set up debug messenger!");
+            throw std::runtime_error("Failed to set up debug messenger!");
         }
     }
 
@@ -345,7 +421,7 @@ private:
         createInfo.hinstance = hInstance;
 
         if (vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, &surface) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create window surface!");
+            throw std::runtime_error("Failed to create window surface!");
         }
     }
 
@@ -354,7 +430,7 @@ private:
         vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
 
         if (deviceCount == 0) {
-            throw std::runtime_error("failed to find GPUs with Vulkan support!");
+            throw std::runtime_error("Failed to find GPUs with Vulkan support!");
         }
 
         std::vector<VkPhysicalDevice> devices(deviceCount);
@@ -368,7 +444,7 @@ private:
         }
 
         if (physicalDevice == VK_NULL_HANDLE) {
-            throw std::runtime_error("failed to find a suitable GPU!");
+            throw std::runtime_error("Failed to find a suitable GPU!");
         }
     }
 
@@ -410,7 +486,7 @@ private:
         }
 
         if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create logical device!");
+            throw std::runtime_error("Failed to create logical device!");
         }
 
         vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
@@ -458,7 +534,7 @@ private:
         createInfo.clipped = VK_TRUE;
 
         if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create swap chain!");
+            throw std::runtime_error("Failed to create swap chain!");
         }
 
         vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
@@ -489,7 +565,7 @@ private:
             createInfo.subresourceRange.layerCount = 1;
 
             if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS) {
-                throw std::runtime_error("failed to create image views!");
+                throw std::runtime_error("Failed to create image views!");
             }
         }
     }
@@ -532,16 +608,24 @@ private:
         renderPassInfo.pDependencies = &dependency;
 
         if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create render pass!");
+            throw std::runtime_error("Failed to create render pass!");
         }
     }
 
+    // ============================================================================
+    // Runtime Shader Compilation Version
+    // ============================================================================
     void createGraphicsPipeline() {
-        auto vertShaderCode = readFile("hello_vert.spv");
-        auto fragShaderCode = readFile("hello_frag.spv");
+        // Load shader source from external files
+        std::string vertexShaderSource = readFile("hello.vert");
+        std::string fragmentShaderSource = readFile("hello.frag");
 
-        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+        // Compile GLSL to SPIR-V at runtime
+        std::vector<uint32_t> vertSpirv = ShaderCompiler::compileVertexShader(vertexShaderSource);
+        std::vector<uint32_t> fragSpirv = ShaderCompiler::compileFragmentShader(fragmentShaderSource);
+
+        VkShaderModule vertShaderModule = createShaderModule(vertSpirv);
+        VkShaderModule fragShaderModule = createShaderModule(fragSpirv);
 
         VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
         vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -622,7 +706,7 @@ private:
         pipelineLayoutInfo.pushConstantRangeCount = 0;
 
         if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create pipeline layout!");
+            throw std::runtime_error("Failed to create pipeline layout!");
         }
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -641,7 +725,7 @@ private:
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
         if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create graphics pipeline!");
+            throw std::runtime_error("Failed to create graphics pipeline!");
         }
 
         vkDestroyShaderModule(device, fragShaderModule, nullptr);
@@ -666,7 +750,7 @@ private:
             framebufferInfo.layers = 1;
 
             if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
-                throw std::runtime_error("failed to create framebuffer!");
+                throw std::runtime_error("Failed to create framebuffer!");
             }
         }
     }
@@ -679,7 +763,7 @@ private:
         poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
 
         if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create command pool!");
+            throw std::runtime_error("Failed to create command pool!");
         }
     }
 
@@ -693,7 +777,7 @@ private:
         allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
 
         if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
-            throw std::runtime_error("failed to allocate command buffers!");
+            throw std::runtime_error("Failed to allocate command buffers!");
         }
 
         for (size_t i = 0; i < commandBuffers.size(); i++) {
@@ -701,7 +785,7 @@ private:
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
             if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS) {
-                throw std::runtime_error("failed to begin recording command buffer!");
+                throw std::runtime_error("Failed to begin recording command buffer!");
             }
 
             VkRenderPassBeginInfo renderPassInfo{};
@@ -724,7 +808,7 @@ private:
             vkCmdEndRenderPass(commandBuffers[i]);
 
             if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
-                throw std::runtime_error("failed to record command buffer!");
+                throw std::runtime_error("Failed to record command buffer!");
             }
         }
     }
@@ -746,7 +830,7 @@ private:
             if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
                 vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
                 vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
-                throw std::runtime_error("failed to create synchronization objects for a frame!");
+                throw std::runtime_error("Failed to create synchronization objects for a frame!");
             }
         }
     }
@@ -762,7 +846,7 @@ private:
             return;
         }
         else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-            throw std::runtime_error("failed to acquire swap chain image!");
+            throw std::runtime_error("Failed to acquire swap chain image!");
         }
 
         if (imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
@@ -789,7 +873,7 @@ private:
         vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
         if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
-            throw std::runtime_error("failed to submit draw command buffer!");
+            throw std::runtime_error("Failed to submit draw command buffer!");
         }
 
         VkPresentInfoKHR presentInfo{};
@@ -811,21 +895,22 @@ private:
             recreateSwapChain();
         }
         else if (result != VK_SUCCESS) {
-            throw std::runtime_error("failed to present swap chain image!");
+            throw std::runtime_error("Failed to present swap chain image!");
         }
 
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
-    VkShaderModule createShaderModule(const std::vector<char>& code) {
+    // Create shader module from SPIR-V binary
+    VkShaderModule createShaderModule(const std::vector<uint32_t>& code) {
         VkShaderModuleCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.codeSize = code.size();
-        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+        createInfo.codeSize = code.size() * sizeof(uint32_t);
+        createInfo.pCode = code.data();
 
         VkShaderModule shaderModule;
         if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create shader module!");
+            throw std::runtime_error("Failed to create shader module!");
         }
 
         return shaderModule;
@@ -997,24 +1082,6 @@ private:
         return true;
     }
 
-    static std::vector<char> readFile(const std::string& filename) {
-        std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-        if (!file.is_open()) {
-            throw std::runtime_error("failed to open file!");
-        }
-
-        size_t fileSize = (size_t)file.tellg();
-        std::vector<char> buffer(fileSize);
-
-        file.seekg(0);
-        file.read(buffer.data(), fileSize);
-
-        file.close();
-
-        return buffer;
-    }
-
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
         OutputDebugStringA("validation layer: ");
         OutputDebugStringA(pCallbackData->pMessage);
@@ -1039,6 +1106,10 @@ int VulkanMain(HINSTANCE hInstance) {
 }
 
 #pragma managed(pop)
+
+// ============================================================================
+// Managed Code Entry Point
+// ============================================================================
 
 int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow) {
     return VulkanMain(hInstance);

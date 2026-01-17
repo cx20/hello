@@ -3,9 +3,6 @@ SET INCLUDE=%INCLUDE%;%VULKAN_SDK%\Include
 SET LIB=%LIB%;%VULKAN_SDK%\Lib
 SET PATH=%PATH%;%VULKAN_SDK%\bin
 
-glslc.exe hello.vert -o hello_vert.spv
-glslc.exe hello.frag -o hello_frag.spv
-
 cl hello.cpp ^
          /clr ^
          /std:c++20 ^
@@ -14,3 +11,4 @@ cl hello.cpp ^
          gdi32.lib ^
          shell32.lib ^
          vulkan-1.lib ^
+         shaderc_combined.lib
