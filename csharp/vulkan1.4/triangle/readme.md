@@ -3,9 +3,6 @@ compile:
 C:\> SET VULKAN_SDK=C:\VulkanSDK\1.4.304.0
 C:\> SET PATH=%PATH%;%VULKAN_SDK%\bin
 
-C:\> glslc.exe hello.vert -o hello_vert.spv
-C:\> glslc.exe hello.frag -o hello_frag.spv
-
 C:\> csc /target:winexe Hello.cs
 ```
 Result:
