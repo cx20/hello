@@ -28,6 +28,9 @@ Option Explicit
     Private Declare PtrSafe Sub CoTaskMemFree Lib "ole32" (ByVal pv As LongPtr)
 
     Private Declare PtrSafe Function CallWindowProcW Lib "user32" (ByVal lpPrevWndFunc As LongPtr, ByVal hwnd As LongPtr, ByVal msg As LongPtr, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
+
+    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As LongLong) As Long
+    Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As LongLong) As Long
 #Else
     ' 32-bit not supported
 #End If
@@ -94,6 +97,7 @@ Private Declare PtrSafe Function DispatchMessageW Lib "user32" (ByRef lpMsg As M
 Private Declare PtrSafe Function ShowWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal nCmdShow As Long) As Long
 Private Declare PtrSafe Function UpdateWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
 Private Declare PtrSafe Function GetClientRect Lib "user32" (ByVal hwnd As LongPtr, ByRef rc As RECT) As Long
+Private Declare PtrSafe Function UnregisterClassW Lib "user32" (ByVal lpClassName As LongPtr, ByVal hInstance As LongPtr) As Long
 
 ' -----------------------------
 ' VirtualAlloc constants
@@ -1076,20 +1080,20 @@ Private Function WndProc(ByVal hwnd As LongPtr, ByVal uMsg As Long, ByVal wParam
         Case WM_KEYDOWN
             If wParam = VK_ESCAPE Then
                 g_quit = True
-                DestroyWindow hwnd
-                WndProc = 0
-                Exit Function
+                'DestroyWindow hwnd
+                'WndProc = 0
+                'Exit Function
             End If
         Case WM_CLOSE
             g_quit = True
-            DestroyWindow hwnd
+            'DestroyWindow hwnd
             WndProc = 0
             Exit Function
         Case WM_DESTROY
             g_quit = True
-            PostQuitMessage 0
-            WndProc = 0
-            Exit Function
+            'PostQuitMessage 0
+            'WndProc = 0
+            'Exit Function
     End Select
     WndProc = DefWindowProcW(hwnd, uMsg, wParam, lParam)
 End Function
@@ -2354,6 +2358,23 @@ Private Sub VulkanCleanupAll()
     LogLine "Cleanup end"
 End Sub
 
+Private Sub FreeThunks()
+    Dim i As Long
+    On Error Resume Next
+    If g_thunkCount > 0 Then
+        For i = 1 To g_thunkCount
+            If g_thunks(i).stubPtr <> 0 Then
+                ' MEM_RELEASE = &H8000
+                VirtualFree g_thunks(i).stubPtr, 0, &H8000
+                g_thunks(i).stubPtr = 0
+            End If
+        Next
+        Erase g_thunks
+        g_thunkCount = 0
+    End If
+    LogLine "Thunks freed"
+End Sub
+
 Public Sub Main()
     On Error GoTo EH
 
@@ -2362,8 +2383,6 @@ Public Sub Main()
     g_quit = False
     LogLine "CreateAppWindow..."
     CreateAppWindow 800, 600
-    LogKV "hwnd", HexPtr(g_hwnd)
-    LogKV "hInst", HexPtr(g_hInst)
 
     LogLine "VulkanInitAll..."
     VulkanInitAll
@@ -2382,12 +2401,30 @@ Public Sub Main()
 
     LogLine "Cleanup..."
     VulkanCleanupAll
+    
+    If g_hwnd <> 0 Then
+        LogLine "DestroyWindow..."
+        DestroyWindow g_hwnd
+        
+        Dim m2 As MSG_T
+        Do While PeekMessageW(m2, 0, 0, 0, PM_REMOVE) <> 0
+            TranslateMessage m2
+            DispatchMessageW m2
+        Loop
+        
+        g_hwnd = 0
+    End If
+    
+    FreeThunks 
+    
+    LogLine "UnregisterClass..."
+    UnregisterClassW StrPtr("VBA_VK_RAYMARCHING"), g_hInst
+
     LogLine "END OK"
     Exit Sub
 
 EH:
     LogLine "EXCEPTION: " & Err.Description
-    LogLine "Cleanup after exception..."
     On Error Resume Next
     VulkanCleanupAll
     LogLine "END ERROR"
