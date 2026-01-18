@@ -27,7 +27,7 @@ Option Explicit
     Private Declare PtrSafe Function CoTaskMemAlloc Lib "ole32" (ByVal cb As LongPtr) As LongPtr
     Private Declare PtrSafe Sub CoTaskMemFree Lib "ole32" (ByVal pv As LongPtr)
 
-    Private Declare PtrSafe Function CallWindowProcW Lib "user32" (ByVal lpPrevWndFunc As LongPtr, ByVal hwnd As LongPtr, ByVal Msg As LongPtr, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
+    Private Declare PtrSafe Function CallWindowProcW Lib "user32" (ByVal lpPrevWndFunc As LongPtr, ByVal hwnd As LongPtr, ByVal msg As LongPtr, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
 
     Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As LongLong) As Long
     Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As LongLong) As Long
@@ -97,6 +97,7 @@ Private Declare PtrSafe Function DispatchMessageW Lib "user32" (ByRef lpMsg As M
 Private Declare PtrSafe Function ShowWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal nCmdShow As Long) As Long
 Private Declare PtrSafe Function UpdateWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
 Private Declare PtrSafe Function GetClientRect Lib "user32" (ByVal hwnd As LongPtr, ByRef rc As RECT) As Long
+Private Declare PtrSafe Function UnregisterClassW Lib "user32" (ByVal lpClassName As LongPtr, ByVal hInstance As LongPtr) As Long
 
 ' -----------------------------
 ' VirtualAlloc constants
@@ -830,8 +831,8 @@ Private Sub LogInit()
 
     g_logEnabled = True
     LogLine "============================================================"
-    LogLine "START " & Format$(Now, "yyyy-mm-dd hh:nn:ss.000")
-    LogLine "Excel=" & Application.Name & " " & Application.Version
+    LogLine "START " & format$(now, "yyyy-mm-dd hh:nn:ss.000")
+    LogLine "Excel=" & Application.name & " " & Application.Version
 End Sub
 
 Private Sub LogLine(ByVal s As String)
@@ -839,7 +840,7 @@ Private Sub LogLine(ByVal s As String)
     Dim f As Integer: f = FreeFile
     On Error Resume Next
     Open LOG_PATH For Append As #f
-    Print #f, Format$(Now, "hh:nn:ss.000") & " | " & s
+    Print #f, format$(now, "hh:nn:ss.000") & " | " & s
     Close #f
     On Error GoTo 0
 End Sub
@@ -1079,20 +1080,20 @@ Private Function WndProc(ByVal hwnd As LongPtr, ByVal uMsg As Long, ByVal wParam
         Case WM_KEYDOWN
             If wParam = VK_ESCAPE Then
                 g_quit = True
-                DestroyWindow hwnd
-                WndProc = 0
-                Exit Function
+                'DestroyWindow hwnd
+                'WndProc = 0
+                'Exit Function
             End If
         Case WM_CLOSE
             g_quit = True
-            DestroyWindow hwnd
+            'DestroyWindow hwnd
             WndProc = 0
             Exit Function
         Case WM_DESTROY
             g_quit = True
-            PostQuitMessage 0
-            WndProc = 0
-            Exit Function
+            'PostQuitMessage 0
+            'WndProc = 0
+            'Exit Function
     End Select
     WndProc = DefWindowProcW(hwnd, uMsg, wParam, lParam)
 End Function
@@ -1392,7 +1393,7 @@ Private Sub PickPhysicalDeviceAndQueues_()
     If count <= 0 Then Err.Raise 5, , "No Vulkan physical devices"
 
     Dim devs() As LongPtr
-    ReDim devs(0 To count - 1) As LongPtr
+    ReDim devs(0 To count - 1) As LongLong
 
     argvC(2) = CLngLng(VarPtr(devs(0)))
     res = InvokeI32(p_vkEnumeratePhysicalDevices, 3, argvC)
@@ -1573,12 +1574,12 @@ Private Sub VkCreateSwapchainAndViews_()
     res = InvokeI32(p_vkGetSwapchainImagesKHR, 4, argvI)
     VkCheck res, "vkGetSwapchainImagesKHR(count)"
 
-    ReDim swapImages(0 To swapImageCount - 1) As LongPtr
+    ReDim swapImages(0 To swapImageCount - 1) As LongLong
     argvI(3) = CLngLng(VarPtr(swapImages(0)))
     res = InvokeI32(p_vkGetSwapchainImagesKHR, 4, argvI)
     VkCheck res, "vkGetSwapchainImagesKHR(list)"
 
-    ReDim swapImageViews(0 To swapImageCount - 1) As LongPtr
+    ReDim swapImageViews(0 To swapImageCount - 1) As LongLong
     For i = 0 To swapImageCount - 1
         Dim iv As VkImageViewCreateInfo
         iv.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO
@@ -1649,7 +1650,7 @@ End Sub
 
 Private Sub VkCreateFramebuffers_()
     Dim i As Long
-    ReDim swapFramebuffers(0 To swapImageCount - 1) As LongPtr
+    ReDim swapFramebuffers(0 To swapImageCount - 1) As LongLong
 
     For i = 0 To swapImageCount - 1
         Dim fbci As VkFramebufferCreateInfo
@@ -1929,7 +1930,7 @@ Private Sub VkCreateCommandPoolAndBuffers_()
     Dim res As Long: res = InvokeI32(p_vkCreateCommandPool, 4, argv)
     VkCheck res, "vkCreateCommandPool"
 
-    ReDim vkCmdBuffers(0 To swapImageCount - 1) As LongPtr
+    ReDim vkCmdBuffers(0 To swapImageCount - 1) As LongLong
 
     Dim ai As VkCommandBufferAllocateInfo
     ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
@@ -2191,88 +2192,108 @@ Private Sub VulkanCleanupAll()
     On Error Resume Next
     LogLine "Cleanup begin"
 
-    If vkDevice <> 0 Then
-        If p_vkDeviceWaitIdle <> 0 Then
-            Dim argv1(0 To 0) As LongLong
-            argv1(0) = CLngLng(vkDevice)
-            Call InvokeRaw(p_vkDeviceWaitIdle, 1, argv1)
-        End If
+    If vkDevice <> 0 And p_vkDeviceWaitIdle <> 0 Then
+        Dim argv1(0 To 0) As LongLong
+        argv1(0) = CLngLng(vkDevice)
+        Call InvokeRaw(p_vkDeviceWaitIdle, 1, argv1)
+    End If
 
-        Dim i As Long
-        Dim argvD(0 To 2) As LongLong
-        argvD(0) = CLngLng(vkDevice)
-        argvD(2) = 0
+    Dim argvD(0 To 2) As LongLong
+    argvD(0) = CLngLng(vkDevice)
+    argvD(2) = 0 ' pAllocator
 
-        If fenceInFlight <> 0 Then
-            argvD(1) = CLngLng(fenceInFlight)
-            Call InvokeRaw(p_vkDestroyFence, 3, argvD)
-        End If
-        If semRenderFinished <> 0 Then
-            argvD(1) = CLngLng(semRenderFinished)
-            Call InvokeRaw(p_vkDestroySemaphore, 3, argvD)
-        End If
-        If semImageAvailable <> 0 Then
-            argvD(1) = CLngLng(semImageAvailable)
-            Call InvokeRaw(p_vkDestroySemaphore, 3, argvD)
-        End If
+    ' Fence
+    If fenceInFlight <> 0 And p_vkDestroyFence <> 0 Then
+        argvD(1) = CLngLng(fenceInFlight)
+        Call InvokeRaw(p_vkDestroyFence, 3, argvD)
+        fenceInFlight = 0
+    End If
+    ' Semaphores
+    If semRenderFinished <> 0 And p_vkDestroySemaphore <> 0 Then
+        argvD(1) = CLngLng(semRenderFinished)
+        Call InvokeRaw(p_vkDestroySemaphore, 3, argvD)
+        semRenderFinished = 0
+    End If
+    If semImageAvailable <> 0 And p_vkDestroySemaphore <> 0 Then
+        argvD(1) = CLngLng(semImageAvailable)
+        Call InvokeRaw(p_vkDestroySemaphore, 3, argvD)
+        semImageAvailable = 0
+    End If
 
-        If vkCommandPool <> 0 Then
-            argvD(1) = CLngLng(vkCommandPool)
-            Call InvokeRaw(p_vkDestroyCommandPool, 3, argvD)
-        End If
+    If vkCommandPool <> 0 And p_vkDestroyCommandPool <> 0 Then
+        argvD(1) = CLngLng(vkCommandPool)
+        Call InvokeRaw(p_vkDestroyCommandPool, 3, argvD)
+        vkCommandPool = 0
+    End If
+    Erase vkCmdBuffers
 
-        If (Not Not swapFramebuffers) <> 0 Then
-            For i = 0 To swapImageCount - 1
+    Dim i As Long
+    If (Not Not swapFramebuffers) <> 0 Then
+        If p_vkDestroyFramebuffer <> 0 Then
+            For i = 0 To UBound(swapFramebuffers)
                 If swapFramebuffers(i) <> 0 Then
                     argvD(1) = CLngLng(swapFramebuffers(i))
                     Call InvokeRaw(p_vkDestroyFramebuffer, 3, argvD)
+                    swapFramebuffers(i) = 0
                 End If
             Next
         End If
+        Erase swapFramebuffers
+    End If
 
-        If vkPipeline <> 0 Then
-            argvD(1) = CLngLng(vkPipeline)
-            Call InvokeRaw(p_vkDestroyPipeline, 3, argvD)
-        End If
-        If vkPipelineLayout <> 0 Then
-            argvD(1) = CLngLng(vkPipelineLayout)
-            Call InvokeRaw(p_vkDestroyPipelineLayout, 3, argvD)
-        End If
+    If vkPipeline <> 0 And p_vkDestroyPipeline <> 0 Then
+        argvD(1) = CLngLng(vkPipeline)
+        Call InvokeRaw(p_vkDestroyPipeline, 3, argvD)
+        vkPipeline = 0
+    End If
+    If vkPipelineLayout <> 0 And p_vkDestroyPipelineLayout <> 0 Then
+        argvD(1) = CLngLng(vkPipelineLayout)
+        Call InvokeRaw(p_vkDestroyPipelineLayout, 3, argvD)
+        vkPipelineLayout = 0
+    End If
 
-        If shaderVertModule <> 0 Then
-            argvD(1) = CLngLng(shaderVertModule)
-            Call InvokeRaw(p_vkDestroyShaderModule, 3, argvD)
-        End If
-        If shaderFragModule <> 0 Then
-            argvD(1) = CLngLng(shaderFragModule)
-            Call InvokeRaw(p_vkDestroyShaderModule, 3, argvD)
-        End If
+    If shaderVertModule <> 0 And p_vkDestroyShaderModule <> 0 Then
+        argvD(1) = CLngLng(shaderVertModule)
+        Call InvokeRaw(p_vkDestroyShaderModule, 3, argvD)
+        shaderVertModule = 0
+    End If
+    If shaderFragModule <> 0 And p_vkDestroyShaderModule <> 0 Then
+        argvD(1) = CLngLng(shaderFragModule)
+        Call InvokeRaw(p_vkDestroyShaderModule, 3, argvD)
+        shaderFragModule = 0
+    End If
 
-        If vkRenderPass <> 0 Then
-            argvD(1) = CLngLng(vkRenderPass)
-            Call InvokeRaw(p_vkDestroyRenderPass, 3, argvD)
-        End If
+    If vkRenderPass <> 0 And p_vkDestroyRenderPass <> 0 Then
+        argvD(1) = CLngLng(vkRenderPass)
+        Call InvokeRaw(p_vkDestroyRenderPass, 3, argvD)
+        vkRenderPass = 0
+    End If
 
-        If (Not Not swapImageViews) <> 0 Then
-            For i = 0 To swapImageCount - 1
+    If (Not Not swapImageViews) <> 0 Then
+        If p_vkDestroyImageView <> 0 Then
+            For i = 0 To UBound(swapImageViews)
                 If swapImageViews(i) <> 0 Then
                     argvD(1) = CLngLng(swapImageViews(i))
                     Call InvokeRaw(p_vkDestroyImageView, 3, argvD)
+                    swapImageViews(i) = 0
                 End If
             Next
         End If
+        Erase swapImageViews
+    End If
 
-        If vkSwapchain <> 0 Then
-            argvD(1) = CLngLng(vkSwapchain)
-            Call InvokeRaw(p_vkDestroySwapchainKHR, 3, argvD)
-        End If
+    If vkSwapchain <> 0 And p_vkDestroySwapchainKHR <> 0 Then
+        argvD(1) = CLngLng(vkSwapchain)
+        Call InvokeRaw(p_vkDestroySwapchainKHR, 3, argvD)
+        vkSwapchain = 0
+    End If
 
-        If p_vkDestroyDevice <> 0 Then
-            Dim argvDD(0 To 1) As LongLong
-            argvDD(0) = CLngLng(vkDevice)
-            argvDD(1) = 0
-            Call InvokeRaw(p_vkDestroyDevice, 2, argvDD)
-        End If
+    If vkDevice <> 0 And p_vkDestroyDevice <> 0 Then
+        Dim argvDD(0 To 1) As LongLong
+        argvDD(0) = CLngLng(vkDevice)
+        argvDD(1) = 0
+        Call InvokeRaw(p_vkDestroyDevice, 2, argvDD)
+        vkDevice = 0
     End If
 
     If vkSurface <> 0 And p_vkDestroySurfaceKHR <> 0 Then
@@ -2281,6 +2302,7 @@ Private Sub VulkanCleanupAll()
         argvS(1) = CLngLng(vkSurface)
         argvS(2) = 0
         Call InvokeRaw(p_vkDestroySurfaceKHR, 3, argvS)
+        vkSurface = 0
     End If
 
     If vkInstance <> 0 And p_vkDestroyInstance <> 0 Then
@@ -2288,19 +2310,37 @@ Private Sub VulkanCleanupAll()
         argvI(0) = CLngLng(vkInstance)
         argvI(1) = 0
         Call InvokeRaw(p_vkDestroyInstance, 2, argvI)
+        vkInstance = 0
     End If
 
-    If g_hShaderc <> 0 Then
-        FreeLibrary g_hShaderc
-        g_hShaderc = 0
-    End If
-    If g_hVulkan <> 0 Then
-        FreeLibrary g_hVulkan
-        g_hVulkan = 0
-    End If
+    ' If g_hShaderc <> 0 Then
+    '     FreeLibrary g_hShaderc
+    '     g_hShaderc = 0
+    ' End If
+    ' If g_hVulkan <> 0 Then
+    '     FreeLibrary g_hVulkan
+    '     g_hVulkan = 0
+    ' End If
 
     FreeAllAnsi
     LogLine "Cleanup end"
+End Sub
+
+Private Sub FreeThunks()
+    Dim i As Long
+    On Error Resume Next
+    If g_thunkCount > 0 Then
+        For i = 1 To g_thunkCount
+            If g_thunks(i).stubPtr <> 0 Then
+                ' MEM_RELEASE = &H8000
+                VirtualFree g_thunks(i).stubPtr, 0, &H8000
+                g_thunks(i).stubPtr = 0
+            End If
+        Next
+        Erase g_thunks
+        g_thunkCount = 0
+    End If
+    LogLine "Thunks freed"
 End Sub
 
 Public Sub Main()
@@ -2332,14 +2372,36 @@ Public Sub Main()
     Loop
 
     LogLine "Cleanup..."
+    
     VulkanCleanupAll
+    
+    If g_hwnd <> 0 Then
+        LogLine "DestroyWindow..."
+        DestroyWindow g_hwnd
+        
+        Dim m2 As MSG_T
+        Do While PeekMessageW(m2, 0, 0, 0, PM_REMOVE) <> 0
+            TranslateMessage m2
+            DispatchMessageW m2
+        Loop
+        
+        g_hwnd = 0
+    End If
+    
+    FreeThunks 
+    
+    LogLine "UnregisterClass..."
+    UnregisterClassW StrPtr("VBA_VK_RAYMARCHING"), g_hInst
+
     LogLine "END OK"
     Exit Sub
-
+    
 EH:
     LogLine "EXCEPTION: " & Err.Description
     On Error Resume Next
     VulkanCleanupAll
     LogLine "END ERROR"
-    MsgBox "ERROR: " & Err.Description & vbCrLf & "ログ: " & LOG_PATH, vbExclamation
+    MsgBox "ERROR: " & Err.Description & vbCrLf & "Log: " & LOG_PATH, vbExclamation
 End Sub
+
+
