@@ -210,7 +210,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |Browser       |Version |Remarks                                          |
 |:-------------|:------:|:------------------------------------------------|
 |Chrome Stable |  143   |                                                 |
-|Chrome Canary |  145   |                                                 |
+|Chrome Canary |  146   |                                                 |
 
 |Language      |Version |Remarks                                          |
 |:-------------|:------:|:------------------------------------------------|
