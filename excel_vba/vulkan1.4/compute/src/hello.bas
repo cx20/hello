@@ -3,17 +3,9 @@ Option Explicit
 
 ' ============================================================================
 '  Excel VBA (64-bit) + Vulkan 1.4 + shaderc: Harmonograph Compute Demo
-'   - Compute Shader for harmonograph calculation
-'   - Storage Buffers for positions and colors
-'   - Uniform Buffer for parameters
-'   - Descriptor Sets for resource binding
-'   - Pipeline Barrier for compute-to-graphics sync
-'   - Logs to C:\TEMP\vk_harmonograph_log.txt
+'   - PROFILED VERSION: Measures time for each operation
 ' ============================================================================
 
-' -----------------------------
-' Win32 / memory / proc
-' -----------------------------
 #If VBA7 Then
     Private Declare PtrSafe Function LoadLibraryW Lib "kernel32" (ByVal lpLibFileName As LongPtr) As LongPtr
     Private Declare PtrSafe Function FreeLibrary Lib "kernel32" (ByVal hLibModule As LongPtr) As Long
@@ -32,7 +24,6 @@ Option Explicit
     Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As LongLong) As Long
 #End If
 
-' Window / Message loop
 Private Const WS_OVERLAPPEDWINDOW As Long = &HCF0000
 Private Const WS_VISIBLE As Long = &H10000000
 Private Const CW_USEDEFAULT As Long = &H80000000
@@ -59,6 +50,8 @@ Private Declare PtrSafe Function ShowWindow Lib "user32" (ByVal hwnd As LongPtr,
 Private Declare PtrSafe Function UpdateWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
 Private Declare PtrSafe Function GetClientRect Lib "user32" (ByVal hwnd As LongPtr, ByRef rc As RECT) As Long
 Private Declare PtrSafe Function UnregisterClassW Lib "user32" (ByVal lpClassName As LongPtr, ByVal hInstance As LongPtr) As Long
+Private Declare PtrSafe Function SetWindowTextW Lib "user32" (ByVal hwnd As LongPtr, ByVal lpString As LongPtr) As Long
+Private Declare PtrSafe Function GetTickCount Lib "kernel32" () As Long
 
 Private Const MEM_COMMIT As Long = &H1000
 Private Const MEM_RESERVE As Long = &H2000
@@ -70,9 +63,32 @@ Private g_logEnabled As Boolean
 Private g_allocAnsiPtrs() As LongPtr
 Private g_allocAnsiCount As Long
 
-Private Type THUNK_REC: fnPtr As LongPtr: argc As Long: stubPtr As LongPtr: End Type
-Private g_thunks() As THUNK_REC
-Private g_thunkCount As Long
+' ============================================================================
+' PROFILING - Timing measurements
+' ============================================================================
+Private g_perfFreq As LongLong
+Private g_profileWaitFence As Double
+Private g_profileAcquire As Double
+Private g_profileUpdateUBO As Double
+Private g_profileRecord As Double
+Private g_profileSubmit As Double
+Private g_profilePresent As Double
+Private g_profileTotal As Double
+Private g_profileFrameCount As Long
+
+' Thunks
+Private g_thunk0 As LongPtr
+Private g_thunk1 As LongPtr
+Private g_thunk2 As LongPtr
+Private g_thunk3 As LongPtr
+Private g_thunk4 As LongPtr
+Private g_thunk5 As LongPtr
+Private g_thunk6 As LongPtr
+Private g_thunk7 As LongPtr
+Private g_thunk8 As LongPtr
+Private g_thunk10 As LongPtr
+Private g_argBuffer As LongPtr
+Private Const ARG_BUFFER_SIZE As Long = 128
 
 ' Vulkan constants
 Private Const VK_SUCCESS As Long = 0
@@ -82,7 +98,6 @@ Private Const VK_TRUE As Long = 1
 Private Const VK_FALSE As Long = 0
 Private Const VK_API_VERSION_1_4 As Long = &H4010000
 
-' Structure types
 Private Const VK_STRUCTURE_TYPE_APPLICATION_INFO As Long = 0
 Private Const VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO As Long = 1
 Private Const VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO As Long = 2
@@ -120,15 +135,15 @@ Private Const VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR As Long = 10000090
 Private Const VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR As Long = 1000001000
 Private Const VK_STRUCTURE_TYPE_PRESENT_INFO_KHR As Long = 1000001001
 
-' Other constants
 Private Const VK_QUEUE_GRAPHICS_BIT As Long = &H1
 Private Const VK_QUEUE_COMPUTE_BIT As Long = &H2
 Private Const VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT As Long = &H10
 Private Const VK_SHARING_MODE_EXCLUSIVE As Long = 0
 Private Const VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR As Long = &H1
 Private Const VK_PRESENT_MODE_FIFO_KHR As Long = 2
+Private Const VK_PRESENT_MODE_MAILBOX_KHR As Long = 1
+Private Const VK_PRESENT_MODE_IMMEDIATE_KHR As Long = 0
 Private Const VK_FORMAT_B8G8R8A8_UNORM As Long = 44
-Private Const VK_COLOR_SPACE_SRGB_NONLINEAR_KHR As Long = 0
 Private Const VK_IMAGE_ASPECT_COLOR_BIT As Long = &H1
 Private Const VK_IMAGE_VIEW_TYPE_2D As Long = 1
 Private Const VK_PIPELINE_BIND_POINT_GRAPHICS As Long = 0
@@ -172,7 +187,7 @@ Private Const SHADERC_SHADER_KIND_COMPUTE As Long = 2
 Private Const SHADERC_COMPILATION_STATUS_SUCCESS As Long = 0
 Private Const VERTEX_COUNT As Long = 500000
 
-' Vulkan structs
+' Vulkan structs (abbreviated for brevity - same as before)
 Private Type VkExtent2D: width As Long: height As Long: End Type
 Private Type VkOffset2D: x As Long: y As Long: End Type
 Private Type VkRect2D: offset As VkOffset2D: extent As VkExtent2D: End Type
@@ -427,24 +442,21 @@ Private g_quit As Boolean
 Private g_hVulkan As LongPtr
 Private g_hShaderc As LongPtr
 
-' Vulkan loader exports
+' Vulkan function pointers
 Private p_vkGetInstanceProcAddr As LongPtr
 Private p_vkGetDeviceProcAddr As LongPtr
 Private p_vkCreateInstance As LongPtr
-
-' Instance funcs
 Private p_vkDestroyInstance As LongPtr
 Private p_vkEnumeratePhysicalDevices As LongPtr
 Private p_vkGetPhysicalDeviceQueueFamilyProperties As LongPtr
 Private p_vkGetPhysicalDeviceSurfaceSupportKHR As LongPtr
 Private p_vkGetPhysicalDeviceSurfaceFormatsKHR As LongPtr
 Private p_vkGetPhysicalDeviceSurfaceCapabilitiesKHR As LongPtr
+Private p_vkGetPhysicalDeviceSurfacePresentModesKHR As LongPtr
 Private p_vkGetPhysicalDeviceMemoryProperties As LongPtr
 Private p_vkCreateWin32SurfaceKHR As LongPtr
 Private p_vkDestroySurfaceKHR As LongPtr
 Private p_vkCreateDevice As LongPtr
-
-' Device funcs
 Private p_vkDestroyDevice As LongPtr
 Private p_vkGetDeviceQueue As LongPtr
 Private p_vkCreateSwapchainKHR As LongPtr
@@ -503,7 +515,6 @@ Private p_vkDestroyDescriptorPool As LongPtr
 Private p_vkAllocateDescriptorSets As LongPtr
 Private p_vkUpdateDescriptorSets As LongPtr
 
-' shaderc
 Private p_shaderc_compiler_initialize As LongPtr
 Private p_shaderc_compiler_release As LongPtr
 Private p_shaderc_compile_options_initialize As LongPtr
@@ -548,21 +559,185 @@ Private colBuffer As LongPtr
 Private colMemory As LongPtr
 Private uboBuffer As LongPtr
 Private uboMemory As LongPtr
+Private uboMappedPtr As LongPtr
 Private vkDescriptorSetLayout As LongPtr
 Private vkDescriptorPool As LongPtr
 Private vkDescriptorSet As LongPtr
 Private memoryProperties As VkPhysicalDeviceMemoryProperties
 Private uboParams As ParamsUBO
-Private g_startTime As LongLong
-Private g_perfFreq As LongLong
+Private g_presentMode As Long
 
-' Utility functions
+' ============================================================================
+' PROFILING HELPERS
+' ============================================================================
+
+Private Function GetTimeMs() As Double
+    Dim t As LongLong
+    QueryPerformanceCounter t
+    GetTimeMs = CDbl(t) / CDbl(g_perfFreq) * 1000#
+End Function
+
+Private Sub ResetProfile()
+    g_profileWaitFence = 0
+    g_profileAcquire = 0
+    g_profileUpdateUBO = 0
+    g_profileRecord = 0
+    g_profileSubmit = 0
+    g_profilePresent = 0
+    g_profileTotal = 0
+    g_profileFrameCount = 0
+End Sub
+
+Private Sub LogProfile()
+    If g_profileFrameCount = 0 Then Exit Sub
+    Dim n As Long: n = g_profileFrameCount
+    LogLine "=== PROFILE RESULTS (avg ms over " & n & " frames) ==="
+    LogLine "  WaitFence:  " & Format$(g_profileWaitFence / n, "0.000") & " ms"
+    LogLine "  Acquire:    " & Format$(g_profileAcquire / n, "0.000") & " ms"
+    LogLine "  UpdateUBO:  " & Format$(g_profileUpdateUBO / n, "0.000") & " ms"
+    LogLine "  RecordCmd:  " & Format$(g_profileRecord / n, "0.000") & " ms"
+    LogLine "  Submit:     " & Format$(g_profileSubmit / n, "0.000") & " ms"
+    LogLine "  Present:    " & Format$(g_profilePresent / n, "0.000") & " ms"
+    LogLine "  TOTAL:      " & Format$(g_profileTotal / n, "0.000") & " ms"
+    LogLine "  Est. FPS:   " & Format$(1000# / (g_profileTotal / n), "0.0")
+    LogLine "================================================"
+End Sub
+
+' ============================================================================
+' THUNK SYSTEM
+' ============================================================================
+
+Private Function BuildThunkForArgCount(ByVal argc As Long) As LongPtr
+    If argc < 0 Or argc > 12 Then Err.Raise 5
+    Dim stackArgs As Long: If argc > 4 Then stackArgs = argc - 4 Else stackArgs = 0
+    Dim pad8 As Long: If (stackArgs And 1) <> 0 Then pad8 = 1
+    Dim allocBytes As Long: allocBytes = &H28 + (stackArgs * 8) + (pad8 * 8)
+    Dim codeSize As Long: codeSize = 256
+    Dim mem As LongPtr: mem = VirtualAlloc(0, codeSize, MEM_RESERVE Or MEM_COMMIT, PAGE_EXECUTE_READWRITE)
+    If mem = 0 Then Err.Raise 5
+    Dim b() As Byte: ReDim b(0 To codeSize - 1) As Byte
+    Dim pIdx As Long: pIdx = 0
+    b(pIdx) = &H4C: b(pIdx + 1) = &H8B: b(pIdx + 2) = &HD9: pIdx = pIdx + 3
+    b(pIdx) = &H48: b(pIdx + 1) = &H83: b(pIdx + 2) = &HEC: b(pIdx + 3) = CByte(allocBytes): pIdx = pIdx + 4
+    b(pIdx) = &H49: b(pIdx + 1) = &H8B: b(pIdx + 2) = &H3: pIdx = pIdx + 3
+    If argc >= 1 Then b(pIdx) = &H49: b(pIdx + 1) = &H8B: b(pIdx + 2) = &H4B: b(pIdx + 3) = &H8: pIdx = pIdx + 4
+    If argc >= 2 Then b(pIdx) = &H49: b(pIdx + 1) = &H8B: b(pIdx + 2) = &H53: b(pIdx + 3) = &H10: pIdx = pIdx + 4
+    If argc >= 3 Then b(pIdx) = &H4D: b(pIdx + 1) = &H8B: b(pIdx + 2) = &H43: b(pIdx + 3) = &H18: pIdx = pIdx + 4
+    If argc >= 4 Then b(pIdx) = &H4D: b(pIdx + 1) = &H8B: b(pIdx + 2) = &H4B: b(pIdx + 3) = &H20: pIdx = pIdx + 4
+    Dim i As Long
+    For i = 4 To argc - 1
+        Dim offArg As Byte: offArg = CByte((i + 1) * 8)
+        Dim offStk As Byte: offStk = CByte(&H20 + (i - 4) * 8)
+        b(pIdx) = &H4D: b(pIdx + 1) = &H8B: b(pIdx + 2) = &H53: b(pIdx + 3) = offArg: pIdx = pIdx + 4
+        b(pIdx) = &H4C: b(pIdx + 1) = &H89: b(pIdx + 2) = &H54: b(pIdx + 3) = &H24: b(pIdx + 4) = offStk: pIdx = pIdx + 5
+    Next
+    b(pIdx) = &HFF: b(pIdx + 1) = &HD0: pIdx = pIdx + 2
+    b(pIdx) = &H48: b(pIdx + 1) = &H83: b(pIdx + 2) = &HC4: b(pIdx + 3) = CByte(allocBytes): pIdx = pIdx + 4
+    b(pIdx) = &HC3: pIdx = pIdx + 1
+    RtlMoveMemory mem, VarPtr(b(0)), pIdx
+    BuildThunkForArgCount = mem
+End Function
+
+Private Sub InitOptimizedThunks()
+    g_argBuffer = VirtualAlloc(0, ARG_BUFFER_SIZE, MEM_RESERVE Or MEM_COMMIT, PAGE_EXECUTE_READWRITE)
+    If g_argBuffer = 0 Then Err.Raise 5
+    g_thunk0 = BuildThunkForArgCount(0)
+    g_thunk1 = BuildThunkForArgCount(1)
+    g_thunk2 = BuildThunkForArgCount(2)
+    g_thunk3 = BuildThunkForArgCount(3)
+    g_thunk4 = BuildThunkForArgCount(4)
+    g_thunk5 = BuildThunkForArgCount(5)
+    g_thunk6 = BuildThunkForArgCount(6)
+    g_thunk7 = BuildThunkForArgCount(7)
+    g_thunk8 = BuildThunkForArgCount(8)
+    g_thunk10 = BuildThunkForArgCount(10)
+End Sub
+
+Private Sub FreeOptimizedThunks()
+    On Error Resume Next
+    If g_argBuffer <> 0 Then VirtualFree g_argBuffer, 0, MEM_RELEASE: g_argBuffer = 0
+    If g_thunk0 <> 0 Then VirtualFree g_thunk0, 0, MEM_RELEASE: g_thunk0 = 0
+    If g_thunk1 <> 0 Then VirtualFree g_thunk1, 0, MEM_RELEASE: g_thunk1 = 0
+    If g_thunk2 <> 0 Then VirtualFree g_thunk2, 0, MEM_RELEASE: g_thunk2 = 0
+    If g_thunk3 <> 0 Then VirtualFree g_thunk3, 0, MEM_RELEASE: g_thunk3 = 0
+    If g_thunk4 <> 0 Then VirtualFree g_thunk4, 0, MEM_RELEASE: g_thunk4 = 0
+    If g_thunk5 <> 0 Then VirtualFree g_thunk5, 0, MEM_RELEASE: g_thunk5 = 0
+    If g_thunk6 <> 0 Then VirtualFree g_thunk6, 0, MEM_RELEASE: g_thunk6 = 0
+    If g_thunk7 <> 0 Then VirtualFree g_thunk7, 0, MEM_RELEASE: g_thunk7 = 0
+    If g_thunk8 <> 0 Then VirtualFree g_thunk8, 0, MEM_RELEASE: g_thunk8 = 0
+    If g_thunk10 <> 0 Then VirtualFree g_thunk10, 0, MEM_RELEASE: g_thunk10 = 0
+End Sub
+
+Private Function VkCall0(ByVal fn As LongPtr) As LongPtr
+    Dim buf(0 To 0) As LongLong: buf(0) = CLngLng(fn)
+    RtlMoveMemory g_argBuffer, VarPtr(buf(0)), 8
+    VkCall0 = CallWindowProcW(g_thunk0, g_argBuffer, 0, 0, 0)
+End Function
+
+Private Function VkCall1(ByVal fn As LongPtr, ByVal a1 As LongLong) As LongPtr
+    Dim buf(0 To 1) As LongLong: buf(0) = CLngLng(fn): buf(1) = a1
+    RtlMoveMemory g_argBuffer, VarPtr(buf(0)), 16
+    VkCall1 = CallWindowProcW(g_thunk1, g_argBuffer, 0, 0, 0)
+End Function
+
+Private Function VkCall2(ByVal fn As LongPtr, ByVal a1 As LongLong, ByVal a2 As LongLong) As LongPtr
+    Dim buf(0 To 2) As LongLong: buf(0) = CLngLng(fn): buf(1) = a1: buf(2) = a2
+    RtlMoveMemory g_argBuffer, VarPtr(buf(0)), 24
+    VkCall2 = CallWindowProcW(g_thunk2, g_argBuffer, 0, 0, 0)
+End Function
+
+Private Function VkCall3(ByVal fn As LongPtr, ByVal a1 As LongLong, ByVal a2 As LongLong, ByVal a3 As LongLong) As LongPtr
+    Dim buf(0 To 3) As LongLong: buf(0) = CLngLng(fn): buf(1) = a1: buf(2) = a2: buf(3) = a3
+    RtlMoveMemory g_argBuffer, VarPtr(buf(0)), 32
+    VkCall3 = CallWindowProcW(g_thunk3, g_argBuffer, 0, 0, 0)
+End Function
+
+Private Function VkCall4(ByVal fn As LongPtr, ByVal a1 As LongLong, ByVal a2 As LongLong, ByVal a3 As LongLong, ByVal a4 As LongLong) As LongPtr
+    Dim buf(0 To 4) As LongLong: buf(0) = CLngLng(fn): buf(1) = a1: buf(2) = a2: buf(3) = a3: buf(4) = a4
+    RtlMoveMemory g_argBuffer, VarPtr(buf(0)), 40
+    VkCall4 = CallWindowProcW(g_thunk4, g_argBuffer, 0, 0, 0)
+End Function
+
+Private Function VkCall5(ByVal fn As LongPtr, ByVal a1 As LongLong, ByVal a2 As LongLong, ByVal a3 As LongLong, ByVal a4 As LongLong, ByVal a5 As LongLong) As LongPtr
+    Dim buf(0 To 5) As LongLong: buf(0) = CLngLng(fn): buf(1) = a1: buf(2) = a2: buf(3) = a3: buf(4) = a4: buf(5) = a5
+    RtlMoveMemory g_argBuffer, VarPtr(buf(0)), 48
+    VkCall5 = CallWindowProcW(g_thunk5, g_argBuffer, 0, 0, 0)
+End Function
+
+Private Function VkCall6(ByVal fn As LongPtr, ByVal a1 As LongLong, ByVal a2 As LongLong, ByVal a3 As LongLong, ByVal a4 As LongLong, ByVal a5 As LongLong, ByVal a6 As LongLong) As LongPtr
+    Dim buf(0 To 6) As LongLong: buf(0) = CLngLng(fn): buf(1) = a1: buf(2) = a2: buf(3) = a3: buf(4) = a4: buf(5) = a5: buf(6) = a6
+    RtlMoveMemory g_argBuffer, VarPtr(buf(0)), 56
+    VkCall6 = CallWindowProcW(g_thunk6, g_argBuffer, 0, 0, 0)
+End Function
+
+Private Function VkCall7(ByVal fn As LongPtr, ByVal a1 As LongLong, ByVal a2 As LongLong, ByVal a3 As LongLong, ByVal a4 As LongLong, ByVal a5 As LongLong, ByVal a6 As LongLong, ByVal a7 As LongLong) As LongPtr
+    Dim buf(0 To 7) As LongLong: buf(0) = CLngLng(fn): buf(1) = a1: buf(2) = a2: buf(3) = a3: buf(4) = a4: buf(5) = a5: buf(6) = a6: buf(7) = a7
+    RtlMoveMemory g_argBuffer, VarPtr(buf(0)), 64
+    VkCall7 = CallWindowProcW(g_thunk7, g_argBuffer, 0, 0, 0)
+End Function
+
+Private Function VkCall8(ByVal fn As LongPtr, ByVal a1 As LongLong, ByVal a2 As LongLong, ByVal a3 As LongLong, ByVal a4 As LongLong, ByVal a5 As LongLong, ByVal a6 As LongLong, ByVal a7 As LongLong, ByVal a8 As LongLong) As LongPtr
+    Dim buf(0 To 8) As LongLong: buf(0) = CLngLng(fn): buf(1) = a1: buf(2) = a2: buf(3) = a3: buf(4) = a4: buf(5) = a5: buf(6) = a6: buf(7) = a7: buf(8) = a8
+    RtlMoveMemory g_argBuffer, VarPtr(buf(0)), 72
+    VkCall8 = CallWindowProcW(g_thunk8, g_argBuffer, 0, 0, 0)
+End Function
+
+Private Function VkCall10(ByVal fn As LongPtr, ByVal a1 As LongLong, ByVal a2 As LongLong, ByVal a3 As LongLong, ByVal a4 As LongLong, ByVal a5 As LongLong, ByVal a6 As LongLong, ByVal a7 As LongLong, ByVal a8 As LongLong, ByVal a9 As LongLong, ByVal a10 As LongLong) As LongPtr
+    Dim buf(0 To 10) As LongLong: buf(0) = CLngLng(fn): buf(1) = a1: buf(2) = a2: buf(3) = a3: buf(4) = a4: buf(5) = a5: buf(6) = a6: buf(7) = a7: buf(8) = a8: buf(9) = a9: buf(10) = a10
+    RtlMoveMemory g_argBuffer, VarPtr(buf(0)), 88
+    VkCall10 = CallWindowProcW(g_thunk10, g_argBuffer, 0, 0, 0)
+End Function
+
+' ============================================================================
+' UTILITY FUNCTIONS
+' ============================================================================
+
 Private Sub LogInit()
     On Error Resume Next
     If Dir$("C:\TEMP", vbDirectory) = "" Then MkDir "C:\TEMP"
     g_logEnabled = True
     LogLine "============================================================"
-    LogLine "START " & format$(Now, "yyyy-mm-dd hh:nn:ss")
+    LogLine "START " & Format$(Now, "yyyy-mm-dd hh:nn:ss") & " (PROFILED)"
 End Sub
 
 Private Sub LogLine(ByVal s As String)
@@ -570,7 +745,7 @@ Private Sub LogLine(ByVal s As String)
     Dim f As Integer: f = FreeFile
     On Error Resume Next
     Open LOG_PATH For Append As #f
-    Print #f, format$(Now, "hh:nn:ss") & " | " & s
+    Print #f, Format$(Now, "hh:nn:ss") & " | " & s
     Close #f
 End Sub
 
@@ -644,87 +819,10 @@ Private Function FindShadercDll() As String
     FindShadercDll = best
 End Function
 
-' Thunk functions
-Private Function GetThunk(ByVal fnPtr As LongPtr, ByVal argc As Long) As LongPtr
-    Dim i As Long
-    For i = 1 To g_thunkCount
-        If g_thunks(i).fnPtr = fnPtr And g_thunks(i).argc = argc Then
-            GetThunk = g_thunks(i).stubPtr: Exit Function
-        End If
-    Next
-    Dim stub As LongPtr: stub = BuildThunk(fnPtr, argc)
-    g_thunkCount = g_thunkCount + 1
-    ReDim Preserve g_thunks(1 To g_thunkCount)
-    g_thunks(g_thunkCount).fnPtr = fnPtr
-    g_thunks(g_thunkCount).argc = argc
-    g_thunks(g_thunkCount).stubPtr = stub
-    GetThunk = stub
-End Function
-
-Private Function BuildThunk(ByVal fnPtr As LongPtr, ByVal argc As Long) As LongPtr
-    If argc < 0 Or argc > 12 Then Err.Raise 5
-    Dim stackArgs As Long: If argc > 4 Then stackArgs = argc - 4
-    Dim pad8 As Long: If (stackArgs And 1) <> 0 Then pad8 = 1
-    Dim allocBytes As Long: allocBytes = &H28 + (stackArgs * 8) + (pad8 * 8)
-    Dim codeSize As Long: codeSize = 256
-    Dim mem As LongPtr: mem = VirtualAlloc(0, codeSize, MEM_RESERVE Or MEM_COMMIT, PAGE_EXECUTE_READWRITE)
-    If mem = 0 Then Err.Raise 5
-    Dim b() As Byte: ReDim b(0 To codeSize - 1) As Byte
-    Dim pIdx As Long: pIdx = 0
-    b(pIdx) = &H4C: b(pIdx + 1) = &H8B: b(pIdx + 2) = &HD9: pIdx = pIdx + 3
-    b(pIdx) = &H48: b(pIdx + 1) = &H83: b(pIdx + 2) = &HEC: b(pIdx + 3) = CByte(allocBytes): pIdx = pIdx + 4
-    b(pIdx) = &H48: b(pIdx + 1) = &HB8: pIdx = pIdx + 2
-    Dim tmpLL As LongLong: tmpLL = CLngLng(fnPtr)
-    RtlMoveMemory mem + pIdx, VarPtr(tmpLL), 8
-    pIdx = pIdx + 8
-    If argc >= 1 Then b(pIdx) = &H49: b(pIdx + 1) = &H8B: b(pIdx + 2) = &HB: pIdx = pIdx + 3
-    If argc >= 2 Then b(pIdx) = &H49: b(pIdx + 1) = &H8B: b(pIdx + 2) = &H53: b(pIdx + 3) = &H8: pIdx = pIdx + 4
-    If argc >= 3 Then b(pIdx) = &H4D: b(pIdx + 1) = &H8B: b(pIdx + 2) = &H43: b(pIdx + 3) = &H10: pIdx = pIdx + 4
-    If argc >= 4 Then b(pIdx) = &H4D: b(pIdx + 1) = &H8B: b(pIdx + 2) = &H4B: b(pIdx + 3) = &H18: pIdx = pIdx + 4
-    Dim i As Long
-    For i = 4 To argc - 1
-        Dim offArg As Byte: offArg = CByte(i * 8)
-        Dim offStk As Byte: offStk = CByte(&H20 + (i - 4) * 8)
-        b(pIdx) = &H4D: b(pIdx + 1) = &H8B: b(pIdx + 2) = &H53: b(pIdx + 3) = offArg: pIdx = pIdx + 4
-        b(pIdx) = &H4C: b(pIdx + 1) = &H89: b(pIdx + 2) = &H54: b(pIdx + 3) = &H24: b(pIdx + 4) = offStk: pIdx = pIdx + 5
-    Next
-    b(pIdx) = &HFF: b(pIdx + 1) = &HD0: pIdx = pIdx + 2
-    b(pIdx) = &H48: b(pIdx + 1) = &H83: b(pIdx + 2) = &HC4: b(pIdx + 3) = CByte(allocBytes): pIdx = pIdx + 4
-    b(pIdx) = &HC3: pIdx = pIdx + 1
-    RtlMoveMemory mem, VarPtr(b(0)), pIdx
-    Dim immPos As Long: immPos = 3 + 4 + 2
-    RtlMoveMemory mem + immPos, VarPtr(tmpLL), 8
-    BuildThunk = mem
-End Function
-
-Private Function InvokeRaw(ByVal fnPtr As LongPtr, ByVal argc As Long, ByRef argv() As LongLong) As LongLong
-    Dim stub As LongPtr: stub = GetThunk(fnPtr, argc)
-    Dim argMem As LongPtr
-    If argc > 0 Then
-        argMem = CoTaskMemAlloc(argc * 8)
-        If argMem = 0 Then Err.Raise 5
-        RtlMoveMemory argMem, VarPtr(argv(0)), argc * 8
-    End If
-    Dim ret As LongPtr: ret = CallWindowProcW(stub, argMem, 0, 0, 0)
-    If argMem <> 0 Then CoTaskMemFree argMem
-    InvokeRaw = CLngLng(ret)
-End Function
-
-Private Function InvokeI32(ByVal fnPtr As LongPtr, ByVal argc As Long, ByRef argv() As LongLong) As Long
-    InvokeI32 = CLng(InvokeRaw(fnPtr, argc, argv) And &HFFFFFFFF)
-End Function
-
-Private Function InvokePtr0(ByVal fnPtr As LongPtr) As LongPtr
-    Dim dummy(0 To 0) As LongLong
-    InvokePtr0 = CLngPtr(InvokeRaw(fnPtr, 0, dummy))
-End Function
-
 Private Sub VkCheck(ByVal res As Long, ByVal what As String)
     If res <> VK_SUCCESS And res <> VK_SUBOPTIMAL_KHR Then
         LogLine "VK_FAIL " & what & " VkResult=" & CStr(res)
         Err.Raise 5, , what & " failed VkResult=" & res
-    Else
-        LogLine "VK_OK " & what
     End If
 End Sub
 
@@ -739,14 +837,14 @@ End Function
 
 Private Sub CreateAppWindow(ByVal w As Long, ByVal h As Long)
     g_hInst = GetModuleHandleW(0)
-    Dim clsName As String: clsName = "VBA_VK_HARMONOGRAPH"
+    Dim clsName As String: clsName = "VBA_VK_HARMONOGRAPH_PROF"
     Dim wc As WNDCLASSEXW
     wc.cbSize = LenB(wc)
     wc.lpfnWndProc = VBA.CLngPtr(AddressOf WndProc)
     wc.hInstance = g_hInst
     wc.lpszClassName = StrPtr(clsName)
     If RegisterClassExW(wc) = 0 Then Err.Raise 5
-    Dim title As String: title = "Harmonograph - Vulkan 1.4 Compute / VBA x64"
+    Dim title As String: title = "Harmonograph - Vulkan 1.4 (PROFILED)"
     g_hwnd = CreateWindowExW(0, StrPtr(clsName), StrPtr(title), WS_OVERLAPPEDWINDOW Or WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, w, h, 0, 0, g_hInst, 0)
     If g_hwnd = 0 Then Err.Raise 5
     ShowWindow g_hwnd, 1
@@ -764,15 +862,11 @@ Private Sub LoadVulkanLoader()
 End Sub
 
 Private Function VkGetInstanceProc(ByVal inst As LongPtr, ByVal name As String) As LongPtr
-    Dim argv(0 To 1) As LongLong
-    argv(0) = CLngLng(inst): argv(1) = CLngLng(AllocAnsiZ(name))
-    VkGetInstanceProc = CLngPtr(InvokeRaw(p_vkGetInstanceProcAddr, 2, argv))
+    VkGetInstanceProc = CLngPtr(VkCall2(p_vkGetInstanceProcAddr, CLngLng(inst), CLngLng(AllocAnsiZ(name))))
 End Function
 
 Private Function VkGetDeviceProc(ByVal dev As LongPtr, ByVal name As String) As LongPtr
-    Dim argv(0 To 1) As LongLong
-    argv(0) = CLngLng(dev): argv(1) = CLngLng(AllocAnsiZ(name))
-    VkGetDeviceProc = CLngPtr(InvokeRaw(p_vkGetDeviceProcAddr, 2, argv))
+    VkGetDeviceProc = CLngPtr(VkCall2(p_vkGetDeviceProcAddr, CLngLng(dev), CLngLng(AllocAnsiZ(name))))
 End Function
 
 Private Sub LoadVulkanInstanceFuncs()
@@ -786,6 +880,7 @@ Private Sub LoadVulkanInstanceFuncs()
     p_vkGetPhysicalDeviceSurfaceSupportKHR = VkGetInstanceProc(vkInstance, "vkGetPhysicalDeviceSurfaceSupportKHR")
     p_vkGetPhysicalDeviceSurfaceFormatsKHR = VkGetInstanceProc(vkInstance, "vkGetPhysicalDeviceSurfaceFormatsKHR")
     p_vkGetPhysicalDeviceSurfaceCapabilitiesKHR = VkGetInstanceProc(vkInstance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR")
+    p_vkGetPhysicalDeviceSurfacePresentModesKHR = VkGetInstanceProc(vkInstance, "vkGetPhysicalDeviceSurfacePresentModesKHR")
 End Sub
 
 Private Sub LoadVulkanDeviceFuncs()
@@ -872,49 +967,47 @@ End Sub
 Private Function ShadercCompileSpv(ByVal glsl As String, ByVal kind As Long, ByVal fileName As String) As Byte()
     LogLine "Compiling: " & fileName
     Dim spv() As Byte, compiler As LongPtr, options As LongPtr, result As LongPtr
-    Dim srcBytes() As Byte, argv(0 To 6) As LongLong, argv1(0 To 0) As LongLong
+    Dim srcBytes() As Byte
     On Error GoTo EH
-    compiler = InvokePtr0(p_shaderc_compiler_initialize)
+    compiler = VkCall0(p_shaderc_compiler_initialize)
     If compiler = 0 Then Err.Raise 5
-    options = InvokePtr0(p_shaderc_compile_options_initialize)
+    options = VkCall0(p_shaderc_compile_options_initialize)
     srcBytes = StrConv(glsl, vbFromUnicode)
-    argv(0) = CLngLng(compiler)
-    argv(1) = CLngLng(VarPtr(srcBytes(0)))
-    argv(2) = CLngLng(UBound(srcBytes) - LBound(srcBytes) + 1)
-    argv(3) = CLngLng(kind)
-    argv(4) = CLngLng(AllocAnsiZ(fileName))
-    argv(5) = CLngLng(AllocAnsiZ("main"))
-    argv(6) = CLngLng(options)
-    result = CLngPtr(InvokeRaw(p_shaderc_compile_into_spv, 7, argv))
+    result = CLngPtr(VkCall7(p_shaderc_compile_into_spv, _
+        CLngLng(compiler), CLngLng(VarPtr(srcBytes(0))), CLngLng(UBound(srcBytes) - LBound(srcBytes) + 1), _
+        CLngLng(kind), CLngLng(AllocAnsiZ(fileName)), CLngLng(AllocAnsiZ("main")), CLngLng(options)))
     If result = 0 Then Err.Raise 5
-    argv1(0) = CLngLng(result)
-    Dim status As Long: status = InvokeI32(p_shaderc_result_get_compilation_status, 1, argv1)
+    Dim status As Long: status = CLng(VkCall1(p_shaderc_result_get_compilation_status, CLngLng(result)))
     If status <> SHADERC_COMPILATION_STATUS_SUCCESS Then
-        Dim pErr As LongPtr: pErr = CLngPtr(InvokeRaw(p_shaderc_result_get_error_message, 1, argv1))
+        Dim pErr As LongPtr: pErr = CLngPtr(VkCall1(p_shaderc_result_get_error_message, CLngLng(result)))
         LogLine "shaderc FAILED: " & PtrToAnsiString(pErr)
         Err.Raise 5
     End If
-    Dim outLen As Long: outLen = CLng(InvokeRaw(p_shaderc_result_get_length, 1, argv1))
+    Dim outLen As Long: outLen = CLng(VkCall1(p_shaderc_result_get_length, CLngLng(result)))
     If outLen <= 0 Then GoTo CLEANUP
-    Dim pOut As LongPtr: pOut = CLngPtr(InvokeRaw(p_shaderc_result_get_bytes, 1, argv1))
+    Dim pOut As LongPtr: pOut = CLngPtr(VkCall1(p_shaderc_result_get_bytes, CLngLng(result)))
     ReDim spv(0 To outLen - 1) As Byte
     RtlMoveMemory VarPtr(spv(0)), pOut, CLngPtr(outLen)
     LogLine "Compiled " & outLen & " bytes"
     ShadercCompileSpv = spv
 CLEANUP:
     On Error Resume Next
-    If result <> 0 Then argv1(0) = CLngLng(result): Call InvokeRaw(p_shaderc_result_release, 1, argv1)
-    If options <> 0 Then argv1(0) = CLngLng(options): Call InvokeRaw(p_shaderc_compile_options_release, 1, argv1)
-    If compiler <> 0 Then argv1(0) = CLngLng(compiler): Call InvokeRaw(p_shaderc_compiler_release, 1, argv1)
+    If result <> 0 Then Call VkCall1(p_shaderc_result_release, CLngLng(result))
+    If options <> 0 Then Call VkCall1(p_shaderc_compile_options_release, CLngLng(options))
+    If compiler <> 0 Then Call VkCall1(p_shaderc_compiler_release, CLngLng(compiler))
     Exit Function
 EH: LogLine "shaderc error: " & Err.Description: Resume CLEANUP
 End Function
+
+' ============================================================================
+' VULKAN INITIALIZATION (abbreviated - same structure as before)
+' ============================================================================
 
 Private Sub VkCreateInstance_()
     LogLine "VkCreateInstance_..."
     Dim appInfo As VkApplicationInfo
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO
-    appInfo.pApplicationName = AllocAnsiZ("Harmonograph VBA")
+    appInfo.pApplicationName = AllocAnsiZ("Harmonograph VBA PROF")
     appInfo.applicationVersion = &H10000
     appInfo.pEngineName = AllocAnsiZ("No Engine")
     appInfo.engineVersion = &H10000
@@ -927,9 +1020,8 @@ Private Sub VkCreateInstance_()
     ci.pApplicationInfo = VarPtr(appInfo)
     ci.enabledExtensionCount = 2
     ci.ppEnabledExtensionNames = VarPtr(extPtrs(0))
-    Dim pInst As LongPtr, argv(0 To 2) As LongLong
-    argv(0) = CLngLng(VarPtr(ci)): argv(1) = 0: argv(2) = CLngLng(VarPtr(pInst))
-    VkCheck InvokeI32(p_vkCreateInstance, 3, argv), "vkCreateInstance"
+    Dim pInst As LongPtr
+    VkCheck CLng(VkCall3(p_vkCreateInstance, CLngLng(VarPtr(ci)), 0, CLngLng(VarPtr(pInst)))), "vkCreateInstance"
     vkInstance = pInst
     LoadVulkanInstanceFuncs
 End Sub
@@ -939,44 +1031,36 @@ Private Sub VkCreateSurface_()
     Dim sci As VkWin32SurfaceCreateInfoKHR
     sci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR
     sci.hInstance = g_hInst: sci.hwnd = g_hwnd
-    Dim pSurf As LongPtr, argv(0 To 3) As LongLong
-    argv(0) = CLngLng(vkInstance): argv(1) = CLngLng(VarPtr(sci)): argv(2) = 0: argv(3) = CLngLng(VarPtr(pSurf))
-    VkCheck InvokeI32(p_vkCreateWin32SurfaceKHR, 4, argv), "vkCreateWin32SurfaceKHR"
+    Dim pSurf As LongPtr
+    VkCheck CLng(VkCall4(p_vkCreateWin32SurfaceKHR, CLngLng(vkInstance), CLngLng(VarPtr(sci)), 0, CLngLng(VarPtr(pSurf)))), "vkCreateWin32SurfaceKHR"
     vkSurface = pSurf
 End Sub
 
 Private Sub PickPhysicalDeviceAndQueues_()
     LogLine "PickPhysicalDeviceAndQueues_..."
-    Dim count As Long, argvC(0 To 2) As LongLong
-    argvC(0) = CLngLng(vkInstance): argvC(1) = CLngLng(VarPtr(count)): argvC(2) = 0
-    VkCheck InvokeI32(p_vkEnumeratePhysicalDevices, 3, argvC), "vkEnumeratePhysicalDevices"
+    Dim count As Long
+    VkCheck CLng(VkCall3(p_vkEnumeratePhysicalDevices, CLngLng(vkInstance), CLngLng(VarPtr(count)), 0)), "vkEnumeratePhysicalDevices"
     If count <= 0 Then Err.Raise 5
     Dim devs() As LongPtr: ReDim devs(0 To count - 1) As LongLong
-    argvC(2) = CLngLng(VarPtr(devs(0)))
-    VkCheck InvokeI32(p_vkEnumeratePhysicalDevices, 3, argvC), "vkEnumeratePhysicalDevices"
+    VkCheck CLng(VkCall3(p_vkEnumeratePhysicalDevices, CLngLng(vkInstance), CLngLng(VarPtr(count)), CLngLng(VarPtr(devs(0))))), "vkEnumeratePhysicalDevices"
     vkPhysicalDevice = devs(0)
-    Dim qCount As Long, argvQ(0 To 2) As LongLong
-    argvQ(0) = CLngLng(vkPhysicalDevice): argvQ(1) = CLngLng(VarPtr(qCount)): argvQ(2) = 0
-    Call InvokeRaw(p_vkGetPhysicalDeviceQueueFamilyProperties, 3, argvQ)
+    Dim qCount As Long
+    Call VkCall3(p_vkGetPhysicalDeviceQueueFamilyProperties, CLngLng(vkPhysicalDevice), CLngLng(VarPtr(qCount)), 0)
     If qCount <= 0 Then Err.Raise 5
     Dim buf() As Byte: ReDim buf(0 To qCount * 24 - 1) As Byte
-    argvQ(2) = CLngLng(VarPtr(buf(0)))
-    Call InvokeRaw(p_vkGetPhysicalDeviceQueueFamilyProperties, 3, argvQ)
+    Call VkCall3(p_vkGetPhysicalDeviceQueueFamilyProperties, CLngLng(vkPhysicalDevice), CLngLng(VarPtr(qCount)), CLngLng(VarPtr(buf(0))))
     qFamilyGraphics = -1
     Dim i As Long
     For i = 0 To qCount - 1
         Dim flags As Long: RtlMoveMemory VarPtr(flags), VarPtr(buf(i * 24)), 4
         If (flags And VK_QUEUE_GRAPHICS_BIT) <> 0 And (flags And VK_QUEUE_COMPUTE_BIT) <> 0 Then
-            Dim supported As Long, argvS(0 To 3) As LongLong
-            argvS(0) = CLngLng(vkPhysicalDevice): argvS(1) = CLngLng(i): argvS(2) = CLngLng(vkSurface): argvS(3) = CLngLng(VarPtr(supported))
-            VkCheck InvokeI32(p_vkGetPhysicalDeviceSurfaceSupportKHR, 4, argvS), "vkGetPhysicalDeviceSurfaceSupportKHR"
+            Dim supported As Long
+            VkCheck CLng(VkCall4(p_vkGetPhysicalDeviceSurfaceSupportKHR, CLngLng(vkPhysicalDevice), CLngLng(i), CLngLng(vkSurface), CLngLng(VarPtr(supported)))), "vkGetPhysicalDeviceSurfaceSupportKHR"
             If supported <> 0 Then qFamilyGraphics = i: Exit For
         End If
     Next
     If qFamilyGraphics < 0 Then Err.Raise 5
-    Dim argvM(0 To 1) As LongLong
-    argvM(0) = CLngLng(vkPhysicalDevice): argvM(1) = CLngLng(VarPtr(memoryProperties))
-    Call InvokeRaw(p_vkGetPhysicalDeviceMemoryProperties, 2, argvM)
+    Call VkCall2(p_vkGetPhysicalDeviceMemoryProperties, CLngLng(vkPhysicalDevice), CLngLng(VarPtr(memoryProperties)))
     LogLine "queueFamily=" & CStr(qFamilyGraphics)
 End Sub
 
@@ -991,29 +1075,37 @@ Private Sub VkCreateDevice_()
     dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO
     dci.queueCreateInfoCount = 1: dci.pQueueCreateInfos = VarPtr(qci)
     dci.enabledExtensionCount = 1: dci.ppEnabledExtensionNames = VarPtr(extPtrs(0))
-    Dim pDev As LongPtr, argv(0 To 3) As LongLong
-    argv(0) = CLngLng(vkPhysicalDevice): argv(1) = CLngLng(VarPtr(dci)): argv(2) = 0: argv(3) = CLngLng(VarPtr(pDev))
-    VkCheck InvokeI32(p_vkCreateDevice, 4, argv), "vkCreateDevice"
+    Dim pDev As LongPtr
+    VkCheck CLng(VkCall4(p_vkCreateDevice, CLngLng(vkPhysicalDevice), CLngLng(VarPtr(dci)), 0, CLngLng(VarPtr(pDev)))), "vkCreateDevice"
     vkDevice = pDev
     LoadVulkanDeviceFuncs
-    Dim argvQ(0 To 3) As LongLong
-    argvQ(0) = CLngLng(vkDevice): argvQ(1) = CLngLng(qFamilyGraphics): argvQ(2) = 0: argvQ(3) = CLngLng(VarPtr(vkQueueGraphics))
-    Call InvokeRaw(p_vkGetDeviceQueue, 4, argvQ)
+    Call VkCall4(p_vkGetDeviceQueue, CLngLng(vkDevice), CLngLng(qFamilyGraphics), 0, CLngLng(VarPtr(vkQueueGraphics)))
 End Sub
 
 Private Sub VkCreateSwapchainAndViews_()
     LogLine "VkCreateSwapchainAndViews_..."
-    Dim fmtCount As Long, argvF(0 To 3) As LongLong
-    argvF(0) = CLngLng(vkPhysicalDevice): argvF(1) = CLngLng(vkSurface): argvF(2) = CLngLng(VarPtr(fmtCount)): argvF(3) = 0
-    Call InvokeRaw(p_vkGetPhysicalDeviceSurfaceFormatsKHR, 4, argvF)
+    Dim fmtCount As Long
+    Call VkCall4(p_vkGetPhysicalDeviceSurfaceFormatsKHR, CLngLng(vkPhysicalDevice), CLngLng(vkSurface), CLngLng(VarPtr(fmtCount)), 0)
     If fmtCount <= 0 Then Err.Raise 5
     Dim fmts() As VkSurfaceFormatKHR: ReDim fmts(0 To fmtCount - 1) As VkSurfaceFormatKHR
-    argvF(3) = CLngLng(VarPtr(fmts(0)))
-    Call InvokeRaw(p_vkGetPhysicalDeviceSurfaceFormatsKHR, 4, argvF)
+    Call VkCall4(p_vkGetPhysicalDeviceSurfaceFormatsKHR, CLngLng(vkPhysicalDevice), CLngLng(vkSurface), CLngLng(VarPtr(fmtCount)), CLngLng(VarPtr(fmts(0))))
     swapImageFormat = fmts(0).format
-    Dim caps As VkSurfaceCapabilitiesKHR, argvCaps(0 To 2) As LongLong
-    argvCaps(0) = CLngLng(vkPhysicalDevice): argvCaps(1) = CLngLng(vkSurface): argvCaps(2) = CLngLng(VarPtr(caps))
-    VkCheck InvokeI32(p_vkGetPhysicalDeviceSurfaceCapabilitiesKHR, 3, argvCaps), "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"
+    
+    Dim modeCount As Long
+    Call VkCall4(p_vkGetPhysicalDeviceSurfacePresentModesKHR, CLngLng(vkPhysicalDevice), CLngLng(vkSurface), CLngLng(VarPtr(modeCount)), 0)
+    g_presentMode = VK_PRESENT_MODE_FIFO_KHR
+    If modeCount > 0 Then
+        Dim modes() As Long: ReDim modes(0 To modeCount - 1)
+        Call VkCall4(p_vkGetPhysicalDeviceSurfacePresentModesKHR, CLngLng(vkPhysicalDevice), CLngLng(vkSurface), CLngLng(VarPtr(modeCount)), CLngLng(VarPtr(modes(0))))
+        Dim j As Long
+        For j = 0 To modeCount - 1
+            If modes(j) = VK_PRESENT_MODE_MAILBOX_KHR Then g_presentMode = VK_PRESENT_MODE_MAILBOX_KHR: LogLine "Using MAILBOX": Exit For
+            If modes(j) = VK_PRESENT_MODE_IMMEDIATE_KHR Then g_presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR: LogLine "Using IMMEDIATE"
+        Next
+    End If
+    
+    Dim caps As VkSurfaceCapabilitiesKHR
+    VkCheck CLng(VkCall3(p_vkGetPhysicalDeviceSurfaceCapabilitiesKHR, CLngLng(vkPhysicalDevice), CLngLng(vkSurface), CLngLng(VarPtr(caps)))), "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"
     Dim rc As RECT: GetClientRect g_hwnd, rc
     swapExtent.width = rc.Right - rc.Left: swapExtent.height = rc.Bottom - rc.Top
     Dim desired As Long: desired = caps.minImageCount + 1
@@ -1024,16 +1116,11 @@ Private Sub VkCreateSwapchainAndViews_()
     sci.imageColorSpace = fmts(0).colorSpace: sci.imageExtent = swapExtent
     sci.imageArrayLayers = 1: sci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
     sci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE: sci.preTransform = caps.currentTransform
-    sci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR: sci.presentMode = VK_PRESENT_MODE_FIFO_KHR: sci.clipped = VK_TRUE
-    Dim argv(0 To 3) As LongLong
-    argv(0) = CLngLng(vkDevice): argv(1) = CLngLng(VarPtr(sci)): argv(2) = 0: argv(3) = CLngLng(VarPtr(vkSwapchain))
-    VkCheck InvokeI32(p_vkCreateSwapchainKHR, 4, argv), "vkCreateSwapchainKHR"
-    Dim argvI(0 To 3) As LongLong
-    argvI(0) = CLngLng(vkDevice): argvI(1) = CLngLng(vkSwapchain): argvI(2) = CLngLng(VarPtr(swapImageCount)): argvI(3) = 0
-    VkCheck InvokeI32(p_vkGetSwapchainImagesKHR, 4, argvI), "vkGetSwapchainImagesKHR"
+    sci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR: sci.presentMode = g_presentMode: sci.clipped = VK_TRUE
+    VkCheck CLng(VkCall4(p_vkCreateSwapchainKHR, CLngLng(vkDevice), CLngLng(VarPtr(sci)), 0, CLngLng(VarPtr(vkSwapchain)))), "vkCreateSwapchainKHR"
+    VkCheck CLng(VkCall4(p_vkGetSwapchainImagesKHR, CLngLng(vkDevice), CLngLng(vkSwapchain), CLngLng(VarPtr(swapImageCount)), 0)), "vkGetSwapchainImagesKHR"
     ReDim swapImages(0 To swapImageCount - 1) As LongLong
-    argvI(3) = CLngLng(VarPtr(swapImages(0)))
-    VkCheck InvokeI32(p_vkGetSwapchainImagesKHR, 4, argvI), "vkGetSwapchainImagesKHR"
+    VkCheck CLng(VkCall4(p_vkGetSwapchainImagesKHR, CLngLng(vkDevice), CLngLng(vkSwapchain), CLngLng(VarPtr(swapImageCount)), CLngLng(VarPtr(swapImages(0))))), "vkGetSwapchainImagesKHR"
     ReDim swapImageViews(0 To swapImageCount - 1) As LongLong
     Dim i As Long
     For i = 0 To swapImageCount - 1
@@ -1041,9 +1128,7 @@ Private Sub VkCreateSwapchainAndViews_()
         iv.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO: iv.image = swapImages(i)
         iv.viewType = VK_IMAGE_VIEW_TYPE_2D: iv.format = swapImageFormat
         iv.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT: iv.levelCount = 1: iv.layerCount = 1
-        Dim argvV(0 To 3) As LongLong
-        argvV(0) = CLngLng(vkDevice): argvV(1) = CLngLng(VarPtr(iv)): argvV(2) = 0: argvV(3) = CLngLng(VarPtr(swapImageViews(i)))
-        VkCheck InvokeI32(p_vkCreateImageView, 4, argvV), "vkCreateImageView"
+        VkCheck CLng(VkCall4(p_vkCreateImageView, CLngLng(vkDevice), CLngLng(VarPtr(iv)), 0, CLngLng(VarPtr(swapImageViews(i))))), "vkCreateImageView"
     Next
 End Sub
 
@@ -1060,9 +1145,7 @@ Private Sub VkCreateRenderPass_()
     Dim rpci As VkRenderPassCreateInfo
     rpci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO: rpci.attachmentCount = 1: rpci.pAttachments = VarPtr(colorAttach)
     rpci.subpassCount = 1: rpci.pSubpasses = VarPtr(subpass)
-    Dim argv(0 To 3) As LongLong
-    argv(0) = CLngLng(vkDevice): argv(1) = CLngLng(VarPtr(rpci)): argv(2) = 0: argv(3) = CLngLng(VarPtr(vkRenderPass))
-    VkCheck InvokeI32(p_vkCreateRenderPass, 4, argv), "vkCreateRenderPass"
+    VkCheck CLng(VkCall4(p_vkCreateRenderPass, CLngLng(vkDevice), CLngLng(VarPtr(rpci)), 0, CLngLng(VarPtr(vkRenderPass)))), "vkCreateRenderPass"
 End Sub
 
 Private Sub VkCreateFramebuffers_()
@@ -1074,9 +1157,7 @@ Private Sub VkCreateFramebuffers_()
         fbci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO: fbci.renderPass = vkRenderPass
         fbci.attachmentCount = 1: fbci.pAttachments = VarPtr(swapImageViews(i))
         fbci.width = swapExtent.width: fbci.height = swapExtent.height: fbci.layers = 1
-        Dim argv(0 To 3) As LongLong
-        argv(0) = CLngLng(vkDevice): argv(1) = CLngLng(VarPtr(fbci)): argv(2) = 0: argv(3) = CLngLng(VarPtr(swapFramebuffers(i)))
-        VkCheck InvokeI32(p_vkCreateFramebuffer, 4, argv), "vkCreateFramebuffer"
+        VkCheck CLng(VkCall4(p_vkCreateFramebuffer, CLngLng(vkDevice), CLngLng(VarPtr(fbci)), 0, CLngLng(VarPtr(swapFramebuffers(i))))), "vkCreateFramebuffer"
     Next
 End Sub
 
@@ -1089,28 +1170,21 @@ Private Function FindMemoryType(ByVal typeFilter As Long, ByVal properties As Lo
             End If
         End If
     Next
-    Err.Raise 5, , "No suitable memory type"
+    Err.Raise 5
 End Function
 
 Private Sub CreateBuffer(ByVal size As LongLong, ByVal usage As Long, ByVal memProps As Long, ByRef outBuffer As LongPtr, ByRef outMemory As LongPtr)
     Dim bufInfo As VkBufferCreateInfo
     bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO: bufInfo.size = size
     bufInfo.usage = usage: bufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE
-    Dim argv(0 To 3) As LongLong
-    argv(0) = CLngLng(vkDevice): argv(1) = CLngLng(VarPtr(bufInfo)): argv(2) = 0: argv(3) = CLngLng(VarPtr(outBuffer))
-    VkCheck InvokeI32(p_vkCreateBuffer, 4, argv), "vkCreateBuffer"
-    Dim memReq As VkMemoryRequirements, argvM(0 To 2) As LongLong
-    argvM(0) = CLngLng(vkDevice): argvM(1) = CLngLng(outBuffer): argvM(2) = CLngLng(VarPtr(memReq))
-    Call InvokeRaw(p_vkGetBufferMemoryRequirements, 3, argvM)
+    VkCheck CLng(VkCall4(p_vkCreateBuffer, CLngLng(vkDevice), CLngLng(VarPtr(bufInfo)), 0, CLngLng(VarPtr(outBuffer)))), "vkCreateBuffer"
+    Dim memReq As VkMemoryRequirements
+    Call VkCall3(p_vkGetBufferMemoryRequirements, CLngLng(vkDevice), CLngLng(outBuffer), CLngLng(VarPtr(memReq)))
     Dim allocInfo As VkMemoryAllocateInfo
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO: allocInfo.allocationSize = memReq.size
     allocInfo.memoryTypeIndex = FindMemoryType(memReq.memoryTypeBits, memProps)
-    Dim argvA(0 To 3) As LongLong
-    argvA(0) = CLngLng(vkDevice): argvA(1) = CLngLng(VarPtr(allocInfo)): argvA(2) = 0: argvA(3) = CLngLng(VarPtr(outMemory))
-    VkCheck InvokeI32(p_vkAllocateMemory, 4, argvA), "vkAllocateMemory"
-    Dim argvB(0 To 3) As LongLong
-    argvB(0) = CLngLng(vkDevice): argvB(1) = CLngLng(outBuffer): argvB(2) = CLngLng(outMemory): argvB(3) = 0
-    VkCheck InvokeI32(p_vkBindBufferMemory, 4, argvB), "vkBindBufferMemory"
+    VkCheck CLng(VkCall4(p_vkAllocateMemory, CLngLng(vkDevice), CLngLng(VarPtr(allocInfo)), 0, CLngLng(VarPtr(outMemory)))), "vkAllocateMemory"
+    VkCheck CLng(VkCall4(p_vkBindBufferMemory, CLngLng(vkDevice), CLngLng(outBuffer), CLngLng(outMemory), 0)), "vkBindBufferMemory"
 End Sub
 
 Private Sub VkCreateBuffers_()
@@ -1118,22 +1192,19 @@ Private Sub VkCreateBuffers_()
     CreateBuffer CLngLng(VERTEX_COUNT) * 16, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, posBuffer, posMemory
     CreateBuffer CLngLng(VERTEX_COUNT) * 16, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, colBuffer, colMemory
     CreateBuffer LenB(uboParams), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT Or VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uboBuffer, uboMemory
+    VkCheck CLng(VkCall6(p_vkMapMemory, CLngLng(vkDevice), CLngLng(uboMemory), 0, CLngLng(LenB(uboParams)), 0, CLngLng(VarPtr(uboMappedPtr)))), "vkMapMemory"
+    LogLine "UBO persistently mapped at " & Hex$(uboMappedPtr)
 End Sub
 
 Private Sub VkCreateDescriptorSetLayout_()
     LogLine "VkCreateDescriptorSetLayout_..."
     Dim bindings(0 To 2) As VkDescriptorSetLayoutBinding
-    bindings(0).binding = 0: bindings(0).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
-    bindings(0).descriptorCount = 1: bindings(0).stageFlags = VK_SHADER_STAGE_COMPUTE_BIT Or VK_SHADER_STAGE_VERTEX_BIT
-    bindings(1).binding = 1: bindings(1).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
-    bindings(1).descriptorCount = 1: bindings(1).stageFlags = VK_SHADER_STAGE_COMPUTE_BIT Or VK_SHADER_STAGE_VERTEX_BIT
-    bindings(2).binding = 2: bindings(2).descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-    bindings(2).descriptorCount = 1: bindings(2).stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
+    bindings(0).binding = 0: bindings(0).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: bindings(0).descriptorCount = 1: bindings(0).stageFlags = VK_SHADER_STAGE_COMPUTE_BIT Or VK_SHADER_STAGE_VERTEX_BIT
+    bindings(1).binding = 1: bindings(1).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: bindings(1).descriptorCount = 1: bindings(1).stageFlags = VK_SHADER_STAGE_COMPUTE_BIT Or VK_SHADER_STAGE_VERTEX_BIT
+    bindings(2).binding = 2: bindings(2).descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: bindings(2).descriptorCount = 1: bindings(2).stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
     Dim layoutInfo As VkDescriptorSetLayoutCreateInfo
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO: layoutInfo.bindingCount = 3: layoutInfo.pBindings = VarPtr(bindings(0))
-    Dim argv(0 To 3) As LongLong
-    argv(0) = CLngLng(vkDevice): argv(1) = CLngLng(VarPtr(layoutInfo)): argv(2) = 0: argv(3) = CLngLng(VarPtr(vkDescriptorSetLayout))
-    VkCheck InvokeI32(p_vkCreateDescriptorSetLayout, 4, argv), "vkCreateDescriptorSetLayout"
+    VkCheck CLng(VkCall4(p_vkCreateDescriptorSetLayout, CLngLng(vkDevice), CLngLng(VarPtr(layoutInfo)), 0, CLngLng(VarPtr(vkDescriptorSetLayout)))), "vkCreateDescriptorSetLayout"
 End Sub
 
 Private Sub VkCreateDescriptorPool_()
@@ -1144,9 +1215,7 @@ Private Sub VkCreateDescriptorPool_()
     Dim poolInfo As VkDescriptorPoolCreateInfo
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO: poolInfo.maxSets = 1
     poolInfo.poolSizeCount = 2: poolInfo.pPoolSizes = VarPtr(poolSizes(0))
-    Dim argv(0 To 3) As LongLong
-    argv(0) = CLngLng(vkDevice): argv(1) = CLngLng(VarPtr(poolInfo)): argv(2) = 0: argv(3) = CLngLng(VarPtr(vkDescriptorPool))
-    VkCheck InvokeI32(p_vkCreateDescriptorPool, 4, argv), "vkCreateDescriptorPool"
+    VkCheck CLng(VkCall4(p_vkCreateDescriptorPool, CLngLng(vkDevice), CLngLng(VarPtr(poolInfo)), 0, CLngLng(VarPtr(vkDescriptorPool)))), "vkCreateDescriptorPool"
 End Sub
 
 Private Sub VkAllocateDescriptorSets_()
@@ -1154,9 +1223,7 @@ Private Sub VkAllocateDescriptorSets_()
     Dim allocInfo As VkDescriptorSetAllocateInfo
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO: allocInfo.descriptorPool = vkDescriptorPool
     allocInfo.descriptorSetCount = 1: allocInfo.pSetLayouts = VarPtr(vkDescriptorSetLayout)
-    Dim argv(0 To 2) As LongLong
-    argv(0) = CLngLng(vkDevice): argv(1) = CLngLng(VarPtr(allocInfo)): argv(2) = CLngLng(VarPtr(vkDescriptorSet))
-    VkCheck InvokeI32(p_vkAllocateDescriptorSets, 3, argv), "vkAllocateDescriptorSets"
+    VkCheck CLng(VkCall3(p_vkAllocateDescriptorSets, CLngLng(vkDevice), CLngLng(VarPtr(allocInfo)), CLngLng(VarPtr(vkDescriptorSet)))), "vkAllocateDescriptorSets"
 End Sub
 
 Private Sub VkUpdateDescriptorSets_()
@@ -1165,95 +1232,56 @@ Private Sub VkUpdateDescriptorSets_()
     Dim colInfo As VkDescriptorBufferInfo: colInfo.buffer = colBuffer: colInfo.range = CLngLng(VERTEX_COUNT) * 16
     Dim uboInfo As VkDescriptorBufferInfo: uboInfo.buffer = uboBuffer: uboInfo.range = LenB(uboParams)
     Dim writes(0 To 2) As VkWriteDescriptorSet
-    writes(0).sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET: writes(0).dstSet = vkDescriptorSet: writes(0).dstBinding = 0
-    writes(0).descriptorCount = 1: writes(0).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: writes(0).pBufferInfo = VarPtr(posInfo)
-    writes(1).sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET: writes(1).dstSet = vkDescriptorSet: writes(1).dstBinding = 1
-    writes(1).descriptorCount = 1: writes(1).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: writes(1).pBufferInfo = VarPtr(colInfo)
-    writes(2).sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET: writes(2).dstSet = vkDescriptorSet: writes(2).dstBinding = 2
-    writes(2).descriptorCount = 1: writes(2).descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: writes(2).pBufferInfo = VarPtr(uboInfo)
-    Dim argv(0 To 4) As LongLong
-    argv(0) = CLngLng(vkDevice): argv(1) = 3: argv(2) = CLngLng(VarPtr(writes(0))): argv(3) = 0: argv(4) = 0
-    Call InvokeRaw(p_vkUpdateDescriptorSets, 5, argv)
+    writes(0).sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET: writes(0).dstSet = vkDescriptorSet: writes(0).dstBinding = 0: writes(0).descriptorCount = 1: writes(0).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: writes(0).pBufferInfo = VarPtr(posInfo)
+    writes(1).sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET: writes(1).dstSet = vkDescriptorSet: writes(1).dstBinding = 1: writes(1).descriptorCount = 1: writes(1).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: writes(1).pBufferInfo = VarPtr(colInfo)
+    writes(2).sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET: writes(2).dstSet = vkDescriptorSet: writes(2).dstBinding = 2: writes(2).descriptorCount = 1: writes(2).descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: writes(2).pBufferInfo = VarPtr(uboInfo)
+    Call VkCall5(p_vkUpdateDescriptorSets, CLngLng(vkDevice), 3, CLngLng(VarPtr(writes(0))), 0, 0)
 End Sub
 
 Private Sub VkCreateShadersAndPipelines_()
     LogLine "VkCreateShadersAndPipelines_..."
-    ' Compute shader
     Dim glslComp As String
-    glslComp = "#version 450" & vbLf
-    glslComp = glslComp & "layout(local_size_x = 256) in;" & vbLf
+    glslComp = "#version 450" & vbLf & "layout(local_size_x = 256) in;" & vbLf
     glslComp = glslComp & "layout(std430, binding = 0) buffer Positions { vec4 pos[]; };" & vbLf
     glslComp = glslComp & "layout(std430, binding = 1) buffer Colors { vec4 col[]; };" & vbLf
-    glslComp = glslComp & "layout(std140, binding = 2) uniform Params {" & vbLf
-    glslComp = glslComp & "    uint max_num; float dt; float scale; float pad0;" & vbLf
-    glslComp = glslComp & "    float A1; float f1; float p1; float d1;" & vbLf
-    glslComp = glslComp & "    float A2; float f2; float p2; float d2;" & vbLf
-    glslComp = glslComp & "    float A3; float f3; float p3; float d3;" & vbLf
-    glslComp = glslComp & "    float A4; float f4; float p4; float d4;" & vbLf
-    glslComp = glslComp & "} u;" & vbLf
-    glslComp = glslComp & "vec3 hsv2rgb(float h, float s, float v) {" & vbLf
-    glslComp = glslComp & "    float c = v * s; float hp = h / 60.0; float x = c * (1.0 - abs(mod(hp, 2.0) - 1.0));" & vbLf
-    glslComp = glslComp & "    vec3 rgb; if (hp < 1.0) rgb = vec3(c, x, 0.0); else if (hp < 2.0) rgb = vec3(x, c, 0.0);" & vbLf
-    glslComp = glslComp & "    else if (hp < 3.0) rgb = vec3(0.0, c, x); else if (hp < 4.0) rgb = vec3(0.0, x, c);" & vbLf
-    glslComp = glslComp & "    else if (hp < 5.0) rgb = vec3(x, 0.0, c); else rgb = vec3(c, 0.0, x);" & vbLf
-    glslComp = glslComp & "    return rgb + vec3(v - c); }" & vbLf
-    glslComp = glslComp & "void main() {" & vbLf
-    glslComp = glslComp & "    uint idx = gl_GlobalInvocationID.x; if (idx >= u.max_num) return;" & vbLf
-    glslComp = glslComp & "    float t = float(idx) * u.dt; float PI = 3.141592653589793;" & vbLf
-    glslComp = glslComp & "    float x = u.A1 * sin(u.f1 * t + PI * u.p1) * exp(-u.d1 * t) + u.A2 * sin(u.f2 * t + PI * u.p2) * exp(-u.d2 * t);" & vbLf
-    glslComp = glslComp & "    float y = u.A3 * sin(u.f3 * t + PI * u.p3) * exp(-u.d3 * t) + u.A4 * sin(u.f4 * t + PI * u.p4) * exp(-u.d4 * t);" & vbLf
-    glslComp = glslComp & "    pos[idx] = vec4(x * u.scale, y * u.scale, 0.0, 1.0);" & vbLf
-    glslComp = glslComp & "    col[idx] = vec4(hsv2rgb(mod((t / 20.0) * 360.0, 360.0), 1.0, 1.0), 1.0); }" & vbLf
-    ' Vertex shader
+    glslComp = glslComp & "layout(std140, binding = 2) uniform Params { uint max_num; float dt; float scale; float pad0; float A1; float f1; float p1; float d1; float A2; float f2; float p2; float d2; float A3; float f3; float p3; float d3; float A4; float f4; float p4; float d4; } u;" & vbLf
+    glslComp = glslComp & "vec3 hsv2rgb(float h, float s, float v) { float c = v * s; float hp = h / 60.0; float x = c * (1.0 - abs(mod(hp, 2.0) - 1.0)); vec3 rgb; if (hp < 1.0) rgb = vec3(c, x, 0.0); else if (hp < 2.0) rgb = vec3(x, c, 0.0); else if (hp < 3.0) rgb = vec3(0.0, c, x); else if (hp < 4.0) rgb = vec3(0.0, x, c); else if (hp < 5.0) rgb = vec3(x, 0.0, c); else rgb = vec3(c, 0.0, x); return rgb + vec3(v - c); }" & vbLf
+    glslComp = glslComp & "void main() { uint idx = gl_GlobalInvocationID.x; if (idx >= u.max_num) return; float t = float(idx) * u.dt; float PI = 3.141592653589793; float x = u.A1 * sin(u.f1 * t + PI * u.p1) * exp(-u.d1 * t) + u.A2 * sin(u.f2 * t + PI * u.p2) * exp(-u.d2 * t); float y = u.A3 * sin(u.f3 * t + PI * u.p3) * exp(-u.d3 * t) + u.A4 * sin(u.f4 * t + PI * u.p4) * exp(-u.d4 * t); pos[idx] = vec4(x * u.scale, y * u.scale, 0.0, 1.0); col[idx] = vec4(hsv2rgb(mod((t / 20.0) * 360.0, 360.0), 1.0, 1.0), 1.0); }" & vbLf
     Dim glslVert As String
-    glslVert = "#version 450" & vbLf
-    glslVert = glslVert & "layout(std430, binding = 0) buffer Positions { vec4 pos[]; };" & vbLf
+    glslVert = "#version 450" & vbLf & "layout(std430, binding = 0) buffer Positions { vec4 pos[]; };" & vbLf
     glslVert = glslVert & "layout(std430, binding = 1) buffer Colors { vec4 col[]; };" & vbLf
     glslVert = glslVert & "layout(location = 0) out vec4 vColor;" & vbLf
     glslVert = glslVert & "void main() { uint idx = uint(gl_VertexIndex); gl_Position = pos[idx]; vColor = col[idx]; }" & vbLf
-    ' Fragment shader
     Dim glslFrag As String
-    glslFrag = "#version 450" & vbLf
-    glslFrag = glslFrag & "layout(location = 0) in vec4 vColor;" & vbLf
+    glslFrag = "#version 450" & vbLf & "layout(location = 0) in vec4 vColor;" & vbLf
     glslFrag = glslFrag & "layout(location = 0) out vec4 outColor;" & vbLf
     glslFrag = glslFrag & "void main() { outColor = vColor; }" & vbLf
-    ' Compile shaders
     Dim spvComp() As Byte: spvComp = ShadercCompileSpv(glslComp, SHADERC_SHADER_KIND_COMPUTE, "hello.comp")
     Dim spvVert() As Byte: spvVert = ShadercCompileSpv(glslVert, SHADERC_SHADER_KIND_VERTEX, "hello.vert")
     Dim spvFrag() As Byte: spvFrag = ShadercCompileSpv(glslFrag, SHADERC_SHADER_KIND_FRAGMENT, "hello.frag")
-    ' Create shader modules
-    Dim smci As VkShaderModuleCreateInfo, argv(0 To 3) As LongLong, res As Long
+    Dim smci As VkShaderModuleCreateInfo
     smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO
     smci.codeSize = UBound(spvComp) + 1: smci.pCode = VarPtr(spvComp(0))
-    argv(0) = CLngLng(vkDevice): argv(1) = CLngLng(VarPtr(smci)): argv(2) = 0: argv(3) = CLngLng(VarPtr(shaderCompModule))
-    VkCheck InvokeI32(p_vkCreateShaderModule, 4, argv), "vkCreateShaderModule(comp)"
+    VkCheck CLng(VkCall4(p_vkCreateShaderModule, CLngLng(vkDevice), CLngLng(VarPtr(smci)), 0, CLngLng(VarPtr(shaderCompModule)))), "vkCreateShaderModule(comp)"
     smci.codeSize = UBound(spvVert) + 1: smci.pCode = VarPtr(spvVert(0))
-    argv(3) = CLngLng(VarPtr(shaderVertModule))
-    VkCheck InvokeI32(p_vkCreateShaderModule, 4, argv), "vkCreateShaderModule(vert)"
+    VkCheck CLng(VkCall4(p_vkCreateShaderModule, CLngLng(vkDevice), CLngLng(VarPtr(smci)), 0, CLngLng(VarPtr(shaderVertModule)))), "vkCreateShaderModule(vert)"
     smci.codeSize = UBound(spvFrag) + 1: smci.pCode = VarPtr(spvFrag(0))
-    argv(3) = CLngLng(VarPtr(shaderFragModule))
-    VkCheck InvokeI32(p_vkCreateShaderModule, 4, argv), "vkCreateShaderModule(frag)"
+    VkCheck CLng(VkCall4(p_vkCreateShaderModule, CLngLng(vkDevice), CLngLng(VarPtr(smci)), 0, CLngLng(VarPtr(shaderFragModule)))), "vkCreateShaderModule(frag)"
     Dim pMain As LongPtr: pMain = AllocAnsiZ("main")
-    ' Create compute pipeline
     LogLine "Creating compute pipeline..."
     Dim compLayoutInfo As VkPipelineLayoutCreateInfo
     compLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO: compLayoutInfo.setLayoutCount = 1: compLayoutInfo.pSetLayouts = VarPtr(vkDescriptorSetLayout)
-    argv(1) = CLngLng(VarPtr(compLayoutInfo)): argv(3) = CLngLng(VarPtr(vkComputePipelineLayout))
-    VkCheck InvokeI32(p_vkCreatePipelineLayout, 4, argv), "vkCreatePipelineLayout(compute)"
+    VkCheck CLng(VkCall4(p_vkCreatePipelineLayout, CLngLng(vkDevice), CLngLng(VarPtr(compLayoutInfo)), 0, CLngLng(VarPtr(vkComputePipelineLayout)))), "vkCreatePipelineLayout(compute)"
     Dim compPipelineInfo As VkComputePipelineCreateInfo
     compPipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO
     compPipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
     compPipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT: compPipelineInfo.stage.module = shaderCompModule: compPipelineInfo.stage.pName = pMain
     compPipelineInfo.layout = vkComputePipelineLayout: compPipelineInfo.basePipelineIndex = -1
-    Dim argvP(0 To 5) As LongLong
-    argvP(0) = CLngLng(vkDevice): argvP(1) = 0: argvP(2) = 1: argvP(3) = CLngLng(VarPtr(compPipelineInfo)): argvP(4) = 0: argvP(5) = CLngLng(VarPtr(vkComputePipeline))
-    VkCheck InvokeI32(p_vkCreateComputePipelines, 6, argvP), "vkCreateComputePipelines"
-    ' Create graphics pipeline
+    VkCheck CLng(VkCall6(p_vkCreateComputePipelines, CLngLng(vkDevice), 0, 1, CLngLng(VarPtr(compPipelineInfo)), 0, CLngLng(VarPtr(vkComputePipeline)))), "vkCreateComputePipelines"
     LogLine "Creating graphics pipeline..."
     Dim gfxLayoutInfo As VkPipelineLayoutCreateInfo
     gfxLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO: gfxLayoutInfo.setLayoutCount = 1: gfxLayoutInfo.pSetLayouts = VarPtr(vkDescriptorSetLayout)
-    argv(1) = CLngLng(VarPtr(gfxLayoutInfo)): argv(3) = CLngLng(VarPtr(vkGraphicsPipelineLayout))
-    VkCheck InvokeI32(p_vkCreatePipelineLayout, 4, argv), "vkCreatePipelineLayout(graphics)"
+    VkCheck CLng(VkCall4(p_vkCreatePipelineLayout, CLngLng(vkDevice), CLngLng(VarPtr(gfxLayoutInfo)), 0, CLngLng(VarPtr(vkGraphicsPipelineLayout)))), "vkCreatePipelineLayout(graphics)"
     Dim stages(0 To 1) As VkPipelineShaderStageCreateInfo
     stages(0).sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO: stages(0).stage = VK_SHADER_STAGE_VERTEX_BIT: stages(0).module = shaderVertModule: stages(0).pName = pMain
     stages(1).sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO: stages(1).stage = VK_SHADER_STAGE_FRAGMENT_BIT: stages(1).module = shaderFragModule: stages(1).pName = pMain
@@ -1271,25 +1299,21 @@ Private Sub VkCreateShadersAndPipelines_()
     gpci.pVertexInputState = VarPtr(vi): gpci.pInputAssemblyState = VarPtr(ia): gpci.pViewportState = VarPtr(vp)
     gpci.pRasterizationState = VarPtr(rs): gpci.pMultisampleState = VarPtr(ms): gpci.pColorBlendState = VarPtr(cb)
     gpci.pDynamicState = VarPtr(dynState): gpci.layout = vkGraphicsPipelineLayout: gpci.renderPass = vkRenderPass: gpci.basePipelineIndex = -1
-    argvP(3) = CLngLng(VarPtr(gpci)): argvP(5) = CLngLng(VarPtr(vkGraphicsPipeline))
-    VkCheck InvokeI32(p_vkCreateGraphicsPipelines, 6, argvP), "vkCreateGraphicsPipelines"
+    VkCheck CLng(VkCall6(p_vkCreateGraphicsPipelines, CLngLng(vkDevice), 0, 1, CLngLng(VarPtr(gpci)), 0, CLngLng(VarPtr(vkGraphicsPipeline)))), "vkCreateGraphicsPipelines"
 End Sub
 
 Private Sub VkCreateCommandPoolAndBuffers_()
     LogLine "VkCreateCommandPoolAndBuffers_..."
     Dim cpci As VkCommandPoolCreateInfo
     cpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO: cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT: cpci.queueFamilyIndex = qFamilyGraphics
-    Dim argv(0 To 3) As LongLong
-    argv(0) = CLngLng(vkDevice): argv(1) = CLngLng(VarPtr(cpci)): argv(2) = 0: argv(3) = CLngLng(VarPtr(vkCommandPool))
-    VkCheck InvokeI32(p_vkCreateCommandPool, 4, argv), "vkCreateCommandPool"
+    VkCheck CLng(VkCall4(p_vkCreateCommandPool, CLngLng(vkDevice), CLngLng(VarPtr(cpci)), 0, CLngLng(VarPtr(vkCommandPool)))), "vkCreateCommandPool"
     ReDim vkCmdBuffers(0 To swapImageCount - 1) As LongLong
     Dim ai As VkCommandBufferAllocateInfo
     ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO: ai.commandPool = vkCommandPool: ai.commandBufferCount = 1
     Dim i As Long
     For i = 0 To swapImageCount - 1
-        Dim one As LongPtr, argvA(0 To 2) As LongLong
-        argvA(0) = CLngLng(vkDevice): argvA(1) = CLngLng(VarPtr(ai)): argvA(2) = CLngLng(VarPtr(one))
-        VkCheck InvokeI32(p_vkAllocateCommandBuffers, 3, argvA), "vkAllocateCommandBuffers"
+        Dim one As LongPtr
+        VkCheck CLng(VkCall3(p_vkAllocateCommandBuffers, CLngLng(vkDevice), CLngLng(VarPtr(ai)), CLngLng(VarPtr(one)))), "vkAllocateCommandBuffers"
         vkCmdBuffers(i) = one
     Next
 End Sub
@@ -1297,13 +1321,10 @@ End Sub
 Private Sub VkCreateSyncObjects_()
     LogLine "VkCreateSyncObjects_..."
     Dim sci As VkSemaphoreCreateInfo: sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
-    Dim argv(0 To 3) As LongLong
-    argv(0) = CLngLng(vkDevice): argv(1) = CLngLng(VarPtr(sci)): argv(2) = 0
-    argv(3) = CLngLng(VarPtr(semImageAvailable)): VkCheck InvokeI32(p_vkCreateSemaphore, 4, argv), "vkCreateSemaphore"
-    argv(3) = CLngLng(VarPtr(semRenderFinished)): VkCheck InvokeI32(p_vkCreateSemaphore, 4, argv), "vkCreateSemaphore"
+    VkCheck CLng(VkCall4(p_vkCreateSemaphore, CLngLng(vkDevice), CLngLng(VarPtr(sci)), 0, CLngLng(VarPtr(semImageAvailable)))), "vkCreateSemaphore"
+    VkCheck CLng(VkCall4(p_vkCreateSemaphore, CLngLng(vkDevice), CLngLng(VarPtr(sci)), 0, CLngLng(VarPtr(semRenderFinished)))), "vkCreateSemaphore"
     Dim fci As VkFenceCreateInfo: fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO: fci.flags = VK_FENCE_CREATE_SIGNALED_BIT
-    argv(1) = CLngLng(VarPtr(fci)): argv(3) = CLngLng(VarPtr(fenceInFlight))
-    VkCheck InvokeI32(p_vkCreateFence, 4, argv), "vkCreateFence"
+    VkCheck CLng(VkCall4(p_vkCreateFence, CLngLng(vkDevice), CLngLng(VarPtr(fci)), 0, CLngLng(VarPtr(fenceInFlight)))), "vkCreateFence"
 End Sub
 
 Private Sub InitUBO()
@@ -1316,90 +1337,102 @@ End Sub
 
 Private Sub UpdateUBO()
     uboParams.p1 = uboParams.p1 + 0.002!
-    Dim pData As LongPtr, argv(0 To 5) As LongLong
-    argv(0) = CLngLng(vkDevice): argv(1) = CLngLng(uboMemory): argv(2) = 0: argv(3) = CLngLng(LenB(uboParams)): argv(4) = 0: argv(5) = CLngLng(VarPtr(pData))
-    If InvokeI32(p_vkMapMemory, 6, argv) = VK_SUCCESS Then
-        RtlMoveMemory pData, VarPtr(uboParams), LenB(uboParams)
-        Dim argv1(0 To 1) As LongLong: argv1(0) = CLngLng(vkDevice): argv1(1) = CLngLng(uboMemory)
-        Call InvokeRaw(p_vkUnmapMemory, 2, argv1)
-    End If
+    RtlMoveMemory uboMappedPtr, VarPtr(uboParams), LenB(uboParams)
 End Sub
 
 Private Sub RecordCommandBuffer(ByVal imageIndex As Long)
     Dim cmd As LongPtr: cmd = vkCmdBuffers(imageIndex)
-    Dim argv2(0 To 1) As LongLong: argv2(0) = CLngLng(cmd): argv2(1) = 0
-    Call InvokeRaw(p_vkResetCommandBuffer, 2, argv2)
+    Call VkCall2(p_vkResetCommandBuffer, CLngLng(cmd), 0)
     Dim bi As VkCommandBufferBeginInfo: bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-    Dim argvB(0 To 1) As LongLong: argvB(0) = CLngLng(cmd): argvB(1) = CLngLng(VarPtr(bi))
-    Call InvokeRaw(p_vkBeginCommandBuffer, 2, argvB)
-    ' Compute
-    Dim argvBP(0 To 2) As LongLong: argvBP(0) = CLngLng(cmd): argvBP(1) = CLngLng(VK_PIPELINE_BIND_POINT_COMPUTE): argvBP(2) = CLngLng(vkComputePipeline)
-    Call InvokeRaw(p_vkCmdBindPipeline, 3, argvBP)
-    Dim argvDS(0 To 7) As LongLong: argvDS(0) = CLngLng(cmd): argvDS(1) = CLngLng(VK_PIPELINE_BIND_POINT_COMPUTE): argvDS(2) = CLngLng(vkComputePipelineLayout): argvDS(3) = 0: argvDS(4) = 1: argvDS(5) = CLngLng(VarPtr(vkDescriptorSet)): argvDS(6) = 0: argvDS(7) = 0
-    Call InvokeRaw(p_vkCmdBindDescriptorSets, 8, argvDS)
+    Call VkCall2(p_vkBeginCommandBuffer, CLngLng(cmd), CLngLng(VarPtr(bi)))
+    Call VkCall3(p_vkCmdBindPipeline, CLngLng(cmd), CLngLng(VK_PIPELINE_BIND_POINT_COMPUTE), CLngLng(vkComputePipeline))
+    Call VkCall8(p_vkCmdBindDescriptorSets, CLngLng(cmd), CLngLng(VK_PIPELINE_BIND_POINT_COMPUTE), CLngLng(vkComputePipelineLayout), 0, 1, CLngLng(VarPtr(vkDescriptorSet)), 0, 0)
     Dim groupCount As Long: groupCount = (VERTEX_COUNT + 255) \ 256
-    Dim argvD(0 To 3) As LongLong: argvD(0) = CLngLng(cmd): argvD(1) = CLngLng(groupCount): argvD(2) = 1: argvD(3) = 1
-    Call InvokeRaw(p_vkCmdDispatch, 4, argvD)
-    ' Barrier
+    Call VkCall4(p_vkCmdDispatch, CLngLng(cmd), CLngLng(groupCount), 1, 1)
     Dim barriers(0 To 1) As VkBufferMemoryBarrier
     barriers(0).sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER: barriers(0).srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT: barriers(0).dstAccessMask = VK_ACCESS_SHADER_READ_BIT
     barriers(0).srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED: barriers(0).dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED: barriers(0).buffer = posBuffer: barriers(0).size = CLngLng(VERTEX_COUNT) * 16
     barriers(1).sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER: barriers(1).srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT: barriers(1).dstAccessMask = VK_ACCESS_SHADER_READ_BIT
     barriers(1).srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED: barriers(1).dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED: barriers(1).buffer = colBuffer: barriers(1).size = CLngLng(VERTEX_COUNT) * 16
-    Dim argvBar(0 To 9) As LongLong: argvBar(0) = CLngLng(cmd): argvBar(1) = CLngLng(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT): argvBar(2) = CLngLng(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT): argvBar(3) = 0: argvBar(4) = 0: argvBar(5) = 0: argvBar(6) = 2: argvBar(7) = CLngLng(VarPtr(barriers(0))): argvBar(8) = 0: argvBar(9) = 0
-    Call InvokeRaw(p_vkCmdPipelineBarrier, 10, argvBar)
-    ' Begin render pass
+    Call VkCall10(p_vkCmdPipelineBarrier, CLngLng(cmd), CLngLng(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT), CLngLng(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT), 0, 0, 0, 2, CLngLng(VarPtr(barriers(0))), 0, 0)
     Dim clear As VkClearValue: clear.color.float32_3 = 1!
     Dim rpbi As VkRenderPassBeginInfo: rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO: rpbi.renderPass = vkRenderPass
     rpbi.framebuffer = swapFramebuffers(imageIndex): rpbi.renderArea.extent = swapExtent: rpbi.clearValueCount = 1: rpbi.pClearValues = VarPtr(clear)
-    Dim argvR(0 To 2) As LongLong: argvR(0) = CLngLng(cmd): argvR(1) = CLngLng(VarPtr(rpbi)): argvR(2) = CLngLng(VK_SUBPASS_CONTENTS_INLINE)
-    Call InvokeRaw(p_vkCmdBeginRenderPass, 3, argvR)
-    ' Graphics
-    argvBP(1) = CLngLng(VK_PIPELINE_BIND_POINT_GRAPHICS): argvBP(2) = CLngLng(vkGraphicsPipeline)
-    Call InvokeRaw(p_vkCmdBindPipeline, 3, argvBP)
-    argvDS(1) = CLngLng(VK_PIPELINE_BIND_POINT_GRAPHICS): argvDS(2) = CLngLng(vkGraphicsPipelineLayout)
-    Call InvokeRaw(p_vkCmdBindDescriptorSets, 8, argvDS)
-    ' Viewport
+    Call VkCall3(p_vkCmdBeginRenderPass, CLngLng(cmd), CLngLng(VarPtr(rpbi)), CLngLng(VK_SUBPASS_CONTENTS_INLINE))
+    Call VkCall3(p_vkCmdBindPipeline, CLngLng(cmd), CLngLng(VK_PIPELINE_BIND_POINT_GRAPHICS), CLngLng(vkGraphicsPipeline))
+    Call VkCall8(p_vkCmdBindDescriptorSets, CLngLng(cmd), CLngLng(VK_PIPELINE_BIND_POINT_GRAPHICS), CLngLng(vkGraphicsPipelineLayout), 0, 1, CLngLng(VarPtr(vkDescriptorSet)), 0, 0)
     Dim viewport As VkViewport: viewport.width = CSng(swapExtent.width): viewport.height = CSng(swapExtent.height): viewport.maxDepth = 1!
-    Dim argvVP(0 To 3) As LongLong: argvVP(0) = CLngLng(cmd): argvVP(1) = 0: argvVP(2) = 1: argvVP(3) = CLngLng(VarPtr(viewport))
-    Call InvokeRaw(p_vkCmdSetViewport, 4, argvVP)
-    ' Scissor
+    Call VkCall4(p_vkCmdSetViewport, CLngLng(cmd), 0, 1, CLngLng(VarPtr(viewport)))
     Dim scissor As VkRect2D: scissor.extent = swapExtent
-    Dim argvSC(0 To 3) As LongLong: argvSC(0) = CLngLng(cmd): argvSC(1) = 0: argvSC(2) = 1: argvSC(3) = CLngLng(VarPtr(scissor))
-    Call InvokeRaw(p_vkCmdSetScissor, 4, argvSC)
-    ' Draw
-    Dim argvDraw(0 To 4) As LongLong: argvDraw(0) = CLngLng(cmd): argvDraw(1) = CLngLng(VERTEX_COUNT): argvDraw(2) = 1: argvDraw(3) = 0: argvDraw(4) = 0
-    Call InvokeRaw(p_vkCmdDraw, 5, argvDraw)
-    ' End
-    Dim argvE(0 To 0) As LongLong: argvE(0) = CLngLng(cmd)
-    Call InvokeRaw(p_vkCmdEndRenderPass, 1, argvE)
-    Call InvokeRaw(p_vkEndCommandBuffer, 1, argvE)
+    Call VkCall4(p_vkCmdSetScissor, CLngLng(cmd), 0, 1, CLngLng(VarPtr(scissor)))
+    Call VkCall5(p_vkCmdDraw, CLngLng(cmd), CLngLng(VERTEX_COUNT), 1, 0, 0)
+    Call VkCall1(p_vkCmdEndRenderPass, CLngLng(cmd))
+    Call VkCall1(p_vkEndCommandBuffer, CLngLng(cmd))
 End Sub
 
+' ============================================================================
+' DRAW FRAME WITH PROFILING
+' ============================================================================
+
 Private Sub DrawFrame()
-    Dim argvW(0 To 4) As LongLong: argvW(0) = CLngLng(vkDevice): argvW(1) = 1: argvW(2) = CLngLng(VarPtr(fenceInFlight)): argvW(3) = CLngLng(VK_TRUE): argvW(4) = CLngLng("9223372036854775807")
-    Call InvokeRaw(p_vkWaitForFences, 5, argvW)
-    Dim argvRF(0 To 2) As LongLong: argvRF(0) = CLngLng(vkDevice): argvRF(1) = 1: argvRF(2) = CLngLng(VarPtr(fenceInFlight))
-    Call InvokeRaw(p_vkResetFences, 3, argvRF)
-    Dim imageIndex As Long, argvA(0 To 5) As LongLong
-    argvA(0) = CLngLng(vkDevice): argvA(1) = CLngLng(vkSwapchain): argvA(2) = CLngLng("9223372036854775807"): argvA(3) = CLngLng(semImageAvailable): argvA(4) = 0: argvA(5) = CLngLng(VarPtr(imageIndex))
-    Dim res As Long: res = InvokeI32(p_vkAcquireNextImageKHR, 6, argvA)
+    Dim t0 As Double, t1 As Double, t2 As Double, t3 As Double, t4 As Double, t5 As Double, t6 As Double
+    Dim maxTimeout As LongLong
+    maxTimeout = CLngLng("9223372036854775807")
+    
+    t0 = GetTimeMs()
+    
+    ' 1. Wait for fence
+    Call VkCall5(p_vkWaitForFences, CLngLng(vkDevice), 1, CLngLng(VarPtr(fenceInFlight)), CLngLng(VK_TRUE), maxTimeout)
+    Call VkCall3(p_vkResetFences, CLngLng(vkDevice), 1, CLngLng(VarPtr(fenceInFlight)))
+    
+    t1 = GetTimeMs()
+    
+    ' 2. Acquire next image
+    Dim imageIndex As Long
+    Dim res As Long: res = CLng(VkCall6(p_vkAcquireNextImageKHR, CLngLng(vkDevice), CLngLng(vkSwapchain), maxTimeout, CLngLng(semImageAvailable), 0, CLngLng(VarPtr(imageIndex))))
     If res = VK_ERROR_OUT_OF_DATE_KHR Then g_quit = True: Exit Sub
+    
+    t2 = GetTimeMs()
+    
+    ' 3. Update UBO
     UpdateUBO
+    
+    t3 = GetTimeMs()
+    
+    ' 4. Record command buffer
     RecordCommandBuffer imageIndex
+    
+    t4 = GetTimeMs()
+    
+    ' 5. Submit
     Dim waitStage As Long: waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
     Dim submit As VkSubmitInfo: submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO: submit.waitSemaphoreCount = 1: submit.pWaitSemaphores = VarPtr(semImageAvailable)
     submit.pWaitDstStageMask = VarPtr(waitStage): submit.commandBufferCount = 1: submit.pCommandBuffers = VarPtr(vkCmdBuffers(imageIndex)): submit.signalSemaphoreCount = 1: submit.pSignalSemaphores = VarPtr(semRenderFinished)
-    Dim argvS(0 To 3) As LongLong: argvS(0) = CLngLng(vkQueueGraphics): argvS(1) = 1: argvS(2) = CLngLng(VarPtr(submit)): argvS(3) = CLngLng(fenceInFlight)
-    Call InvokeRaw(p_vkQueueSubmit, 4, argvS)
+    Call VkCall4(p_vkQueueSubmit, CLngLng(vkQueueGraphics), 1, CLngLng(VarPtr(submit)), CLngLng(fenceInFlight))
+    
+    t5 = GetTimeMs()
+    
+    ' 6. Present
     Dim present As VkPresentInfoKHR: present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR: present.waitSemaphoreCount = 1: present.pWaitSemaphores = VarPtr(semRenderFinished)
     present.swapchainCount = 1: present.pSwapchains = VarPtr(vkSwapchain): present.pImageIndices = VarPtr(imageIndex)
-    Dim argvP(0 To 1) As LongLong: argvP(0) = CLngLng(vkQueueGraphics): argvP(1) = CLngLng(VarPtr(present))
-    res = InvokeI32(p_vkQueuePresentKHR, 2, argvP)
+    res = CLng(VkCall2(p_vkQueuePresentKHR, CLngLng(vkQueueGraphics), CLngLng(VarPtr(present))))
     If res = VK_ERROR_OUT_OF_DATE_KHR Or res = VK_SUBOPTIMAL_KHR Then g_quit = True
+    
+    t6 = GetTimeMs()
+    
+    ' Accumulate
+    g_profileWaitFence = g_profileWaitFence + (t1 - t0)
+    g_profileAcquire = g_profileAcquire + (t2 - t1)
+    g_profileUpdateUBO = g_profileUpdateUBO + (t3 - t2)
+    g_profileRecord = g_profileRecord + (t4 - t3)
+    g_profileSubmit = g_profileSubmit + (t5 - t4)
+    g_profilePresent = g_profilePresent + (t6 - t5)
+    g_profileTotal = g_profileTotal + (t6 - t0)
+    g_profileFrameCount = g_profileFrameCount + 1
 End Sub
 
 Private Sub VulkanInitAll()
+    InitOptimizedThunks
     LoadVulkanLoader
     LoadShaderc
     VkCreateInstance_
@@ -1423,349 +1456,274 @@ End Sub
 
 Private Sub VulkanCleanupAll()
     On Error Resume Next
+
     LogLine "Cleanup begin"
 
-    ' ----------------------------
-    ' Device wait idle
-    ' ----------------------------
+    ' ---- Wait / Unmap ----
     If vkDevice <> 0 And p_vkDeviceWaitIdle <> 0 Then
-        Dim argvWait(0 To 0) As LongLong
-        argvWait(0) = CLngLng(vkDevice)
-        Call InvokeRaw(p_vkDeviceWaitIdle, 1, argvWait)
+        VkCall1 p_vkDeviceWaitIdle, CLngLng(vkDevice)
     End If
 
-    Dim i As Long
+    If uboMappedPtr <> 0 And uboMemory <> 0 And p_vkUnmapMemory <> 0 Then
+        VkCall2 p_vkUnmapMemory, CLngLng(vkDevice), CLngLng(uboMemory)
+        uboMappedPtr = 0
+    End If
 
-    ' ----------------------------
-    ' Destroy fence / semaphores / command pool
-    ' ----------------------------
+    ' ---- Device-scoped single objects ----
     If vkDevice <> 0 Then
         If fenceInFlight <> 0 And p_vkDestroyFence <> 0 Then
-            Dim argvD3(0 To 2) As LongLong
-            argvD3(0) = CLngLng(vkDevice)
-            argvD3(1) = CLngLng(fenceInFlight)
-            argvD3(2) = 0
-            Call InvokeRaw(p_vkDestroyFence, 3, argvD3)
+            VkCall3 p_vkDestroyFence, CLngLng(vkDevice), CLngLng(fenceInFlight), 0
             fenceInFlight = 0
         End If
 
         If semRenderFinished <> 0 And p_vkDestroySemaphore <> 0 Then
-            Dim argvD3s1(0 To 2) As LongLong
-            argvD3s1(0) = CLngLng(vkDevice)
-            argvD3s1(1) = CLngLng(semRenderFinished)
-            argvD3s1(2) = 0
-            Call InvokeRaw(p_vkDestroySemaphore, 3, argvD3s1)
+            VkCall3 p_vkDestroySemaphore, CLngLng(vkDevice), CLngLng(semRenderFinished), 0
             semRenderFinished = 0
         End If
 
         If semImageAvailable <> 0 And p_vkDestroySemaphore <> 0 Then
-            Dim argvD3s2(0 To 2) As LongLong
-            argvD3s2(0) = CLngLng(vkDevice)
-            argvD3s2(1) = CLngLng(semImageAvailable)
-            argvD3s2(2) = 0
-            Call InvokeRaw(p_vkDestroySemaphore, 3, argvD3s2)
+            VkCall3 p_vkDestroySemaphore, CLngLng(vkDevice), CLngLng(semImageAvailable), 0
             semImageAvailable = 0
         End If
 
         If vkCommandPool <> 0 And p_vkDestroyCommandPool <> 0 Then
-            Dim argvD3cp(0 To 2) As LongLong
-            argvD3cp(0) = CLngLng(vkDevice)
-            argvD3cp(1) = CLngLng(vkCommandPool)
-            argvD3cp(2) = 0
-            Call InvokeRaw(p_vkDestroyCommandPool, 3, argvD3cp)
+            VkCall3 p_vkDestroyCommandPool, CLngLng(vkDevice), CLngLng(vkCommandPool), 0
             vkCommandPool = 0
         End If
     End If
 
-    ' ----------------------------
-    ' Framebuffers
-    ' ----------------------------
+    ' ---- Swapchain framebuffers ----
     If vkDevice <> 0 And p_vkDestroyFramebuffer <> 0 Then
-        If (Not Not swapFramebuffers) <> 0 Then
-            For i = 0 To UBound(swapFramebuffers)
-                If swapFramebuffers(i) <> 0 Then
-                    Dim argvFB(0 To 2) As LongLong
-                    argvFB(0) = CLngLng(vkDevice)
-                    argvFB(1) = CLngLng(swapFramebuffers(i))
-                    argvFB(2) = 0
-                    Call InvokeRaw(p_vkDestroyFramebuffer, 3, argvFB)
-                    swapFramebuffers(i) = 0
-                End If
-            Next i
-        End If
+        DestroyHandleArray_Framebuffer vkDevice, p_vkDestroyFramebuffer, swapFramebuffers
     End If
 
-    ' ----------------------------
-    ' Pipelines / layouts
-    ' ----------------------------
+    ' ---- Pipelines / layouts ----
     If vkDevice <> 0 Then
         If vkGraphicsPipeline <> 0 And p_vkDestroyPipeline <> 0 Then
-            Dim argvP1(0 To 2) As LongLong
-            argvP1(0) = CLngLng(vkDevice)
-            argvP1(1) = CLngLng(vkGraphicsPipeline)
-            argvP1(2) = 0
-            Call InvokeRaw(p_vkDestroyPipeline, 3, argvP1)
+            VkCall3 p_vkDestroyPipeline, CLngLng(vkDevice), CLngLng(vkGraphicsPipeline), 0
             vkGraphicsPipeline = 0
         End If
 
         If vkComputePipeline <> 0 And p_vkDestroyPipeline <> 0 Then
-            Dim argvP2(0 To 2) As LongLong
-            argvP2(0) = CLngLng(vkDevice)
-            argvP2(1) = CLngLng(vkComputePipeline)
-            argvP2(2) = 0
-            Call InvokeRaw(p_vkDestroyPipeline, 3, argvP2)
+            VkCall3 p_vkDestroyPipeline, CLngLng(vkDevice), CLngLng(vkComputePipeline), 0
             vkComputePipeline = 0
         End If
 
         If vkGraphicsPipelineLayout <> 0 And p_vkDestroyPipelineLayout <> 0 Then
-            Dim argvPL1(0 To 2) As LongLong
-            argvPL1(0) = CLngLng(vkDevice)
-            argvPL1(1) = CLngLng(vkGraphicsPipelineLayout)
-            argvPL1(2) = 0
-            Call InvokeRaw(p_vkDestroyPipelineLayout, 3, argvPL1)
+            VkCall3 p_vkDestroyPipelineLayout, CLngLng(vkDevice), CLngLng(vkGraphicsPipelineLayout), 0
             vkGraphicsPipelineLayout = 0
         End If
 
         If vkComputePipelineLayout <> 0 And p_vkDestroyPipelineLayout <> 0 Then
-            Dim argvPL2(0 To 2) As LongLong
-            argvPL2(0) = CLngLng(vkDevice)
-            argvPL2(1) = CLngLng(vkComputePipelineLayout)
-            argvPL2(2) = 0
-            Call InvokeRaw(p_vkDestroyPipelineLayout, 3, argvPL2)
+            VkCall3 p_vkDestroyPipelineLayout, CLngLng(vkDevice), CLngLng(vkComputePipelineLayout), 0
             vkComputePipelineLayout = 0
         End If
     End If
 
-    ' ----------------------------
-    ' Shader modules
-    ' ----------------------------
+    ' ---- Shader modules ----
     If vkDevice <> 0 And p_vkDestroyShaderModule <> 0 Then
         If shaderVertModule <> 0 Then
-            Dim argvSM1(0 To 2) As LongLong
-            argvSM1(0) = CLngLng(vkDevice)
-            argvSM1(1) = CLngLng(shaderVertModule)
-            argvSM1(2) = 0
-            Call InvokeRaw(p_vkDestroyShaderModule, 3, argvSM1)
+            VkCall3 p_vkDestroyShaderModule, CLngLng(vkDevice), CLngLng(shaderVertModule), 0
             shaderVertModule = 0
         End If
 
         If shaderFragModule <> 0 Then
-            Dim argvSM2(0 To 2) As LongLong
-            argvSM2(0) = CLngLng(vkDevice)
-            argvSM2(1) = CLngLng(shaderFragModule)
-            argvSM2(2) = 0
-            Call InvokeRaw(p_vkDestroyShaderModule, 3, argvSM2)
+            VkCall3 p_vkDestroyShaderModule, CLngLng(vkDevice), CLngLng(shaderFragModule), 0
             shaderFragModule = 0
         End If
 
         If shaderCompModule <> 0 Then
-            Dim argvSM3(0 To 2) As LongLong
-            argvSM3(0) = CLngLng(vkDevice)
-            argvSM3(1) = CLngLng(shaderCompModule)
-            argvSM3(2) = 0
-            Call InvokeRaw(p_vkDestroyShaderModule, 3, argvSM3)
+            VkCall3 p_vkDestroyShaderModule, CLngLng(vkDevice), CLngLng(shaderCompModule), 0
             shaderCompModule = 0
         End If
     End If
 
-    ' ----------------------------
-    ' Descriptor pool / set layout
-    ' ----------------------------
+    ' ---- Descriptor pool / layout ----
     If vkDevice <> 0 Then
         If vkDescriptorPool <> 0 And p_vkDestroyDescriptorPool <> 0 Then
-            Dim argvDP(0 To 2) As LongLong
-            argvDP(0) = CLngLng(vkDevice)
-            argvDP(1) = CLngLng(vkDescriptorPool)
-            argvDP(2) = 0
-            Call InvokeRaw(p_vkDestroyDescriptorPool, 3, argvDP)
+            VkCall3 p_vkDestroyDescriptorPool, CLngLng(vkDevice), CLngLng(vkDescriptorPool), 0
             vkDescriptorPool = 0
         End If
 
         If vkDescriptorSetLayout <> 0 And p_vkDestroyDescriptorSetLayout <> 0 Then
-            Dim argvDSL(0 To 2) As LongLong
-            argvDSL(0) = CLngLng(vkDevice)
-            argvDSL(1) = CLngLng(vkDescriptorSetLayout)
-            argvDSL(2) = 0
-            Call InvokeRaw(p_vkDestroyDescriptorSetLayout, 3, argvDSL)
+            VkCall3 p_vkDestroyDescriptorSetLayout, CLngLng(vkDevice), CLngLng(vkDescriptorSetLayout), 0
             vkDescriptorSetLayout = 0
         End If
     End If
 
-    ' ----------------------------
-    ' Buffers / memory
-    ' ----------------------------
+    ' ---- Buffers / memory ----
     If vkDevice <> 0 Then
         If posBuffer <> 0 And p_vkDestroyBuffer <> 0 Then
-            Dim argvB1(0 To 2) As LongLong
-            argvB1(0) = CLngLng(vkDevice)
-            argvB1(1) = CLngLng(posBuffer)
-            argvB1(2) = 0
-            Call InvokeRaw(p_vkDestroyBuffer, 3, argvB1)
+            VkCall3 p_vkDestroyBuffer, CLngLng(vkDevice), CLngLng(posBuffer), 0
             posBuffer = 0
         End If
+
         If posMemory <> 0 And p_vkFreeMemory <> 0 Then
-            Dim argvM1(0 To 2) As LongLong
-            argvM1(0) = CLngLng(vkDevice)
-            argvM1(1) = CLngLng(posMemory)
-            argvM1(2) = 0
-            Call InvokeRaw(p_vkFreeMemory, 3, argvM1)
+            VkCall3 p_vkFreeMemory, CLngLng(vkDevice), CLngLng(posMemory), 0
             posMemory = 0
         End If
 
         If colBuffer <> 0 And p_vkDestroyBuffer <> 0 Then
-            Dim argvB2(0 To 2) As LongLong
-            argvB2(0) = CLngLng(vkDevice)
-            argvB2(1) = CLngLng(colBuffer)
-            argvB2(2) = 0
-            Call InvokeRaw(p_vkDestroyBuffer, 3, argvB2)
+            VkCall3 p_vkDestroyBuffer, CLngLng(vkDevice), CLngLng(colBuffer), 0
             colBuffer = 0
         End If
+
         If colMemory <> 0 And p_vkFreeMemory <> 0 Then
-            Dim argvM2(0 To 2) As LongLong
-            argvM2(0) = CLngLng(vkDevice)
-            argvM2(1) = CLngLng(colMemory)
-            argvM2(2) = 0
-            Call InvokeRaw(p_vkFreeMemory, 3, argvM2)
+            VkCall3 p_vkFreeMemory, CLngLng(vkDevice), CLngLng(colMemory), 0
             colMemory = 0
         End If
 
         If uboBuffer <> 0 And p_vkDestroyBuffer <> 0 Then
-            Dim argvB3(0 To 2) As LongLong
-            argvB3(0) = CLngLng(vkDevice)
-            argvB3(1) = CLngLng(uboBuffer)
-            argvB3(2) = 0
-            Call InvokeRaw(p_vkDestroyBuffer, 3, argvB3)
+            VkCall3 p_vkDestroyBuffer, CLngLng(vkDevice), CLngLng(uboBuffer), 0
             uboBuffer = 0
         End If
+
         If uboMemory <> 0 And p_vkFreeMemory <> 0 Then
-            Dim argvM3(0 To 2) As LongLong
-            argvM3(0) = CLngLng(vkDevice)
-            argvM3(1) = CLngLng(uboMemory)
-            argvM3(2) = 0
-            Call InvokeRaw(p_vkFreeMemory, 3, argvM3)
+            VkCall3 p_vkFreeMemory, CLngLng(vkDevice), CLngLng(uboMemory), 0
             uboMemory = 0
         End If
     End If
 
-    ' ----------------------------
-    ' Render pass
-    ' ----------------------------
+    ' ---- Render pass ----
     If vkDevice <> 0 And vkRenderPass <> 0 And p_vkDestroyRenderPass <> 0 Then
-        Dim argvRP(0 To 2) As LongLong
-        argvRP(0) = CLngLng(vkDevice)
-        argvRP(1) = CLngLng(vkRenderPass)
-        argvRP(2) = 0
-        Call InvokeRaw(p_vkDestroyRenderPass, 3, argvRP)
+        VkCall3 p_vkDestroyRenderPass, CLngLng(vkDevice), CLngLng(vkRenderPass), 0
         vkRenderPass = 0
     End If
 
-    ' ----------------------------
-    ' Image views
-    ' ----------------------------
+    ' ---- Swapchain image views ----
     If vkDevice <> 0 And p_vkDestroyImageView <> 0 Then
-        If (Not Not swapImageViews) <> 0 Then
-            For i = 0 To UBound(swapImageViews)
-                If swapImageViews(i) <> 0 Then
-                    Dim argvIV(0 To 2) As LongLong
-                    argvIV(0) = CLngLng(vkDevice)
-                    argvIV(1) = CLngLng(swapImageViews(i))
-                    argvIV(2) = 0
-                    Call InvokeRaw(p_vkDestroyImageView, 3, argvIV)
-                    swapImageViews(i) = 0
-                End If
-            Next i
-        End If
+        DestroyHandleArray_ImageView vkDevice, p_vkDestroyImageView, swapImageViews
     End If
 
-    ' ----------------------------
-    ' Swapchain
-    ' ----------------------------
+    ' ---- Swapchain / device / instance ----
     If vkDevice <> 0 And vkSwapchain <> 0 And p_vkDestroySwapchainKHR <> 0 Then
-        Dim argvSC(0 To 2) As LongLong
-        argvSC(0) = CLngLng(vkDevice)
-        argvSC(1) = CLngLng(vkSwapchain)
-        argvSC(2) = 0
-        Call InvokeRaw(p_vkDestroySwapchainKHR, 3, argvSC)
+        VkCall3 p_vkDestroySwapchainKHR, CLngLng(vkDevice), CLngLng(vkSwapchain), 0
         vkSwapchain = 0
     End If
 
-    ' ----------------------------
-    ' Device
-    ' ----------------------------
     If vkDevice <> 0 And p_vkDestroyDevice <> 0 Then
-        Dim argvDev(0 To 1) As LongLong
-        argvDev(0) = CLngLng(vkDevice)
-        argvDev(1) = 0
-        Call InvokeRaw(p_vkDestroyDevice, 2, argvDev)
+        VkCall2 p_vkDestroyDevice, CLngLng(vkDevice), 0
         vkDevice = 0
     End If
 
-    ' ----------------------------
-    ' Surface
-    ' ----------------------------
     If vkSurface <> 0 And vkInstance <> 0 And p_vkDestroySurfaceKHR <> 0 Then
-        Dim argvSurf(0 To 2) As LongLong
-        argvSurf(0) = CLngLng(vkInstance)
-        argvSurf(1) = CLngLng(vkSurface)
-        argvSurf(2) = 0
-        Call InvokeRaw(p_vkDestroySurfaceKHR, 3, argvSurf)
+        VkCall3 p_vkDestroySurfaceKHR, CLngLng(vkInstance), CLngLng(vkSurface), 0
         vkSurface = 0
     End If
 
-    ' ----------------------------
-    ' Instance
-    ' ----------------------------
     If vkInstance <> 0 And p_vkDestroyInstance <> 0 Then
-        Dim argvInst(0 To 1) As LongLong
-        argvInst(0) = CLngLng(vkInstance)
-        argvInst(1) = 0
-        Call InvokeRaw(p_vkDestroyInstance, 2, argvInst)
+        VkCall2 p_vkDestroyInstance, CLngLng(vkInstance), 0
         vkInstance = 0
     End If
 
     FreeAllAnsi
+    FreeOptimizedThunks
+
     LogLine "Cleanup end"
 End Sub
 
+'============================================================
+' Safe array destroy helpers (UBound の 9/0 を吸収)
+'============================================================
 
-Private Sub FreeThunks()
+Private Sub DestroyHandleArray_Framebuffer(ByVal device As LongLong, ByVal pDestroy As LongLong, ByRef arr() As LongLong)
     Dim i As Long
-    On Error Resume Next
-    If g_thunkCount > 0 Then
-        For i = 1 To g_thunkCount
-            If g_thunks(i).stubPtr <> 0 Then VirtualFree g_thunks(i).stubPtr, 0, &H8000
-        Next
-        Erase g_thunks: g_thunkCount = 0
-    End If
+    If Not IsArrayAllocated_LongLong(arr) Then Exit Sub
+
+    For i = LBound(arr) To UBound(arr)
+        If arr(i) <> 0 Then
+            VkCall3 pDestroy, device, arr(i), 0
+            arr(i) = 0
+        End If
+    Next i
 End Sub
+
+Private Sub DestroyHandleArray_ImageView(ByVal device As LongLong, ByVal pDestroy As LongLong, ByRef arr() As LongLong)
+    Dim i As Long
+    If Not IsArrayAllocated_LongLong(arr) Then Exit Sub
+
+    For i = LBound(arr) To UBound(arr)
+        If arr(i) <> 0 Then
+            VkCall3 pDestroy, device, arr(i), 0
+            arr(i) = 0
+        End If
+    Next i
+End Sub
+
+Private Function IsArrayAllocated_LongLong(ByRef arr() As LongLong) As Boolean
+    On Error GoTo EH
+    Dim lb As Long, ub As Long
+    lb = LBound(arr)
+    ub = UBound(arr)
+    IsArrayAllocated_LongLong = (ub >= lb)
+    Exit Function
+EH:
+    IsArrayAllocated_LongLong = False
+End Function
 
 Public Sub Main()
     On Error GoTo EH
     LogInit
     QueryPerformanceFrequency g_perfFreq
-    QueryPerformanceCounter g_startTime
+    ResetProfile
+    
     g_quit = False
     LogLine "CreateAppWindow..."
     CreateAppWindow 960, 720
+
     LogLine "VulkanInitAll..."
     VulkanInitAll
+
     LogLine "Enter main loop..."
     Dim m As MSG_T
+    Dim frameCount As Long: frameCount = 0
+    Dim lastFpsTick As Long: lastFpsTick = GetTickCount()
+    Dim fpsFrames As Long: fpsFrames = 0
+    
     Do While Not g_quit
         If PeekMessageW(m, 0, 0, 0, PM_REMOVE) <> 0 Then
-            TranslateMessage m: DispatchMessageW m
+            TranslateMessage m
+            DispatchMessageW m
         Else
             DrawFrame
-            DoEvents
+            frameCount = frameCount + 1
+            fpsFrames = fpsFrames + 1
+            
+            Dim nowTick As Long: nowTick = GetTickCount()
+            If (nowTick - lastFpsTick) >= 1000 Then
+                Dim fps As Single: fps = CSng(fpsFrames) * 1000! / CSng(nowTick - lastFpsTick)
+                Dim title As String: title = "Harmonograph - Vulkan 1.4 (PROFILED) - FPS: " & Format$(fps, "0.0")
+                SetWindowTextW g_hwnd, StrPtr(title)
+                fpsFrames = 0
+                lastFpsTick = nowTick
+            End If
+            
+            If (frameCount Mod 100) = 0 Then DoEvents
         End If
     Loop
+
+    ' Output profile results
+    LogProfile
+
     LogLine "Cleanup..."
     VulkanCleanupAll
-    If g_hwnd <> 0 Then DestroyWindow g_hwnd: g_hwnd = 0
-    FreeThunks
-    UnregisterClassW StrPtr("VBA_VK_HARMONOGRAPH"), g_hInst
+
+    If g_hwnd <> 0 Then
+        LogLine "DestroyWindow..."
+        DestroyWindow g_hwnd
+        Dim m2 As MSG_T
+        Do While PeekMessageW(m2, 0, 0, 0, PM_REMOVE) <> 0
+            TranslateMessage m2
+            DispatchMessageW m2
+        Loop
+        g_hwnd = 0
+    End If
+
+    UnregisterClassW StrPtr("VBA_VK_HARMONOGRAPH_PROF"), g_hInst
+
     LogLine "END OK"
     Exit Sub
+
 EH:
     LogLine "EXCEPTION: " & Err.Description
     On Error Resume Next
