@@ -1030,21 +1030,19 @@ Private Function BuildThunk(ByVal fnPtr As LongPtr, ByVal argc As Long) As LongP
 End Function
 
 Private Function InvokeRaw(ByVal fnPtr As LongPtr, ByVal argc As Long, ByRef argv() As LongLong) As LongLong
+    ' PERF: Avoid per-call heap allocation/copy.
+    ' Pass the argv() array pointer directly to the thunk.
     Dim stub As LongPtr: stub = GetThunk(fnPtr, argc)
 
-    Dim argMem As LongPtr
+    Dim pArgs As LongPtr
     If argc > 0 Then
-        argMem = CoTaskMemAlloc(argc * 8)
-        If argMem = 0 Then Err.Raise 5, , "CoTaskMemAlloc args failed"
-        RtlMoveMemory argMem, VarPtr(argv(0)), argc * 8
+        pArgs = VarPtr(argv(0))
     Else
-        argMem = 0
+        pArgs = 0
     End If
 
     Dim ret As LongPtr
-    ret = CallWindowProcW(stub, argMem, 0, 0, 0)
-
-    If argMem <> 0 Then CoTaskMemFree argMem
+    ret = CallWindowProcW(stub, pArgs, 0, 0, 0)
     InvokeRaw = CLngLng(ret)
 End Function
 
