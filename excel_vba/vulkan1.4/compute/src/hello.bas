@@ -429,10 +429,10 @@ End Type
 
 Private Type ParamsUBO
     max_num As Long: dt As Single: scale_ As Single: pad0 As Single
-    A1 As Single: f1 As Single: p1 As Single: d1 As Single
-    A2 As Single: f2 As Single: p2 As Single: d2 As Single
-    A3 As Single: f3 As Single: p3 As Single: d3 As Single
-    A4 As Single: f4 As Single: p4 As Single: d4 As Single
+    a1 As Single: f1 As Single: p1 As Single: d1 As Single
+    a2 As Single: f2 As Single: p2 As Single: d2 As Single
+    a3 As Single: f3 As Single: p3 As Single: d3 As Single
+    a4 As Single: f4 As Single: p4 As Single: d4 As Single
 End Type
 
 ' Global state
@@ -599,14 +599,14 @@ Private Sub LogProfile()
     If g_profileFrameCount = 0 Then Exit Sub
     Dim n As Long: n = g_profileFrameCount
     LogLine "=== PROFILE RESULTS (avg ms over " & n & " frames) ==="
-    LogLine "  WaitFence:  " & Format$(g_profileWaitFence / n, "0.000") & " ms"
-    LogLine "  Acquire:    " & Format$(g_profileAcquire / n, "0.000") & " ms"
-    LogLine "  UpdateUBO:  " & Format$(g_profileUpdateUBO / n, "0.000") & " ms"
-    LogLine "  RecordCmd:  " & Format$(g_profileRecord / n, "0.000") & " ms"
-    LogLine "  Submit:     " & Format$(g_profileSubmit / n, "0.000") & " ms"
-    LogLine "  Present:    " & Format$(g_profilePresent / n, "0.000") & " ms"
-    LogLine "  TOTAL:      " & Format$(g_profileTotal / n, "0.000") & " ms"
-    LogLine "  Est. FPS:   " & Format$(1000# / (g_profileTotal / n), "0.0")
+    LogLine "  WaitFence:  " & format$(g_profileWaitFence / n, "0.000") & " ms"
+    LogLine "  Acquire:    " & format$(g_profileAcquire / n, "0.000") & " ms"
+    LogLine "  UpdateUBO:  " & format$(g_profileUpdateUBO / n, "0.000") & " ms"
+    LogLine "  RecordCmd:  " & format$(g_profileRecord / n, "0.000") & " ms"
+    LogLine "  Submit:     " & format$(g_profileSubmit / n, "0.000") & " ms"
+    LogLine "  Present:    " & format$(g_profilePresent / n, "0.000") & " ms"
+    LogLine "  TOTAL:      " & format$(g_profileTotal / n, "0.000") & " ms"
+    LogLine "  Est. FPS:   " & format$(1000# / (g_profileTotal / n), "0.0")
     LogLine "================================================"
 End Sub
 
@@ -788,7 +788,7 @@ Private Sub LogInit()
     If Dir$("C:\TEMP", vbDirectory) = "" Then MkDir "C:\TEMP"
     g_logEnabled = True
     LogLine "============================================================"
-    LogLine "START " & Format$(Now, "yyyy-mm-dd hh:nn:ss") & " (PROFILED)"
+    LogLine "START " & format$(Now, "yyyy-mm-dd hh:nn:ss") & " (PROFILED)"
 End Sub
 
 Private Sub LogLine(ByVal s As String)
@@ -796,7 +796,7 @@ Private Sub LogLine(ByVal s As String)
     Dim f As Integer: f = FreeFile
     On Error Resume Next
     Open LOG_PATH For Append As #f
-    Print #f, Format$(Now, "hh:nn:ss") & " | " & s
+    Print #f, format$(Now, "hh:nn:ss") & " | " & s
     Close #f
 End Sub
 
@@ -1048,6 +1048,7 @@ CLEANUP:
     If compiler <> 0 Then Call VkCall1(p_shaderc_compiler_release, CLngLng(compiler))
     Exit Function
 EH: LogLine "shaderc error: " & Err.Description: Resume CLEANUP
+End Function
 
 Private Function ShaderText_Comp() As String
     Dim s As String
@@ -1240,18 +1241,9 @@ Private Sub VkCreateSwapchainAndViews_()
     Call VkCall4(p_vkGetPhysicalDeviceSurfaceFormatsKHR, CLngLng(vkPhysicalDevice), CLngLng(vkSurface), CLngLng(VarPtr(fmtCount)), CLngLng(VarPtr(fmts(0))))
     swapImageFormat = fmts(0).format
     
-    Dim modeCount As Long
-    Call VkCall4(p_vkGetPhysicalDeviceSurfacePresentModesKHR, CLngLng(vkPhysicalDevice), CLngLng(vkSurface), CLngLng(VarPtr(modeCount)), 0)
+    ' Present mode: force FIFO for VSync-stable frame pacing
     g_presentMode = VK_PRESENT_MODE_FIFO_KHR
-    If modeCount > 0 Then
-        Dim modes() As Long: ReDim modes(0 To modeCount - 1)
-        Call VkCall4(p_vkGetPhysicalDeviceSurfacePresentModesKHR, CLngLng(vkPhysicalDevice), CLngLng(vkSurface), CLngLng(VarPtr(modeCount)), CLngLng(VarPtr(modes(0))))
-        Dim j As Long
-        For j = 0 To modeCount - 1
-            If modes(j) = VK_PRESENT_MODE_MAILBOX_KHR Then g_presentMode = VK_PRESENT_MODE_MAILBOX_KHR: LogLine "Using MAILBOX": Exit For
-            If modes(j) = VK_PRESENT_MODE_IMMEDIATE_KHR Then g_presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR: LogLine "Using IMMEDIATE"
-        Next
-    End If
+    LogLine "Using FIFO (VSync)"
     
     Dim caps As VkSurfaceCapabilitiesKHR
     VkCheck CLng(VkCall3(p_vkGetPhysicalDeviceSurfaceCapabilitiesKHR, CLngLng(vkPhysicalDevice), CLngLng(vkSurface), CLngLng(VarPtr(caps)))), "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"
@@ -1353,9 +1345,9 @@ Private Sub VkCreateBuffers_()
     CreateBuffer CLngLng(VERTEX_COUNT) * 16, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, colBuffer, colMemory
 
     ' UBO per swapchain image (safe for frames-in-flight)
-    ReDim uboBuffer(0 To swapImageCount - 1) As LongPtr
-    ReDim uboMemory(0 To swapImageCount - 1) As LongPtr
-    ReDim uboMappedPtr(0 To swapImageCount - 1) As LongPtr
+    ReDim uboBuffer(0 To swapImageCount - 1) As LongLong
+    ReDim uboMemory(0 To swapImageCount - 1) As LongLong
+    ReDim uboMappedPtr(0 To swapImageCount - 1) As LongLong
 
     Dim i As Long
     For i = 0 To swapImageCount - 1
@@ -1404,10 +1396,10 @@ End Sub
 Private Sub VkAllocateDescriptorSets_()
     LogLine "VkAllocateDescriptorSets_..."
 
-    ReDim vkDescriptorSet(0 To swapImageCount - 1) As LongPtr
+    ReDim vkDescriptorSet(0 To swapImageCount - 1) As LongLong
 
     Dim layouts() As LongPtr
-    ReDim layouts(0 To swapImageCount - 1) As LongPtr
+    ReDim layouts(0 To swapImageCount - 1) As LongLong
 
     Dim i As Long
     For i = 0 To swapImageCount - 1
@@ -1539,9 +1531,9 @@ End Sub
 Private Sub VkCreateSyncObjects_()
     LogLine "VkCreateSyncObjects_..."
 
-    ReDim semImageAvailable(0 To g_framesInFlight - 1) As LongPtr
-    ReDim semRenderFinished(0 To g_framesInFlight - 1) As LongPtr
-    ReDim fenceInFlight(0 To g_framesInFlight - 1) As LongPtr
+    ReDim semImageAvailable(0 To g_framesInFlight - 1) As LongLong
+    ReDim semRenderFinished(0 To g_framesInFlight - 1) As LongLong
+    ReDim fenceInFlight(0 To g_framesInFlight - 1) As LongLong
 
     Dim sci As VkSemaphoreCreateInfo
     sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
@@ -1570,10 +1562,10 @@ Private Sub InitUBO()
     uboParams.scale_ = 0.02!
     uboParams.pad0 = 0!
 
-    uboParams.A1 = 50!: uboParams.f1 = 2!: uboParams.p1 = 0.0625!: uboParams.d1 = 0.02!
-    uboParams.A2 = 50!: uboParams.f2 = 2!: uboParams.p2 = 1.5!: uboParams.d2 = 0.0315!
-    uboParams.A3 = 50!: uboParams.f3 = 2!: uboParams.p3 = 0.8666667!: uboParams.d3 = 0.02!
-    uboParams.A4 = 50!: uboParams.f4 = 2!: uboParams.p4 = 1!: uboParams.d4 = 0.02!
+    uboParams.a1 = 50!: uboParams.f1 = 2!: uboParams.p1 = 0.0625!: uboParams.d1 = 0.02!
+    uboParams.a2 = 50!: uboParams.f2 = 2!: uboParams.p2 = 1.5!: uboParams.d2 = 0.0315!
+    uboParams.a3 = 50!: uboParams.f3 = 2!: uboParams.p3 = 0.8666667!: uboParams.d3 = 0.02!
+    uboParams.a4 = 50!: uboParams.f4 = 2!: uboParams.p4 = 1!: uboParams.d4 = 0.02!
 
     WriteUBOToAllImages
 End Sub
@@ -1582,7 +1574,7 @@ Private Sub WriteUBOToAllImages()
     On Error Resume Next
     Dim lb As Long, ub As Long
     lb = LBound(uboMappedPtr): ub = UBound(uboMappedPtr)
-    If Err.Number <> 0 Then Err.Clear: Exit Sub
+    If Err.Number <> 0 Then Err.clear: Exit Sub
 
     Dim i As Long
     For i = lb To ub
@@ -1820,7 +1812,7 @@ Private Sub VulkanCleanupAll()
 
     ' ---- Unmap UBOs ----
     If vkDevice <> 0 And p_vkUnmapMemory <> 0 Then
-        Err.Clear
+        Err.clear
         Dim lbU As Long, ubU As Long
         lbU = LBound(uboMemory): ubU = UBound(uboMemory)
         If Err.Number = 0 Then
@@ -1831,12 +1823,12 @@ Private Sub VulkanCleanupAll()
                 End If
             Next
         End If
-        Err.Clear
+        Err.clear
     End If
 
     ' ---- Sync objects (per frame) ----
     If vkDevice <> 0 Then
-        Err.Clear
+        Err.clear
         Dim lbF As Long, ubF As Long
         lbF = LBound(fenceInFlight): ubF = UBound(fenceInFlight)
         If Err.Number = 0 Then
@@ -1855,7 +1847,7 @@ Private Sub VulkanCleanupAll()
                 End If
             Next
         End If
-        Err.Clear
+        Err.clear
 
         If vkCommandPool <> 0 And p_vkDestroyCommandPool <> 0 Then
             VkCall3 p_vkDestroyCommandPool, CLngLng(vkDevice), CLngLng(vkCommandPool), 0
@@ -1945,7 +1937,7 @@ Private Sub VulkanCleanupAll()
         End If
 
         ' UBO per image
-        Err.Clear
+        Err.clear
         Dim lbB As Long, ubB As Long
         lbB = LBound(uboBuffer): ubB = UBound(uboBuffer)
         If Err.Number = 0 Then
@@ -1960,7 +1952,7 @@ Private Sub VulkanCleanupAll()
                 End If
             Next
         End If
-        Err.Clear
+        Err.clear
     End If
 
     ' ---- Render pass ----
@@ -2072,7 +2064,7 @@ Public Sub Main()
             Dim nowTick As Long: nowTick = GetTickCount()
             If (nowTick - lastFpsTick) >= 1000 Then
                 Dim fps As Single: fps = CSng(fpsFrames) * 1000! / CSng(nowTick - lastFpsTick)
-                Dim title As String: title = "Harmonograph - Vulkan 1.4 (PROFILED) - FPS: " & Format$(fps, "0.0")
+                Dim title As String: title = "Harmonograph - Vulkan 1.4 (PROFILED) - FPS: " & format$(fps, "0.0")
                 SetWindowTextW g_hwnd, StrPtr(title)
                 fpsFrames = 0
                 lastFpsTick = nowTick
