@@ -571,6 +571,7 @@ Private vkDescriptorPool As LongPtr
 Private vkDescriptorSet() As LongPtr
 Private memoryProperties As VkPhysicalDeviceMemoryProperties
 Private uboParams As ParamsUBO
+Private animTime As Single
 Private g_presentMode As Long
 
 ' ============================================================================
@@ -1047,6 +1048,104 @@ CLEANUP:
     If compiler <> 0 Then Call VkCall1(p_shaderc_compiler_release, CLngLng(compiler))
     Exit Function
 EH: LogLine "shaderc error: " & Err.Description: Resume CLEANUP
+
+Private Function ShaderText_Comp() As String
+    Dim s As String
+    s = ""
+    s = s & "#version 450" & vbLf
+    s = s & "" & vbLf
+    s = s & "layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;" & vbLf
+    s = s & "" & vbLf
+    s = s & "layout(std430, binding = 0) buffer Positions { vec4 pos[]; };" & vbLf
+    s = s & "layout(std430, binding = 1) buffer Colors    { vec4 col[]; };" & vbLf
+    s = s & "" & vbLf
+    s = s & "layout(std140, binding = 2) uniform Params" & vbLf
+    s = s & "{" & vbLf
+    s = s & "    uint  max_num;" & vbLf
+    s = s & "    float dt;" & vbLf
+    s = s & "    float scale;" & vbLf
+    s = s & "    float pad0;" & vbLf
+    s = s & "" & vbLf
+    s = s & "    float A1; float f1; float p1; float d1;" & vbLf
+    s = s & "    float A2; float f2; float p2; float d2;" & vbLf
+    s = s & "    float A3; float f3; float p3; float d3;" & vbLf
+    s = s & "    float A4; float f4; float p4; float d4;" & vbLf
+    s = s & "} u;" & vbLf
+    s = s & "" & vbLf
+    s = s & "vec3 hsv2rgb(float h, float s, float v)" & vbLf
+    s = s & "{" & vbLf
+    s = s & "    float c = v * s;" & vbLf
+    s = s & "    float hp = h / 60.0;" & vbLf
+    s = s & "    float x = c * (1.0 - abs(mod(hp, 2.0) - 1.0));" & vbLf
+    s = s & "    vec3 rgb;" & vbLf
+    s = s & "" & vbLf
+    s = s & "    if      (hp < 1.0) rgb = vec3(c, x, 0.0);" & vbLf
+    s = s & "    else if (hp < 2.0) rgb = vec3(x, c, 0.0);" & vbLf
+    s = s & "    else if (hp < 3.0) rgb = vec3(0.0, c, x);" & vbLf
+    s = s & "    else if (hp < 4.0) rgb = vec3(0.0, x, c);" & vbLf
+    s = s & "    else if (hp < 5.0) rgb = vec3(x, 0.0, c);" & vbLf
+    s = s & "    else               rgb = vec3(c, 0.0, x);" & vbLf
+    s = s & "" & vbLf
+    s = s & "    float m = v - c;" & vbLf
+    s = s & "    return rgb + vec3(m);" & vbLf
+    s = s & "}" & vbLf
+    s = s & "" & vbLf
+    s = s & "void main()" & vbLf
+    s = s & "{" & vbLf
+    s = s & "    uint idx = gl_GlobalInvocationID.x;" & vbLf
+    s = s & "    if (idx >= u.max_num) return;" & vbLf
+    s = s & "" & vbLf
+    s = s & "    float t  = float(idx) * u.dt;" & vbLf
+    s = s & "    float PI = 3.141592653589793;" & vbLf
+    s = s & "" & vbLf
+    s = s & "    float x = u.A1 * sin(u.f1 * t + PI * u.p1) * exp(-u.d1 * t) +" & vbLf
+    s = s & "              u.A2 * sin(u.f2 * t + PI * u.p2) * exp(-u.d2 * t);" & vbLf
+    s = s & "" & vbLf
+    s = s & "    float y = u.A3 * sin(u.f3 * t + PI * u.p3) * exp(-u.d3 * t) +" & vbLf
+    s = s & "              u.A4 * sin(u.f4 * t + PI * u.p4) * exp(-u.d4 * t);" & vbLf
+    s = s & "" & vbLf
+    s = s & "    vec2 p = vec2(x, y) * u.scale;" & vbLf
+    s = s & "    pos[idx] = vec4(p.x, p.y, 0.0, 1.0);" & vbLf
+    s = s & "" & vbLf
+    s = s & "    float hue = mod((t / 20.0) * 360.0, 360.0);" & vbLf
+    s = s & "    vec3 rgb  = hsv2rgb(hue, 1.0, 1.0);" & vbLf
+    s = s & "    col[idx]  = vec4(rgb, 1.0);" & vbLf
+    s = s & "}" & vbLf
+    ShaderText_Comp = s
+End Function
+
+Private Function ShaderText_Vert() As String
+    Dim s As String
+    s = ""
+    s = s & "#version 450" & vbLf
+    s = s & "" & vbLf
+    s = s & "layout(std430, binding = 0) buffer Positions { vec4 pos[]; };" & vbLf
+    s = s & "layout(std430, binding = 1) buffer Colors    { vec4 col[]; };" & vbLf
+    s = s & "" & vbLf
+    s = s & "layout(location = 0) out vec4 vColor;" & vbLf
+    s = s & "" & vbLf
+    s = s & "void main()" & vbLf
+    s = s & "{" & vbLf
+    s = s & "    uint idx = uint(gl_VertexIndex);" & vbLf
+    s = s & "    gl_Position = pos[idx];" & vbLf
+    s = s & "    vColor = col[idx];" & vbLf
+    s = s & "}" & vbLf
+    ShaderText_Vert = s
+End Function
+
+Private Function ShaderText_Frag() As String
+    Dim s As String
+    s = ""
+    s = s & "#version 450" & vbLf
+    s = s & "" & vbLf
+    s = s & "layout(location = 0) in  vec4 vColor;" & vbLf
+    s = s & "layout(location = 0) out vec4 outColor;" & vbLf
+    s = s & "" & vbLf
+    s = s & "void main()" & vbLf
+    s = s & "{" & vbLf
+    s = s & "    outColor = vColor;" & vbLf
+    s = s & "}" & vbLf
+    ShaderText_Frag = s
 End Function
 
 ' ============================================================================
@@ -1371,22 +1470,10 @@ End Sub
 
 Private Sub VkCreateShadersAndPipelines_()
     LogLine "VkCreateShadersAndPipelines_..."
-    Dim glslComp As String
-    glslComp = "#version 450" & vbLf & "layout(local_size_x = 256) in;" & vbLf
-    glslComp = glslComp & "layout(std430, binding = 0) buffer Positions { vec4 pos[]; };" & vbLf
-    glslComp = glslComp & "layout(std430, binding = 1) buffer Colors { vec4 col[]; };" & vbLf
-    glslComp = glslComp & "layout(std140, binding = 2) uniform Params { uint max_num; float dt; float scale; float pad0; float A1; float f1; float p1; float d1; float A2; float f2; float p2; float d2; float A3; float f3; float p3; float d3; float A4; float f4; float p4; float d4; } u;" & vbLf
-    glslComp = glslComp & "vec3 hsv2rgb(float h, float s, float v) { float c = v * s; float hp = h / 60.0; float x = c * (1.0 - abs(mod(hp, 2.0) - 1.0)); vec3 rgb; if (hp < 1.0) rgb = vec3(c, x, 0.0); else if (hp < 2.0) rgb = vec3(x, c, 0.0); else if (hp < 3.0) rgb = vec3(0.0, c, x); else if (hp < 4.0) rgb = vec3(0.0, x, c); else if (hp < 5.0) rgb = vec3(x, 0.0, c); else rgb = vec3(c, 0.0, x); return rgb + vec3(v - c); }" & vbLf
-    glslComp = glslComp & "void main() { uint idx = gl_GlobalInvocationID.x; if (idx >= u.max_num) return; float t = float(idx) * u.dt; float PI = 3.141592653589793; float x = u.A1 * sin(u.f1 * t + PI * u.p1) * exp(-u.d1 * t) + u.A2 * sin(u.f2 * t + PI * u.p2) * exp(-u.d2 * t); float y = u.A3 * sin(u.f3 * t + PI * u.p3) * exp(-u.d3 * t) + u.A4 * sin(u.f4 * t + PI * u.p4) * exp(-u.d4 * t); pos[idx] = vec4(x * u.scale, y * u.scale, 0.0, 1.0); col[idx] = vec4(hsv2rgb(mod((t / 20.0) * 360.0, 360.0), 1.0, 1.0), 1.0); }" & vbLf
-    Dim glslVert As String
-    glslVert = "#version 450" & vbLf & "layout(std430, binding = 0) buffer Positions { vec4 pos[]; };" & vbLf
-    glslVert = glslVert & "layout(std430, binding = 1) buffer Colors { vec4 col[]; };" & vbLf
-    glslVert = glslVert & "layout(location = 0) out vec4 vColor;" & vbLf
-    glslVert = glslVert & "void main() { uint idx = uint(gl_VertexIndex); gl_Position = pos[idx]; vColor = col[idx]; }" & vbLf
-    Dim glslFrag As String
-    glslFrag = "#version 450" & vbLf & "layout(location = 0) in vec4 vColor;" & vbLf
-    glslFrag = glslFrag & "layout(location = 0) out vec4 outColor;" & vbLf
-    glslFrag = glslFrag & "void main() { outColor = vColor; }" & vbLf
+    Dim glslComp As String: glslComp = ShaderText_Comp()
+    Dim glslVert As String: glslVert = ShaderText_Vert()
+    Dim glslFrag As String: glslFrag = ShaderText_Frag()
+
     Dim spvComp() As Byte: spvComp = ShadercCompileSpv(glslComp, SHADERC_SHADER_KIND_COMPUTE, "hello.comp")
     Dim spvVert() As Byte: spvVert = ShadercCompileSpv(glslVert, SHADERC_SHADER_KIND_VERTEX, "hello.vert")
     Dim spvFrag() As Byte: spvFrag = ShadercCompileSpv(glslFrag, SHADERC_SHADER_KIND_FRAGMENT, "hello.frag")
@@ -1475,11 +1562,18 @@ End Sub
 
 
 Private Sub InitUBO()
-    uboParams.max_num = VERTEX_COUNT: uboParams.dt = 0.0001!: uboParams.scale_ = 0.5!
-    uboParams.A1 = 1!: uboParams.f1 = 2.01!: uboParams.p1 = 0!: uboParams.d1 = 0.002!
-    uboParams.A2 = 1!: uboParams.f2 = 3!: uboParams.p2 = 0!: uboParams.d2 = 0.0065!
-    uboParams.A3 = 1!: uboParams.f3 = 3.01!: uboParams.p3 = 1.5!: uboParams.d3 = 0.003!
-    uboParams.A4 = 1!: uboParams.f4 = 2!: uboParams.p4 = 0!: uboParams.d4 = 0.0085!
+    ' Match C# Vulkan sample initial params
+    animTime = 0!
+
+    uboParams.max_num = VERTEX_COUNT
+    uboParams.dt = 0.001!
+    uboParams.scale_ = 0.02!
+    uboParams.pad0 = 0!
+
+    uboParams.A1 = 50!: uboParams.f1 = 2!: uboParams.p1 = 0.0625!: uboParams.d1 = 0.02!
+    uboParams.A2 = 50!: uboParams.f2 = 2!: uboParams.p2 = 1.5!: uboParams.d2 = 0.0315!
+    uboParams.A3 = 50!: uboParams.f3 = 2!: uboParams.p3 = 0.8666667!: uboParams.d3 = 0.02!
+    uboParams.A4 = 50!: uboParams.f4 = 2!: uboParams.p4 = 1!: uboParams.d4 = 0.02!
 
     WriteUBOToAllImages
 End Sub
@@ -1499,7 +1593,14 @@ Private Sub WriteUBOToAllImages()
 End Sub
 
 Private Sub UpdateUBO(ByVal imageIndex As Long)
+    ' Match C# Vulkan sample update logic
+    animTime = animTime + 0.016!
+    uboParams.f1 = 2! + 0.5! * CSng(Sin(animTime * 0.7!))
+    uboParams.f2 = 2! + 0.5! * CSng(Sin(animTime * 0.9!))
+    uboParams.f3 = 2! + 0.5! * CSng(Sin(animTime * 1.1!))
+    uboParams.f4 = 2! + 0.5! * CSng(Sin(animTime * 1.3!))
     uboParams.p1 = uboParams.p1 + 0.002!
+
     If imageIndex >= 0 Then
         RtlMoveMemory uboMappedPtr(imageIndex), VarPtr(uboParams), LenB(uboParams)
     End If
