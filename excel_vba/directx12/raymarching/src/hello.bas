@@ -1,18 +1,44 @@
 Attribute VB_Name = "hello"
 Option Explicit
 
-Private g_qpcFreq As Double
 ' ============================================================
-'  Excel VBA (64-bit) + DirectX 12 - Raymarching Rendering
-'   - PIPELINED VERSION: Proper frame-in-flight management
-'   - Creates a Win32 window
-'   - Creates D3D12 Device, CommandQueue, SwapChain
-'   - Creates RootSignature with CBV, PipelineState
-'   - Manages GPU synchronization with per-frame Fences
-'   - Renders raymarching scene using external hello.hlsl
-'   - Debug log: C:\TEMP\dx12_raymarching.log
+' DX12 CPU Profiler (integrated)
+' ============================================================
+' ============================================================
+'  DX12/VBA Micro Profiler (QPC)
+'   - Low overhead (no strings in hot path)
+'   - Accumulates average ms over a window
+'   - Writes to log file and Debug.Print
 '
-'  KEY OPTIMIZATION: Frame pipelining - CPU and GPU work in parallel
+'  Intended for: Excel VBA (64-bit) DirectX 12 samples.
+'
+'  Integration (minimal edits):
+'    1) Call ProfilerInit once during startup.
+'    2) Call ProfilerReset once before entering the main loop.
+'    3) In DrawFrame (or equivalent), call:
+'
+'         ProfilerBeginFrame
+'         ' --- Wait for frame fence ---
+'         ProfilerMark PROF_WAIT
+'         ' --- Reset allocator / list ---
+'         ProfilerMark PROF_RESET
+'         ' --- Update constant buffer ---
+'         ProfilerMark PROF_UPDATE
+'         ' --- Record commands ---
+'         ProfilerMark PROF_RECORD
+'         ' --- ExecuteCommandLists ---
+'         ProfilerMark PROF_EXECUTE
+'         ' --- Present ---
+'         ProfilerMark PROF_PRESENT
+'         ' --- Signal fence ---
+'         ProfilerMark PROF_SIGNAL
+'         ProfilerEndFrame
+'
+'    4) After the loop, call ProfilerFlush to print the last window.
+'
+'  Notes:
+'   - Keep ProfilerMark calls *outside* tight per-draw loops.
+'   - This profiler measures CPU-side time only (not GPU duration).
 ' ============================================================
 
 ' -------- Settings --------
@@ -28,11 +54,37 @@ Public Const PROF_EXECUTE As Long = 4
 Public Const PROF_PRESENT As Long = 5
 Public Const PROF_SIGNAL As Long = 6
 Public Const PROF_TOTAL As Long = 7
-Public Const PROF_COUNT As Long = 8
+Public Const PROF_INDEX As Long = 8
+Public Const PROF_COUNT As Long = 9
 
 Private Type LARGE_INTEGER
     QuadPart As LongLong
 End Type
+
+#If VBA7 Then
+    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As LARGE_INTEGER) As Long
+    Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As LARGE_INTEGER) As Long
+#End If
+
+Private g_profFreq As Double
+Private g_t0 As Double
+Private g_prev As Double
+Private g_acc(0 To PROF_COUNT - 1) As Double
+Private g_frames As Long
+
+Private g_qpcFreq As Double
+' ============================================================
+'  Excel VBA (64-bit) + DirectX 12 - Raymarching Rendering
+'   - PIPELINED VERSION: Proper frame-in-flight management
+'   - Creates a Win32 window
+'   - Creates D3D12 Device, CommandQueue, SwapChain
+'   - Creates RootSignature with CBV, PipelineState
+'   - Manages GPU synchronization with per-frame Fences
+'   - Renders raymarching scene using external hello.hlsl
+'   - Debug log: C:\TEMP\dx12_raymarching.log
+'
+'  KEY OPTIMIZATION: Frame pipelining - CPU and GPU work in parallel
+' ============================================================
 
 ' -----------------------------
 ' Win32 constants
@@ -698,15 +750,9 @@ Private g_thunksInitialized As Boolean
     Private Declare PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (ByVal Destination As LongPtr, ByVal Source As LongPtr, ByVal Length As LongPtr)
     Private Declare PtrSafe Function VirtualAlloc Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal flAllocationType As Long, ByVal flProtect As Long) As LongPtr
     Private Declare PtrSafe Function VirtualFree Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal dwFreeType As Long) As Long
-    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As LARGE_INTEGER) As Long
-    Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As LARGE_INTEGER) As Long
+'    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As LARGE_INTEGER) As Long
+'    Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As LARGE_INTEGER) As Long
 #End If
-
-Private g_profFreq As Double
-Private g_t0 As Double
-Private g_prev As Double
-Private g_acc(0 To PROF_COUNT - 1) As Double
-Private g_frames As Long
 
 ' Public API
 Public Sub ProfilerInit()
@@ -1646,21 +1692,24 @@ Private Sub RecordCommandListForFrame(ByVal frameIdx As Long)
     COM_Call1 pCmd, VTBL_CmdList_Close
 End Sub
 
-'Private Sub WaitForFrame(ByVal frameIdx As Long)
-'    Dim fenceValue As LongLong
-'    fenceValue = g_frameFenceValues(frameIdx)
-'
-'    ' Only wait if GPU hasn't completed this frame yet
-'    If fenceValue <> 0 Then
-'        Dim completed As LongLong
-'        completed = COM_Call1(g_pFence, VTBL_Fence_GetCompletedValue)
-'
-'        If completed < fenceValue Then
-'            COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(fenceValue), g_fenceEvent
-'            'WaitForSingleObject g_fenceEvent, INFINITE
-'        End If
-'    End If
-'End Sub
+' Private Sub WaitForFrame(ByVal frameIdx As Long)
+'     ' Standard DX12 frame pacing: wait only when reusing a backbuffer that is still in flight.
+'     Dim fenceValue As LongLong
+'     fenceValue = g_frameFenceValues(frameIdx)
+' 
+'     ' First time for this buffer: no wait necessary
+'     If fenceValue = 0 Then Exit Sub
+' 
+'     Dim completed As LongLong
+'     completed = GetFenceCompletedValue(g_pFence)
+' 
+'     If completed >= fenceValue Then Exit Sub
+' 
+'     ' Block until GPU reaches fenceValue for this backbuffer
+'     COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(fenceValue), g_fenceEvent
+'     Call WaitForSingleObject(g_fenceEvent, INFINITE)
+' End Sub
+
 
 
 Private Sub WaitForFrame(ByVal frameIdx As Long)
@@ -1692,6 +1741,7 @@ Private Sub RenderFrame()
     ProfilerBeginFrame
 
     g_frameIndex = CLng(COM_Call1(g_pSwapChain3, VTBL_SwapChain3_GetCurrentBackBufferIndex))
+    ProfilerMark PROF_INDEX
 
     WaitForFrame g_frameIndex
     ProfilerMark PROF_WAIT
