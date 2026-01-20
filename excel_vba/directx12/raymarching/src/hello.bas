@@ -43,7 +43,7 @@ Option Explicit
 
 ' -------- Settings --------
 Public Const PROF_WINDOW_FRAMES As Long = 300
-Public Const PROF_LOG_PATH As String = "C:\TEMP\dx12_raymarch_prof.log"
+Public Const PROF_LOG_PATH As String = "C:\TEMP\dx12_raymarch_prof_opt.log"
 
 ' -------- Sections --------
 Public Const PROF_WAIT As Long = 0
@@ -242,7 +242,7 @@ Private Const VTBL_Blob_GetBufferPointer As Long = 3
 Private Const VTBL_Blob_GetBufferSize As Long = 4
 
 Private Const CLASS_NAME As String = "RaymarchingDX12WindowVBA"
-Private Const WINDOW_NAME As String = "Raymarching - DirectX 12 (VBA64) - Pipelined"
+Private Const WINDOW_NAME As String = "Raymarching - DirectX 12 (VBA64) - OPTIMIZED"
 
 ' -----------------------------
 ' Types
@@ -857,9 +857,9 @@ End Function
 Private Sub LogOpen()
     On Error Resume Next
     CreateDirectoryW StrPtr("C:\TEMP"), 0
-    g_log = CreateFileW(StrPtr("C:\TEMP\dx12_raymarching.log"), GENERIC_WRITE, FILE_SHARE_READ Or FILE_SHARE_WRITE, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0)
+    g_log = CreateFileW(StrPtr("C:\TEMP\dx12_raymarching_opt.log"), GENERIC_WRITE, FILE_SHARE_READ Or FILE_SHARE_WRITE, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0)
     If g_log = 0 Or g_log = -1 Then g_log = 0
-    LogMsg "==== DX12 RAYMARCHING LOG START (PIPELINED) ===="
+    LogMsg "==== DX12 RAYMARCHING LOG START (OPTIMIZED) ===="
 End Sub
 
 Private Sub LogClose()
@@ -1724,10 +1724,18 @@ Private Sub WaitForFrame(ByVal frameIdx As Long)
     ' 既に完了していれば待機しない
     If completed >= fenceValue Then Exit Sub
     
-    ' タイムアウト付き待機（無限待機を避ける）
+    ' OPTIMIZATION: Spin-wait briefly before falling back to event wait
+    ' This avoids kernel transition for short waits
+    Dim spinCount As Long
+    For spinCount = 0 To 1000
+        completed = GetFenceCompletedValue(g_pFence)
+        If completed >= fenceValue Then Exit Sub
+    Next spinCount
+    
+    ' イベント待機（タイムアウト短縮: 100ms -> 50ms）
     COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(fenceValue), g_fenceEvent
     Dim waitResult As Long
-    waitResult = WaitForSingleObject(g_fenceEvent, 100)  ' 100ms timeout
+    waitResult = WaitForSingleObject(g_fenceEvent, 50)  ' 50ms timeout
     
     If waitResult <> WAIT_OBJECT_0 Then
         LogMsg "WaitForFrame: timeout or error for frame " & frameIdx
@@ -1825,7 +1833,7 @@ End Sub
 Public Sub Main()
     LogOpen
     On Error GoTo EH
-    LogMsg "Main: start (PIPELINED VERSION)"
+    LogMsg "Main: start (OPTIMIZED VERSION)"
     
     InitThunks
     
@@ -1881,9 +1889,9 @@ Public Sub Main()
         Else
             RenderFrame
             frame = frame + 1
-            Sleep 1
-            
-            If (frame Mod 60) = 0 Then DoEvents
+            ' OPTIMIZATION: Removed Sleep(1) - let GPU/CPU work continuously
+            ' OPTIMIZATION: DoEvents every 180 frames instead of 60
+            If (frame Mod 180) = 0 Then DoEvents
         End If
     Loop
 
