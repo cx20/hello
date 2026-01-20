@@ -1,6 +1,7 @@
 Attribute VB_Name = "hello"
 Option Explicit
 
+Private g_qpcFreq As Double
 ' ============================================================
 '  Excel VBA (64-bit) + DirectX 12 - Raymarching Rendering
 '   - PIPELINED VERSION: Proper frame-in-flight management
@@ -13,6 +14,25 @@ Option Explicit
 '
 '  KEY OPTIMIZATION: Frame pipelining - CPU and GPU work in parallel
 ' ============================================================
+
+' -------- Settings --------
+Public Const PROF_WINDOW_FRAMES As Long = 300
+Public Const PROF_LOG_PATH As String = "C:\TEMP\dx12_raymarch_prof.log"
+
+' -------- Sections --------
+Public Const PROF_WAIT As Long = 0
+Public Const PROF_RESET As Long = 1
+Public Const PROF_UPDATE As Long = 2
+Public Const PROF_RECORD As Long = 3
+Public Const PROF_EXECUTE As Long = 4
+Public Const PROF_PRESENT As Long = 5
+Public Const PROF_SIGNAL As Long = 6
+Public Const PROF_TOTAL As Long = 7
+Public Const PROF_COUNT As Long = 8
+
+Private Type LARGE_INTEGER
+    QuadPart As LongLong
+End Type
 
 ' -----------------------------
 ' Win32 constants
@@ -568,6 +588,7 @@ Private g_pSwapChain3 As LongPtr
 Private g_pRtvHeap As LongPtr
 Private g_pCbvHeap As LongPtr
 Private g_pCommandList As LongPtr
+Private g_pFrameCommandLists(0 To FRAME_COUNT - 1) As LongPtr
 Private g_pRootSignature As LongPtr
 Private g_pPipelineState As LongPtr
 Private g_pFence As LongPtr
@@ -677,9 +698,112 @@ Private g_thunksInitialized As Boolean
     Private Declare PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (ByVal Destination As LongPtr, ByVal Source As LongPtr, ByVal Length As LongPtr)
     Private Declare PtrSafe Function VirtualAlloc Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal flAllocationType As Long, ByVal flProtect As Long) As LongPtr
     Private Declare PtrSafe Function VirtualFree Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal dwFreeType As Long) As Long
-    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As Currency) As Long
-    Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As Currency) As Long
+    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As LARGE_INTEGER) As Long
+    Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As LARGE_INTEGER) As Long
 #End If
+
+Private g_profFreq As Double
+Private g_t0 As Double
+Private g_prev As Double
+Private g_acc(0 To PROF_COUNT - 1) As Double
+Private g_frames As Long
+
+' Public API
+Public Sub ProfilerInit()
+    Dim f As LARGE_INTEGER
+    If QueryPerformanceFrequency(f) = 0 Then
+        g_profFreq = 0#
+    Else
+        g_profFreq = CDbl(f.QuadPart)
+    End If
+End Sub
+
+Public Sub ProfilerReset()
+    Dim i As Long
+    For i = 0 To PROF_COUNT - 1
+        g_acc(i) = 0#
+    Next i
+    g_frames = 0
+End Sub
+
+Public Sub ProfilerBeginFrame()
+    Dim t As Double
+    t = NowQpcMs()
+    g_t0 = t
+    g_prev = t
+End Sub
+
+Public Sub ProfilerMark(ByVal sectionId As Long)
+    Dim t As Double
+    t = NowQpcMs()
+    If sectionId >= 0 And sectionId < PROF_COUNT Then
+        g_acc(sectionId) = g_acc(sectionId) + (t - g_prev)
+    End If
+    g_prev = t
+End Sub
+
+Public Sub ProfilerEndFrame()
+    Dim t As Double
+    t = NowQpcMs()
+    g_acc(PROF_TOTAL) = g_acc(PROF_TOTAL) + (t - g_t0)
+    g_prev = t
+
+    g_frames = g_frames + 1
+    If g_frames Mod PROF_WINDOW_FRAMES = 0 Then
+        ProfilerDumpAverage
+    End If
+End Sub
+
+Public Sub ProfilerFlush()
+    If g_frames > 0 Then
+        ProfilerDumpAverage
+    End If
+End Sub
+
+' Internals
+Private Function NowQpcMs() As Double
+    Dim c As LARGE_INTEGER
+    If g_profFreq = 0# Then
+        NowQpcMs = 0#
+        Exit Function
+    End If
+    QueryPerformanceCounter c
+    NowQpcMs = (CDbl(c.QuadPart) * 1000#) / g_profFreq
+End Function
+
+Private Sub ProfilerDumpAverage()
+    On Error Resume Next
+
+    Dim denom As Double
+    denom = CDbl(g_frames)
+    If denom <= 0# Then Exit Sub
+
+    Dim s As String
+    s = "=== DX12 PROFILE (avg ms over " & CStr(g_frames) & " frames) ===" & vbCrLf & _
+        "  Wait:    " & FmtMs(g_acc(PROF_WAIT) / denom) & vbCrLf & _
+        "  Reset:   " & FmtMs(g_acc(PROF_RESET) / denom) & vbCrLf & _
+        "  Update:  " & FmtMs(g_acc(PROF_UPDATE) / denom) & vbCrLf & _
+        "  Record:  " & FmtMs(g_acc(PROF_RECORD) / denom) & vbCrLf & _
+        "  Execute: " & FmtMs(g_acc(PROF_EXECUTE) / denom) & vbCrLf & _
+        "  Present: " & FmtMs(g_acc(PROF_PRESENT) / denom) & vbCrLf & _
+        "  Signal:  " & FmtMs(g_acc(PROF_SIGNAL) / denom) & vbCrLf & _
+        "  TOTAL:   " & FmtMs(g_acc(PROF_TOTAL) / denom) & vbCrLf & _
+        "  Est FPS: " & Format$(IIf(g_acc(PROF_TOTAL) > 0#, (1000# * denom) / g_acc(PROF_TOTAL), 0#), "0.0") & vbCrLf & _
+        "============================================="
+
+    Debug.Print s
+
+    Dim ff As Integer
+    ff = FreeFile
+    Open PROF_LOG_PATH For Append As #ff
+    Print #ff, s
+    Close #ff
+
+End Sub
+
+Private Function FmtMs(ByVal v As Double) As String
+    FmtMs = Format$(v, "0.000") & " ms"
+End Function
 
 ' ============================================================
 ' Logger
@@ -731,11 +855,24 @@ Private Function PtrToAnsiString(ByVal p As LongPtr) As String
 End Function
 
 Private Function GetTime() As Double
-    Dim counter As Currency, freq As Currency
-    QueryPerformanceCounter counter
-    QueryPerformanceFrequency freq
-    GetTime = CDbl(counter) / CDbl(freq)
+    ' Returns seconds (high-resolution). Uses cached QPC frequency.
+    If g_qpcFreq = 0# Then
+        Dim f As LARGE_INTEGER
+        If QueryPerformanceFrequency(f) = 0 Then
+            g_qpcFreq = 0#
+        Else
+            g_qpcFreq = CDbl(f.QuadPart)
+        End If
+    End If
+    If g_qpcFreq = 0# Then
+        GetTime = Timer
+        Exit Function
+    End If
+    Dim c As LARGE_INTEGER
+    QueryPerformanceCounter c
+    GetTime = CDbl(c.QuadPart) / g_qpcFreq
 End Function
+
 
 ' ============================================================
 ' GUIDs
@@ -1300,14 +1437,28 @@ Private Function CreatePipelineState(ByVal shaderPath As String) As Boolean
     CreatePipelineState = (hr >= 0 And g_pPipelineState <> 0)
 End Function
 
-Private Function CreateCommandList() As Boolean
-    ' Create command list with first frame's allocator
+Private Function CreateFrameCommandLists() As Boolean
+    ' Create one direct command list per swapchain buffer (frame).
+    ' We will record each list once at init and reuse it every frame.
     Dim cmdListIID As GUID: cmdListIID = IID_ID3D12GraphicsCommandList()
-    Dim hr As Long: hr = ToHResult(COM_Call7(g_pDevice, VTBL_Device_CreateCommandList, 0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pCommandAllocators(0), g_pPipelineState, VarPtr(cmdListIID), VarPtr(g_pCommandList)))
-    If hr < 0 Or g_pCommandList = 0 Then CreateCommandList = False: Exit Function
-    COM_Call1 g_pCommandList, VTBL_CmdList_Close
-    CreateCommandList = True
+    Dim hr As Long
+    Dim frameIdx As Long
+
+    For frameIdx = 0 To FRAME_COUNT - 1
+        hr = ToHResult(COM_Call7(g_pDevice, VTBL_Device_CreateCommandList, 0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pCommandAllocators(frameIdx), g_pPipelineState, VarPtr(cmdListIID), VarPtr(g_pFrameCommandLists(frameIdx))))
+        If hr < 0 Or g_pFrameCommandLists(frameIdx) = 0 Then
+            LogMsg "Failed to create command list " & frameIdx & " hr=" & Hex$(hr)
+            CreateFrameCommandLists = False
+            Exit Function
+        End If
+
+        ' Close for now; will be Reset+recorded once after all resources are ready.
+        COM_Call1 g_pFrameCommandLists(frameIdx), VTBL_CmdList_Close
+    Next frameIdx
+
+    CreateFrameCommandLists = True
 End Function
+
 
 Private Function CreateVertexBuffer() As Boolean
     Dim vertices(0 To 5) As VERTEX
@@ -1422,6 +1573,79 @@ End Function
 ' *** KEY CHANGE: Wait only for the specific frame's resources ***
 ' This allows pipelining - we only wait when we need to reuse resources
 ' ============================================================
+'
+' ============================================================
+' Record per-frame command lists ONCE (no per-frame recording).
+' This is the single biggest performance lever for VBA + DX12:
+' it collapses hundreds of COM/vtbl calls per frame to ~0.
+' ============================================================
+Private Sub RecordAllFrameCommandListsOnce()
+    Dim frameIdx As Long
+    For frameIdx = 0 To FRAME_COUNT - 1
+        RecordCommandListForFrame frameIdx
+    Next frameIdx
+End Sub
+
+Private Sub RecordCommandListForFrame(ByVal frameIdx As Long)
+    Dim pCmd As LongPtr: pCmd = g_pFrameCommandLists(frameIdx)
+    If pCmd = 0 Then Exit Sub
+
+    ' Reset allocator/list ONCE (at init only)
+    COM_Call1 g_pCommandAllocators(frameIdx), VTBL_CmdAlloc_Reset
+    COM_Call3 pCmd, VTBL_CmdList_Reset, g_pCommandAllocators(frameIdx), g_pPipelineState
+
+    ' Root signature + heaps
+    COM_Call2 pCmd, VTBL_CmdList_SetGraphicsRootSignature, g_pRootSignature
+    Dim ppHeaps As LongPtr: ppHeaps = g_pCbvHeap
+    COM_Call3 pCmd, VTBL_CmdList_SetDescriptorHeaps, 1, VarPtr(ppHeaps)
+
+    ' Frame-specific CBV descriptor (baked into the command list)
+    Dim gpuHandle As D3D12_GPU_DESCRIPTOR_HANDLE
+    COM_GetGPUDescriptorHandle g_pCbvHeap, gpuHandle
+    gpuHandle.ptr = gpuHandle.ptr + CLngLng(frameIdx) * CLngLng(g_cbvDescriptorSize)
+    COM_Call3 pCmd, VTBL_CmdList_SetGraphicsRootDescriptorTable, 0, CLngPtr(gpuHandle.ptr)
+
+    ' Viewport / scissor (fixed size in this sample)
+    Dim vp As D3D12_VIEWPORT: vp.Width = CSng(Width): vp.Height = CSng(Height): vp.MaxDepth = 1!
+    COM_Call3 pCmd, VTBL_CmdList_RSSetViewports, 1, VarPtr(vp)
+    Dim sr As D3D12_RECT: sr.Right = Width: sr.Bottom = Height
+    COM_Call3 pCmd, VTBL_CmdList_RSSetScissorRects, 1, VarPtr(sr)
+
+    ' PRESENT -> RT
+    Dim barrierToRT As D3D12_RESOURCE_BARRIER
+    barrierToRT.cType = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
+    barrierToRT.Transition.pResource = g_pRenderTargets(frameIdx)
+    barrierToRT.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
+    barrierToRT.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT
+    barrierToRT.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
+    COM_Call3 pCmd, VTBL_CmdList_ResourceBarrier, 1, VarPtr(barrierToRT)
+
+    ' RTV handle for this backbuffer
+    Dim rtvHandle As D3D12_CPU_DESCRIPTOR_HANDLE
+    COM_GetCPUDescriptorHandle g_pRtvHeap, rtvHandle
+    rtvHandle.ptr = rtvHandle.ptr + CLngPtr(frameIdx) * CLngPtr(g_rtvDescriptorSize)
+
+    ' Clear + draw fullscreen triangle (raymarch in PS)
+    Dim clearColor(0 To 3) As Single: clearColor(3) = 1!
+    COM_Call5 pCmd, VTBL_CmdList_ClearRenderTargetView, rtvHandle.ptr, VarPtr(clearColor(0)), 0, 0
+    COM_Call5 pCmd, VTBL_CmdList_OMSetRenderTargets, 1, VarPtr(rtvHandle), 1, 0
+
+    COM_Call2 pCmd, VTBL_CmdList_IASetPrimitiveTopology, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+    COM_Call4 pCmd, VTBL_CmdList_IASetVertexBuffers, 0, 1, VarPtr(g_vertexBufferView)
+    COM_Call5 pCmd, VTBL_CmdList_DrawInstanced, 6, 1, 0, 0
+
+    ' RT -> PRESENT
+    Dim barrierToPresent As D3D12_RESOURCE_BARRIER
+    barrierToPresent.cType = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
+    barrierToPresent.Transition.pResource = g_pRenderTargets(frameIdx)
+    barrierToPresent.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
+    barrierToPresent.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET
+    barrierToPresent.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT
+    COM_Call3 pCmd, VTBL_CmdList_ResourceBarrier, 1, VarPtr(barrierToPresent)
+
+    COM_Call1 pCmd, VTBL_CmdList_Close
+End Sub
+
 'Private Sub WaitForFrame(ByVal frameIdx As Long)
 '    Dim fenceValue As LongLong
 '    fenceValue = g_frameFenceValues(frameIdx)
@@ -1465,74 +1689,42 @@ End Sub
 ' Render frame with pipelining
 ' ============================================================
 Private Sub RenderFrame()
+    ProfilerBeginFrame
+
     g_frameIndex = CLng(COM_Call1(g_pSwapChain3, VTBL_SwapChain3_GetCurrentBackBufferIndex))
-    
+
     WaitForFrame g_frameIndex
-    
-    ' *** フレーム固有の定数バッファを更新 ***
+    ProfilerMark PROF_WAIT
+
+    ' Frame-specific constant buffer update (persistently mapped)
     Dim cbData As CONSTANT_BUFFER_DATA
     cbData.iTime = CSng(GetTime() - g_startTime)
     cbData.iResolutionX = CSng(Width)
     cbData.iResolutionY = CSng(Height)
     CopyMemory g_constantBufferDataBegins(g_frameIndex), VarPtr(cbData), CLngPtr(LenB(cbData))
-    
-    COM_Call1 g_pCommandAllocators(g_frameIndex), VTBL_CmdAlloc_Reset
-    COM_Call3 g_pCommandList, VTBL_CmdList_Reset, g_pCommandAllocators(g_frameIndex), g_pPipelineState
-    
-    COM_Call2 g_pCommandList, VTBL_CmdList_SetGraphicsRootSignature, g_pRootSignature
-    Dim ppHeaps As LongPtr: ppHeaps = g_pCbvHeap
-    COM_Call3 g_pCommandList, VTBL_CmdList_SetDescriptorHeaps, 1, VarPtr(ppHeaps)
-    
-    ' *** フレーム固有のCBVを使用 ***
-    Dim gpuHandle As D3D12_GPU_DESCRIPTOR_HANDLE
-    COM_GetGPUDescriptorHandle g_pCbvHeap, gpuHandle
-    gpuHandle.ptr = gpuHandle.ptr + CLngLng(g_frameIndex) * CLngLng(g_cbvDescriptorSize)
-    COM_Call3 g_pCommandList, VTBL_CmdList_SetGraphicsRootDescriptorTable, 0, CLngPtr(gpuHandle.ptr)
-    
-    ' 以下は同じ...
-    Dim vp As D3D12_VIEWPORT: vp.Width = CSng(Width): vp.Height = CSng(Height): vp.MaxDepth = 1!
-    COM_Call3 g_pCommandList, VTBL_CmdList_RSSetViewports, 1, VarPtr(vp)
-    Dim sr As D3D12_RECT: sr.Right = Width: sr.Bottom = Height
-    COM_Call3 g_pCommandList, VTBL_CmdList_RSSetScissorRects, 1, VarPtr(sr)
-    
-    Dim barrierToRT As D3D12_RESOURCE_BARRIER
-    barrierToRT.cType = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
-    barrierToRT.Transition.pResource = g_pRenderTargets(g_frameIndex)
-    barrierToRT.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
-    barrierToRT.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT
-    barrierToRT.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
-    COM_Call3 g_pCommandList, VTBL_CmdList_ResourceBarrier, 1, VarPtr(barrierToRT)
-    
-    Dim rtvHandle As D3D12_CPU_DESCRIPTOR_HANDLE
-    COM_GetCPUDescriptorHandle g_pRtvHeap, rtvHandle
-    rtvHandle.ptr = rtvHandle.ptr + CLngPtr(g_frameIndex) * CLngPtr(g_rtvDescriptorSize)
-    
-    Dim clearColor(0 To 3) As Single: clearColor(3) = 1!
-    COM_Call5 g_pCommandList, VTBL_CmdList_ClearRenderTargetView, rtvHandle.ptr, VarPtr(clearColor(0)), 0, 0
-    COM_Call5 g_pCommandList, VTBL_CmdList_OMSetRenderTargets, 1, VarPtr(rtvHandle), 1, 0
-    
-    COM_Call2 g_pCommandList, VTBL_CmdList_IASetPrimitiveTopology, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST
-    COM_Call4 g_pCommandList, VTBL_CmdList_IASetVertexBuffers, 0, 1, VarPtr(g_vertexBufferView)
-    COM_Call5 g_pCommandList, VTBL_CmdList_DrawInstanced, 6, 1, 0, 0
-    
-    Dim barrierToPresent As D3D12_RESOURCE_BARRIER
-    barrierToPresent.cType = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
-    barrierToPresent.Transition.pResource = g_pRenderTargets(g_frameIndex)
-    barrierToPresent.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
-    barrierToPresent.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET
-    barrierToPresent.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT
-    COM_Call3 g_pCommandList, VTBL_CmdList_ResourceBarrier, 1, VarPtr(barrierToPresent)
-    
-    COM_Call1 g_pCommandList, VTBL_CmdList_Close
-    Dim ppCommandLists As LongPtr: ppCommandLists = g_pCommandList
+    ProfilerMark PROF_UPDATE
+
+    ' No per-frame Reset/Record anymore
+    ProfilerMark PROF_RESET
+    ProfilerMark PROF_RECORD
+
+    ' Execute pre-recorded command list for this backbuffer
+    Dim pCmd As LongPtr: pCmd = g_pFrameCommandLists(g_frameIndex)
+    Dim ppCommandLists As LongPtr: ppCommandLists = pCmd
     COM_Call3 g_pCommandQueue, VTBL_CmdQueue_ExecuteCommandLists, 1, VarPtr(ppCommandLists)
-    
+    ProfilerMark PROF_EXECUTE
+
     g_frameFenceValues(g_frameIndex) = g_currentFenceValue
     COM_Call3 g_pCommandQueue, VTBL_CmdQueue_Signal, g_pFence, CLngPtr(g_currentFenceValue)
+    ProfilerMark PROF_SIGNAL
     g_currentFenceValue = g_currentFenceValue + 1
-    
+
     COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 0, 0
+    ProfilerMark PROF_PRESENT
+
+    ProfilerEndFrame
 End Sub
+
 
 ' ============================================================
 ' Wait for all GPU work to complete (for cleanup)
@@ -1555,6 +1747,10 @@ Private Sub CleanupD3D12()
     'If g_pConstantBuffer <> 0 Then COM_Release g_pConstantBuffer: g_pConstantBuffer = 0
     If g_pVertexBuffer <> 0 Then COM_Release g_pVertexBuffer: g_pVertexBuffer = 0
     If g_pFence <> 0 Then COM_Release g_pFence: g_pFence = 0
+    Dim frameIdx As Long
+    For frameIdx = 0 To FRAME_COUNT - 1
+        If g_pFrameCommandLists(frameIdx) <> 0 Then COM_Release g_pFrameCommandLists(frameIdx): g_pFrameCommandLists(frameIdx) = 0
+    Next frameIdx
     If g_pCommandList <> 0 Then COM_Release g_pCommandList: g_pCommandList = 0
     If g_pPipelineState <> 0 Then COM_Release g_pPipelineState: g_pPipelineState = 0
     If g_pRootSignature <> 0 Then COM_Release g_pRootSignature: g_pRootSignature = 0
@@ -1609,12 +1805,20 @@ Public Sub Main()
     If Not InitD3D12(g_hWnd) Then MsgBox "Failed to initialize DirectX 12.", vbCritical: GoTo FIN
     If Not CreateRootSignature() Then MsgBox "Failed to create root signature.", vbCritical: GoTo FIN
     If Not CreatePipelineState(shaderPath) Then MsgBox "Failed to create pipeline state.", vbCritical: GoTo FIN
-    If Not CreateCommandList() Then MsgBox "Failed to create command list.", vbCritical: GoTo FIN
+    If Not CreateFrameCommandLists() Then MsgBox "Failed to create command lists.", vbCritical: GoTo FIN
     If Not CreateVertexBuffer() Then MsgBox "Failed to create vertex buffer.", vbCritical: GoTo FIN
     If Not CreateConstantBuffer() Then MsgBox "Failed to create constant buffer.", vbCritical: GoTo FIN
     If Not CreateFence() Then MsgBox "Failed to create fence.", vbCritical: GoTo FIN
 
+    ' Record command lists once (per backbuffer)
+    RecordAllFrameCommandListsOnce
+
     g_startTime = GetTime()
+
+    ' ---- Profiler (CPU-side timing) ----
+    ProfilerInit
+    ProfilerReset
+
 
     Dim msg As MSGW
     Dim quit As Boolean: quit = False
@@ -1634,6 +1838,8 @@ Public Sub Main()
     Loop
 
 FIN:
+    ' ---- Profiler flush ----
+    ProfilerFlush
     LogMsg "Cleanup: start"
     CleanupD3D12
     FreeThunks
@@ -1647,4 +1853,3 @@ EH:
     LogMsg "ERROR: " & Err.Number & " / " & Err.Description
     Resume FIN
 End Sub
-
