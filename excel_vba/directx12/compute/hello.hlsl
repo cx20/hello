@@ -1,8 +1,8 @@
 /*
- * Harmonograph HLSL Shaders for DirectX 12 (with Animation)
+ * Harmonograph HLSL Shaders for DirectX 12
  */
 
-// Constant Buffer: Must match VBA struct layout
+// Constant Buffer: Must match C# struct layout
 cbuffer HarmonographParams : register(b0)
 {
     float A1, f1, p1, d1;
@@ -10,8 +10,7 @@ cbuffer HarmonographParams : register(b0)
     float A3, f3, p3, d3;
     float A4, f4, p4, d4;
     uint max_num;
-    float time;           // Animation time from VBA
-    float2 padding;
+    float3 padding;
     float2 resolution;
     float2 padding2;
 };
@@ -48,7 +47,7 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
     uint idx = dispatchThreadID.x;
     if (idx >= max_num) return;
 
-    float t = (float)idx * 0.01 + time * 0.5;  // Add animation offset
+    float t = (float)idx * 0.01;
     float PI = 3.14159265;
 
     // Harmonograph Equations
@@ -63,8 +62,7 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
 
     positionBuffer[idx] = float4(x, y, z, 1.0);
 
-    // Animate color based on time
-    float hue = fmod(((float)idx / (float)max_num + time * 0.1) * 360.0, 360.0);
+    float hue = fmod((t / 20.0) * 360.0, 360.0);
     float3 rgb = hsv2rgb(hue, 1.0, 1.0);
     colorBuffer[idx] = float4(rgb, 1.0);
 }
@@ -121,10 +119,9 @@ VSOutput VSMain(uint vertexID : SV_VertexID)
 
     float4x4 proj = perspective(45.0, resolution.x / resolution.y, 1.0, 500.0);
     
-    // Rotating camera for animation
-    float angle = time * 0.3;
-    float camDist = 150.0;
-    float3 cameraPos = float3(sin(angle) * camDist, 50.0, -cos(angle) * camDist); 
+    // Camera Setup for Left-Handed System (+Z is forward)
+    // We place camera at negative Z to look at origin
+    float3 cameraPos = float3(0, 0, -150); 
     float3 cameraTarget = float3(0, 0, 0);
     float3 cameraUp = float3(0, 1, 0);
     float4x4 view = lookAt(cameraPos, cameraTarget, cameraUp);
