@@ -10,6 +10,24 @@ Option Explicit
 ' ============================================================
 
 ' -----------------------------
+' Profiler constants
+' -----------------------------
+Public Const PROF_WINDOW_FRAMES As Long = 100
+Public Const PROF_LOG_PATH As String = "C:\TEMP\dx12_harmonograph_prof.log"
+
+Public Const PROF_UPDATE As Long = 0
+Public Const PROF_RESET As Long = 1
+Public Const PROF_COMPUTE As Long = 2
+Public Const PROF_BARRIER1 As Long = 3
+Public Const PROF_GRAPHICS As Long = 4
+Public Const PROF_BARRIER2 As Long = 5
+Public Const PROF_EXECUTE As Long = 6
+Public Const PROF_PRESENT As Long = 7
+Public Const PROF_FRAME_SYNC As Long = 8
+Public Const PROF_TOTAL As Long = 9
+Public Const PROF_COUNT As Long = 10
+
+' -----------------------------
 ' Win32 constants
 ' -----------------------------
 Private Const PM_REMOVE As Long = &H1&
@@ -195,7 +213,7 @@ Private Const VTBL_Blob_GetBufferSize As Long = 4
 ' Class / window names
 ' -----------------------------
 Private Const CLASS_NAME As String = "HarmonographDX12VBA"
-Private Const WINDOW_NAME As String = "DirectX 12 Compute Harmonograph (VBA64)"
+Private Const WINDOW_NAME As String = "DirectX 12 Compute Harmonograph (VBA64) - OPTIMIZED"
 
 ' -----------------------------
 ' Types - GUID
@@ -613,6 +631,14 @@ End Type
 ' -----------------------------
 ' Globals
 ' -----------------------------
+' Profiler variables
+Private g_profFreq As Double
+Private g_profFreqInv As Double
+Private g_profT0 As Double
+Private g_profPrev As Double
+Private g_profAcc(0 To PROF_COUNT - 1) As Double
+Private g_profFrames As Long
+
 Private g_hWnd As LongPtr
 
 ' D3D12 objects
@@ -690,6 +716,10 @@ Private g_A2 As Single, g_f2 As Single, g_p2 As Single, g_d2 As Single
 Private g_A3 As Single, g_f3 As Single, g_p3 As Single, g_d3 As Single
 Private g_A4 As Single, g_f4 As Single, g_p4 As Single, g_d4 As Single
 Private Const PI2 As Single = 6.283185!
+
+' Pre-allocated constant buffer structure (optimization)
+Private g_cbParams As HarmonographParams
+Private g_cbParamsSize As LongPtr
 
 #If VBA7 Then
     ' Win32
@@ -791,6 +821,113 @@ Private Const PI2 As Single = 6.283185!
     Private Declare PtrSafe Function VirtualAlloc Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal flAllocationType As Long, ByVal flProtect As Long) As LongPtr
     Private Declare PtrSafe Function VirtualFree Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal dwFreeType As Long) As Long
 #End If
+
+' ============================================================
+' DX12 CPU Profiler (QPC-based)
+' ============================================================
+Private Type LARGE_INTEGER_PROF
+    QuadPart As LongLong
+End Type
+
+#If VBA7 Then
+    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As LARGE_INTEGER_PROF) As Long
+    Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As LARGE_INTEGER_PROF) As Long
+#End If
+
+Public Sub ProfilerInit()
+    Dim f As LARGE_INTEGER_PROF
+    If QueryPerformanceFrequency(f) = 0 Then
+        g_profFreq = 0#
+        g_profFreqInv = 0#
+    Else
+        g_profFreq = CDbl(f.QuadPart)
+        g_profFreqInv = 1000# / g_profFreq  ' Pre-compute for ms conversion
+    End If
+End Sub
+
+Public Sub ProfilerReset()
+    Dim i As Long
+    For i = 0 To PROF_COUNT - 1
+        g_profAcc(i) = 0#
+    Next i
+    g_profFrames = 0
+End Sub
+
+Public Sub ProfilerBeginFrame()
+    Dim c As LARGE_INTEGER_PROF
+    QueryPerformanceCounter c
+    g_profT0 = CDbl(c.QuadPart) * g_profFreqInv
+    g_profPrev = g_profT0
+End Sub
+
+Public Sub ProfilerMark(ByVal sectionId As Long)
+    Dim c As LARGE_INTEGER_PROF
+    QueryPerformanceCounter c
+    Dim t As Double
+    t = CDbl(c.QuadPart) * g_profFreqInv
+    If sectionId >= 0 And sectionId < PROF_COUNT Then
+        g_profAcc(sectionId) = g_profAcc(sectionId) + (t - g_profPrev)
+    End If
+    g_profPrev = t
+End Sub
+
+Public Sub ProfilerEndFrame()
+    Dim c As LARGE_INTEGER_PROF
+    QueryPerformanceCounter c
+    Dim t As Double
+    t = CDbl(c.QuadPart) * g_profFreqInv
+    g_profAcc(PROF_TOTAL) = g_profAcc(PROF_TOTAL) + (t - g_profT0)
+    g_profPrev = t
+    
+    g_profFrames = g_profFrames + 1
+    If g_profFrames Mod PROF_WINDOW_FRAMES = 0 Then
+        ProfilerDumpAverage
+    End If
+End Sub
+
+Public Sub ProfilerFlush()
+    If g_profFrames > 0 Then
+        ProfilerDumpAverage
+    End If
+End Sub
+
+Private Sub ProfilerDumpAverage()
+    On Error Resume Next
+    
+    Dim denom As Double
+    denom = CDbl(g_profFrames)
+    If denom <= 0# Then Exit Sub
+    
+    Dim s As String
+    s = "=== DX12 HARMONOGRAPH PROFILE (avg ms over " & CStr(g_profFrames) & " frames) ===" & vbCrLf & _
+        "  Update:    " & Format$(g_profAcc(PROF_UPDATE) / denom, "0.000") & " ms" & vbCrLf & _
+        "  Reset:     " & Format$(g_profAcc(PROF_RESET) / denom, "0.000") & " ms" & vbCrLf & _
+        "  Compute:   " & Format$(g_profAcc(PROF_COMPUTE) / denom, "0.000") & " ms" & vbCrLf & _
+        "  Barrier1:  " & Format$(g_profAcc(PROF_BARRIER1) / denom, "0.000") & " ms" & vbCrLf & _
+        "  Graphics:  " & Format$(g_profAcc(PROF_GRAPHICS) / denom, "0.000") & " ms" & vbCrLf & _
+        "  Barrier2:  " & Format$(g_profAcc(PROF_BARRIER2) / denom, "0.000") & " ms" & vbCrLf & _
+        "  Execute:   " & Format$(g_profAcc(PROF_EXECUTE) / denom, "0.000") & " ms" & vbCrLf & _
+        "  Present:   " & Format$(g_profAcc(PROF_PRESENT) / denom, "0.000") & " ms" & vbCrLf & _
+        "  FrameSync: " & Format$(g_profAcc(PROF_FRAME_SYNC) / denom, "0.000") & " ms" & vbCrLf & _
+        "  TOTAL:     " & Format$(g_profAcc(PROF_TOTAL) / denom, "0.000") & " ms" & vbCrLf & _
+        "  Est FPS:   " & Format$(IIf(g_profAcc(PROF_TOTAL) > 0#, (1000# * denom) / g_profAcc(PROF_TOTAL), 0#), "0.0") & vbCrLf & _
+        "============================================="
+    
+    Debug.Print s
+    
+    Dim ff As Integer
+    ff = FreeFile
+    Open PROF_LOG_PATH For Append As #ff
+    Print #ff, s
+    Close #ff
+    
+    ' Reset accumulators
+    Dim i As Long
+    For i = 0 To PROF_COUNT - 1
+        g_profAcc(i) = 0#
+    Next i
+    g_profFrames = 0
+End Sub
 
 ' ============================================================
 ' Logger
@@ -2277,10 +2414,21 @@ End Function
 ' Initialize Harmonograph Parameters (same as C# version)
 ' ============================================================
 Private Sub InitHarmonographParams()
+    ' Initialize animation parameters
     g_A1 = 50!: g_f1 = 2!: g_p1 = 1! / 16!: g_d1 = 0.02!
     g_A2 = 50!: g_f2 = 2!: g_p2 = 3! / 2!: g_d2 = 0.0315!
     g_A3 = 50!: g_f3 = 2!: g_p3 = 13! / 15!: g_d3 = 0.02!
     g_A4 = 50!: g_f4 = 2!: g_p4 = 1!: g_d4 = 0.02!
+    
+    ' Pre-initialize static fields in constant buffer (optimization)
+    g_cbParams.a1 = g_A1: g_cbParams.d1 = g_d1
+    g_cbParams.a2 = g_A2: g_cbParams.p2 = g_p2: g_cbParams.d2 = g_d2
+    g_cbParams.a3 = g_A3: g_cbParams.f3 = g_f3: g_cbParams.p3 = g_p3: g_cbParams.d3 = g_d3
+    g_cbParams.a4 = g_A4: g_cbParams.f4 = g_f4: g_cbParams.p4 = g_p4: g_cbParams.d4 = g_d4
+    g_cbParams.max_num = VERTEX_COUNT
+    g_cbParams.resolutionX = CSng(Width)
+    g_cbParams.resolutionY = CSng(Height)
+    g_cbParamsSize = CLngPtr(LenB(g_cbParams))
 End Sub
 
 ' ============================================================
@@ -2292,27 +2440,20 @@ End Function
 
 ' ============================================================
 ' Update Constant Buffer (C# compatible - animate params each frame)
+' OPTIMIZED: Only update changing fields, use pre-allocated struct
 ' ============================================================
 Private Sub UpdateConstantBuffer()
-    Dim params As HarmonographParams
-    
     ' Animate parameters like C# version
-    ' C#: f1 = (f1 + (float)rand.NextDouble() / 200f) % 10f
     g_f1 = FMod(g_f1 + Rnd / 200!, 10!)
     g_f2 = FMod(g_f2 + Rnd / 200!, 10!)
     g_p1 = g_p1 + (PI2 * 0.5! / 360!)
     
-    ' Set harmonograph parameters
-    params.a1 = g_A1: params.f1 = g_f1: params.p1 = g_p1: params.d1 = g_d1
-    params.a2 = g_A2: params.f2 = g_f2: params.p2 = g_p2: params.d2 = g_d2
-    params.a3 = g_A3: params.f3 = g_f3: params.p3 = g_p3: params.d3 = g_d3
-    params.a4 = g_A4: params.f4 = g_f4: params.p4 = g_p4: params.d4 = g_d4
-    params.max_num = VERTEX_COUNT
+    ' Update only changing fields in pre-allocated struct
+    g_cbParams.f1 = g_f1: g_cbParams.p1 = g_p1
+    g_cbParams.f2 = g_f2
     
-    params.resolutionX = CSng(Width)
-    params.resolutionY = CSng(Height)
-    
-    CopyMemory g_pConstantBufferPtr, VarPtr(params), CLngPtr(LenB(params))
+    ' Copy to GPU buffer
+    CopyMemory g_pConstantBufferPtr, VarPtr(g_cbParams), g_cbParamsSize
 End Sub
 
 ' ============================================================
@@ -2348,11 +2489,23 @@ Private Sub MoveToNextFrame()
     Dim nextFrameFenceValue As LongLong
     nextFrameFenceValue = g_fenceValues(nextFrameIndex)
     
-    If COM_Call1(g_pFence, VTBL_Fence_GetCompletedValue) < nextFrameFenceValue Then
+    Dim completed As LongLong
+    completed = COM_Call1(g_pFence, VTBL_Fence_GetCompletedValue)
+    
+    If completed < nextFrameFenceValue Then
+        ' OPTIMIZATION: Spin-wait briefly before kernel event wait
+        Dim spinCount As Long
+        For spinCount = 0 To 99
+            completed = COM_Call1(g_pFence, VTBL_Fence_GetCompletedValue)
+            If completed >= nextFrameFenceValue Then GoTo SkipWait
+        Next spinCount
+        
+        ' Fall back to kernel event wait
         COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(nextFrameFenceValue), g_fenceEvent
-        WaitForSingleObject g_fenceEvent, INFINITE
+        WaitForSingleObject g_fenceEvent, 50  ' 50ms timeout instead of INFINITE
     End If
     
+SkipWait:
     g_fenceValues(nextFrameIndex) = currentFenceValue + 1
     g_fenceValue = currentFenceValue + 1
     g_frameIndex = nextFrameIndex
@@ -2362,12 +2515,16 @@ End Sub
 ' Render frame
 ' ============================================================
 Private Sub RenderFrame()
+    ProfilerBeginFrame
+    
     ' Update constant buffer
     UpdateConstantBuffer
+    ProfilerMark PROF_UPDATE
     
+    ' Reset command allocator and command list
     COM_Call1 g_pCommandAllocators(g_frameIndex), VTBL_CmdAlloc_Reset
-    
     COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_Reset, g_pCommandAllocators(g_frameIndex), g_pComputePipelineState
+    ProfilerMark PROF_RESET
     
     Dim heapPtr As LongPtr: heapPtr = g_pSrvUavHeap
     COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_SetDescriptorHeaps, 1, VarPtr(heapPtr)
@@ -2391,6 +2548,7 @@ Private Sub RenderFrame()
     Dim dispatchX As Long
     dispatchX = (VERTEX_COUNT + 63) \ 64
     COM_Call4 g_pGraphicsCommandList, VTBL_CmdList_Dispatch, dispatchX, 1, 1
+    ProfilerMark PROF_COMPUTE
     
     ' Resource Barrier: UAV -> SRV
     Dim barriers(0 To 1) As D3D12_RESOURCE_BARRIER
@@ -2407,6 +2565,7 @@ Private Sub RenderFrame()
     barriers(1).Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
     
     COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_ResourceBarrier, 2, VarPtr(barriers(0))
+    ProfilerMark PROF_BARRIER1
     
     ' ==========================================
     ' [GRAPHICS PASS]
@@ -2453,6 +2612,7 @@ Private Sub RenderFrame()
     ' Draw
     COM_Call2 g_pGraphicsCommandList, VTBL_CmdList_IASetPrimitiveTopology, D3D_PRIMITIVE_TOPOLOGY_LINESTRIP ' LINESTRIP like C#
     COM_Call5 g_pGraphicsCommandList, VTBL_CmdList_DrawInstanced, VERTEX_COUNT, 1, 0, 0
+    ProfilerMark PROF_GRAPHICS
     
     ' Barrier: RenderTarget -> Present
     rtBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET
@@ -2465,18 +2625,24 @@ Private Sub RenderFrame()
     barriers(1).Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
     barriers(1).Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS
     COM_Call3 g_pGraphicsCommandList, VTBL_CmdList_ResourceBarrier, 2, VarPtr(barriers(0))
+    ProfilerMark PROF_BARRIER2
     
     ' Close & Execute
     COM_Call1 g_pGraphicsCommandList, VTBL_CmdList_Close
     
     Dim ptrList As LongPtr: ptrList = g_pGraphicsCommandList
     COM_Call3 g_pCommandQueue, VTBL_CmdQueue_ExecuteCommandLists, 1, VarPtr(ptrList)
+    ProfilerMark PROF_EXECUTE
     
-    ' Present
-    COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 1, 0 ' VSync ON
-    ' COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 0, 0 ' VSync OFF
+    ' Present (VSync OFF for max performance)
+    ' COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 1, 0 ' VSync ON
+    COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 0, 0 ' VSync OFF
+    ProfilerMark PROF_PRESENT
     
     MoveToNextFrame
+    ProfilerMark PROF_FRAME_SYNC
+    
+    ProfilerEndFrame
 End Sub
 
 ' ============================================================
@@ -2636,6 +2802,10 @@ Public Sub Main()
     ' Initialize harmonograph parameters and random seed
     Randomize Timer
     InitHarmonographParams
+    
+    ' Initialize profiler
+    ProfilerInit
+    ProfilerReset
 
     ' Message loop
     Dim msg As MSGW
@@ -2655,14 +2825,17 @@ Public Sub Main()
             RenderFrame
 
             frame = frame + 1
-            If (frame Mod 60) = 0 Then
-                LogMsg "Loop: frame=" & frame
+            ' OPTIMIZATION: Reduce DoEvents frequency (60 -> 180)
+            If (frame Mod 180) = 0 Then
                 DoEvents
             End If
         End If
     Loop
 
 FIN:
+    ' Flush profiler results
+    ProfilerFlush
+    
     LogMsg "Cleanup: start"
     FreeThunks
     CleanupD3D12
