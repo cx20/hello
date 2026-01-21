@@ -667,6 +667,11 @@ Private g_semanticPosition() As Byte
 
 ' Timer
 Private g_startTime As Double
+Private g_qpcFreqInv As Double              ' OPTIMIZATION: Pre-cached 1/freq for faster division
+
+' OPTIMIZATION: Pre-allocated constant buffer data
+Private g_cbData As CONSTANT_BUFFER_DATA
+Private g_cbDataSize As LongPtr
 
 ' Logger
 Private g_log As LongPtr
@@ -900,23 +905,20 @@ Private Function PtrToAnsiString(ByVal p As LongPtr) As String
     PtrToAnsiString = StrConv(b, vbUnicode)
 End Function
 
+' OPTIMIZATION: Initialize QPC frequency once at startup
+Private Sub InitQpcFrequency()
+    Dim f As LARGE_INTEGER
+    If QueryPerformanceFrequency(f) <> 0 Then
+        g_qpcFreq = CDbl(f.QuadPart)
+        g_qpcFreqInv = 1# / g_qpcFreq   ' Pre-calculate inverse for faster computation
+    End If
+End Sub
+
+' OPTIMIZATION: Faster GetTime with pre-cached frequency inverse
 Private Function GetTime() As Double
-    ' Returns seconds (high-resolution). Uses cached QPC frequency.
-    If g_qpcFreq = 0# Then
-        Dim f As LARGE_INTEGER
-        If QueryPerformanceFrequency(f) = 0 Then
-            g_qpcFreq = 0#
-        Else
-            g_qpcFreq = CDbl(f.QuadPart)
-        End If
-    End If
-    If g_qpcFreq = 0# Then
-        GetTime = Timer
-        Exit Function
-    End If
     Dim c As LARGE_INTEGER
     QueryPerformanceCounter c
-    GetTime = CDbl(c.QuadPart) / g_qpcFreq
+    GetTime = CDbl(c.QuadPart) * g_qpcFreqInv  ' Multiplication instead of division
 End Function
 
 
@@ -1589,6 +1591,12 @@ Private Function CreateConstantBuffer() As Boolean
         cbvHandle.ptr = cbvHandle.ptr + g_cbvDescriptorSize
     Next frameIdx
     
+    ' OPTIMIZATION: Pre-set static values in g_cbData
+    g_cbData.iResolutionX = CSng(Width)
+    g_cbData.iResolutionY = CSng(Height)
+    g_cbData.padding = 0!
+    g_cbDataSize = CLngPtr(LenB(g_cbData))
+    
     CreateConstantBuffer = True
 End Function
 
@@ -1724,22 +1732,18 @@ Private Sub WaitForFrame(ByVal frameIdx As Long)
     ' 既に完了していれば待機しない
     If completed >= fenceValue Then Exit Sub
     
-    ' OPTIMIZATION: Spin-wait briefly before falling back to event wait
-    ' This avoids kernel transition for short waits
+    ' OPTIMIZATION: Reduced spin-wait (100 iterations instead of 1000)
+    ' Since GPU is the bottleneck, extensive spinning wastes CPU cycles
     Dim spinCount As Long
-    For spinCount = 0 To 1000
+    For spinCount = 0 To 99
         completed = GetFenceCompletedValue(g_pFence)
         If completed >= fenceValue Then Exit Sub
     Next spinCount
     
-    ' イベント待機（タイムアウト短縮: 100ms -> 50ms）
+    ' OPTIMIZATION: Use INFINITE timeout since GPU processing takes ~50ms
+    ' 50ms timeout caused unnecessary timeout handling
     COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(fenceValue), g_fenceEvent
-    Dim waitResult As Long
-    waitResult = WaitForSingleObject(g_fenceEvent, 50)  ' 50ms timeout
-    
-    If waitResult <> WAIT_OBJECT_0 Then
-        LogMsg "WaitForFrame: timeout or error for frame " & frameIdx
-    End If
+    WaitForSingleObject g_fenceEvent, INFINITE
 End Sub
 
 ' ============================================================
@@ -1754,12 +1758,9 @@ Private Sub RenderFrame()
     WaitForFrame g_frameIndex
     ProfilerMark PROF_WAIT
 
-    ' Frame-specific constant buffer update (persistently mapped)
-    Dim cbData As CONSTANT_BUFFER_DATA
-    cbData.iTime = CSng(GetTime() - g_startTime)
-    cbData.iResolutionX = CSng(Width)
-    cbData.iResolutionY = CSng(Height)
-    CopyMemory g_constantBufferDataBegins(g_frameIndex), VarPtr(cbData), CLngPtr(LenB(cbData))
+    ' OPTIMIZATION: Update only iTime (resolution is pre-set and static)
+    g_cbData.iTime = CSng(GetTime() - g_startTime)
+    CopyMemory g_constantBufferDataBegins(g_frameIndex), VarPtr(g_cbData), g_cbDataSize
     ProfilerMark PROF_UPDATE
 
     ' No per-frame Reset/Record anymore
@@ -1772,13 +1773,15 @@ Private Sub RenderFrame()
     COM_Call3 g_pCommandQueue, VTBL_CmdQueue_ExecuteCommandLists, 1, VarPtr(ppCommandLists)
     ProfilerMark PROF_EXECUTE
 
+    ' OPTIMIZATION: Present BEFORE Signal for better GPU utilization
+    COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 0, 0
+    ProfilerMark PROF_PRESENT
+
+    ' Signal fence after Present
     g_frameFenceValues(g_frameIndex) = g_currentFenceValue
     COM_Call3 g_pCommandQueue, VTBL_CmdQueue_Signal, g_pFence, CLngPtr(g_currentFenceValue)
     ProfilerMark PROF_SIGNAL
     g_currentFenceValue = g_currentFenceValue + 1
-
-    COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 0, 0
-    ProfilerMark PROF_PRESENT
 
     ProfilerEndFrame
 End Sub
@@ -1833,7 +1836,10 @@ End Sub
 Public Sub Main()
     LogOpen
     On Error GoTo EH
-    LogMsg "Main: start (OPTIMIZED VERSION)"
+    LogMsg "Main: start (OPTIMIZED VERSION V2)"
+    
+    ' OPTIMIZATION: Initialize QPC frequency once at startup
+    InitQpcFrequency
     
     InitThunks
     
@@ -1889,9 +1895,8 @@ Public Sub Main()
         Else
             RenderFrame
             frame = frame + 1
-            ' OPTIMIZATION: Removed Sleep(1) - let GPU/CPU work continuously
-            ' OPTIMIZATION: DoEvents every 180 frames instead of 60
-            If (frame Mod 180) = 0 Then DoEvents
+            ' OPTIMIZATION: DoEvents every 300 frames (reduced from 180)
+            If (frame Mod 300) = 0 Then DoEvents
         End If
     Loop
 
