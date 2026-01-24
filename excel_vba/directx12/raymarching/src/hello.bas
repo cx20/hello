@@ -4,48 +4,9 @@ Option Explicit
 ' ============================================================
 ' DX12 CPU Profiler (integrated)
 ' ============================================================
-' ============================================================
-'  DX12/VBA Micro Profiler (QPC)
-'   - Low overhead (no strings in hot path)
-'   - Accumulates average ms over a window
-'   - Writes to log file and Debug.Print
-'
-'  Intended for: Excel VBA (64-bit) DirectX 12 samples.
-'
-'  Integration (minimal edits):
-'    1) Call ProfilerInit once during startup.
-'    2) Call ProfilerReset once before entering the main loop.
-'    3) In DrawFrame (or equivalent), call:
-'
-'         ProfilerBeginFrame
-'         ' --- Wait for frame fence ---
-'         ProfilerMark PROF_WAIT
-'         ' --- Reset allocator / list ---
-'         ProfilerMark PROF_RESET
-'         ' --- Update constant buffer ---
-'         ProfilerMark PROF_UPDATE
-'         ' --- Record commands ---
-'         ProfilerMark PROF_RECORD
-'         ' --- ExecuteCommandLists ---
-'         ProfilerMark PROF_EXECUTE
-'         ' --- Present ---
-'         ProfilerMark PROF_PRESENT
-'         ' --- Signal fence ---
-'         ProfilerMark PROF_SIGNAL
-'         ProfilerEndFrame
-'
-'    4) After the loop, call ProfilerFlush to print the last window.
-'
-'  Notes:
-'   - Keep ProfilerMark calls *outside* tight per-draw loops.
-'   - This profiler measures CPU-side time only (not GPU duration).
-' ============================================================
-
-' -------- Settings --------
 Public Const PROF_WINDOW_FRAMES As Long = 300
-Public Const PROF_LOG_PATH As String = "C:\TEMP\dx12_raymarch_prof_opt.log"
+Public Const PROF_LOG_PATH As String = "C:\TEMP\dx12_raymarch_prof_v3.log"
 
-' -------- Sections --------
 Public Const PROF_WAIT As Long = 0
 Public Const PROF_RESET As Long = 1
 Public Const PROF_UPDATE As Long = 2
@@ -72,18 +33,16 @@ Private g_prev As Double
 Private g_acc(0 To PROF_COUNT - 1) As Double
 Private g_frames As Long
 
-Private g_qpcFreq As Double
 ' ============================================================
 '  Excel VBA (64-bit) + DirectX 12 - Raymarching Rendering
-'   - PIPELINED VERSION: Proper frame-in-flight management
-'   - Creates a Win32 window
-'   - Creates D3D12 Device, CommandQueue, SwapChain
-'   - Creates RootSignature with CBV, PipelineState
-'   - Manages GPU synchronization with per-frame Fences
-'   - Renders raymarching scene using external hello.hlsl
-'   - Debug log: C:\TEMP\dx12_raymarching.log
+'  *** OPTIMIZED VERSION V3 - Pre-bound Thunks ***
 '
-'  KEY OPTIMIZATION: Frame pipelining - CPU and GPU work in parallel
+'  Key Optimizations:
+'   1. Per-function dedicated thunks (no SetThunkTarget per call)
+'   2. VTable address caching at initialization
+'   3. Reusable ThunkArgs structures (global)
+'   4. Reduced spin-wait iterations
+'   5. Minimized COM call overhead in render loop
 ' ============================================================
 
 ' -----------------------------
@@ -177,7 +136,6 @@ Private Const D3D12_DESCRIPTOR_RANGE_TYPE_CBV As Long = 2
 Private Const D3D12_SHADER_VISIBILITY_PIXEL As Long = 5
 Private Const D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND As Long = &HFFFFFFFF
 
-' Frame management constants
 Private Const FRAME_COUNT As Long = 3
 Private Const Width As Long = 800
 Private Const Height As Long = 600
@@ -242,7 +200,7 @@ Private Const VTBL_Blob_GetBufferPointer As Long = 3
 Private Const VTBL_Blob_GetBufferSize As Long = 4
 
 Private Const CLASS_NAME As String = "RaymarchingDX12WindowVBA"
-Private Const WINDOW_NAME As String = "Raymarching - DirectX 12 (VBA64) - OPTIMIZED"
+Private Const WINDOW_NAME As String = "Raymarching - DirectX 12 (VBA64) - OPTIMIZED V3"
 
 ' -----------------------------
 ' Types
@@ -555,6 +513,7 @@ Private Type CONSTANT_BUFFER_DATA
     padding As Single
 End Type
 
+' *** OPTIMIZATION: Unified argument structures for different call signatures ***
 Private Type ThunkArgs1
     a1 As LongPtr
 End Type
@@ -628,11 +587,9 @@ Private Type ThunkArgs9
 End Type
 
 ' -----------------------------
-' Globals
+' Globals - D3D12 objects
 ' -----------------------------
 Private g_hWnd As LongPtr
-
-' D3D12 objects
 Private g_pDevice As LongPtr
 Private g_pCommandQueue As LongPtr
 Private g_pSwapChain As LongPtr
@@ -649,27 +606,20 @@ Private g_rtvDescriptorSize As Long
 Private g_cbvDescriptorSize As Long
 Private g_pRenderTargets(0 To FRAME_COUNT - 1) As LongPtr
 Private g_pVertexBuffer As LongPtr
-'Private g_pConstantBuffer As LongPtr
-'Private g_constantBufferDataBegin As LongPtr
 Private g_pConstantBuffers(0 To FRAME_COUNT - 1) As LongPtr
 Private g_constantBufferDataBegins(0 To FRAME_COUNT - 1) As LongPtr
 
 Private g_vertexBufferView As D3D12_VERTEX_BUFFER_VIEW
 
-' *** KEY CHANGE: Per-frame resources for pipelining ***
 Private g_pCommandAllocators(0 To FRAME_COUNT - 1) As LongPtr
 Private g_frameFenceValues(0 To FRAME_COUNT - 1) As LongLong
 Private g_currentFenceValue As LongLong
 Private g_frameIndex As Long
 
-' Semantic name strings
 Private g_semanticPosition() As Byte
-
-' Timer
 Private g_startTime As Double
-Private g_qpcFreqInv As Double              ' OPTIMIZATION: Pre-cached 1/freq for faster division
+Private g_qpcFreqInv As Double
 
-' OPTIMIZATION: Pre-allocated constant buffer data
 Private g_cbData As CONSTANT_BUFFER_DATA
 Private g_cbDataSize As LongPtr
 
@@ -684,12 +634,20 @@ Private Const OPEN_EXISTING As Long = 3
 Private Const FILE_ATTRIBUTE_NORMAL As Long = &H80
 Private Const INVALID_HANDLE_VALUE As LongPtr = -1
 
-' Thunk memory - CACHED
+' Thunk memory constants
 Private Const MEM_COMMIT As Long = &H1000&
 Private Const MEM_RESERVE As Long = &H2000&
 Private Const MEM_RELEASE As Long = &H8000&
 Private Const PAGE_EXECUTE_READWRITE As Long = &H40&
 
+' ============================================================
+' *** OPTIMIZATION V3: Pre-bound dedicated thunks ***
+' Each frequently-called function gets its own thunk with
+' the target address baked in at initialization time.
+' This eliminates SetThunkTarget calls in the render loop.
+' ============================================================
+
+' Generic thunks (for initialization/setup - not performance critical)
 Private g_thunk1 As LongPtr
 Private g_thunk2 As LongPtr
 Private g_thunk3 As LongPtr
@@ -701,6 +659,22 @@ Private g_thunk8 As LongPtr
 Private g_thunk9 As LongPtr
 Private g_thunkRetStruct As LongPtr
 Private g_thunkRetStructGPU As LongPtr
+
+' *** NEW: Dedicated pre-bound thunks for hot path ***
+Private g_thunk_SwapChain3_GetCurrentBackBufferIndex As LongPtr
+Private g_thunk_Fence_GetCompletedValue As LongPtr
+Private g_thunk_Fence_SetEventOnCompletion As LongPtr
+Private g_thunk_CmdQueue_ExecuteCommandLists As LongPtr
+Private g_thunk_CmdQueue_Signal As LongPtr
+Private g_thunk_SwapChain_Present As LongPtr
+
+' *** NEW: Pre-allocated reusable argument structures ***
+Private g_args1_GetBackBufferIndex As ThunkArgs1
+Private g_args1_GetFenceValue As ThunkArgs1
+Private g_args3_SetEventOnCompletion As ThunkArgs3
+Private g_args3_ExecuteCommandLists As ThunkArgs3
+Private g_args3_Signal As ThunkArgs3
+Private g_args3_Present As ThunkArgs3
 
 Private Const THUNK1_TARGET_OFFSET As Long = 12
 Private Const THUNK2_TARGET_OFFSET As Long = 16
@@ -755,11 +729,11 @@ Private g_thunksInitialized As Boolean
     Private Declare PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (ByVal Destination As LongPtr, ByVal Source As LongPtr, ByVal Length As LongPtr)
     Private Declare PtrSafe Function VirtualAlloc Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal flAllocationType As Long, ByVal flProtect As Long) As LongPtr
     Private Declare PtrSafe Function VirtualFree Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal dwFreeType As Long) As Long
-'    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As LARGE_INTEGER) As Long
-'    Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As LARGE_INTEGER) As Long
 #End If
 
-' Public API
+' ============================================================
+' Profiler
+' ============================================================
 Public Sub ProfilerInit()
     Dim f As LARGE_INTEGER
     If QueryPerformanceFrequency(f) = 0 Then
@@ -811,7 +785,6 @@ Public Sub ProfilerFlush()
     End If
 End Sub
 
-' Internals
 Private Function NowQpcMs() As Double
     Dim c As LARGE_INTEGER
     If g_profFreq = 0# Then
@@ -830,7 +803,7 @@ Private Sub ProfilerDumpAverage()
     If denom <= 0# Then Exit Sub
 
     Dim s As String
-    s = "=== DX12 PROFILE (avg ms over " & CStr(g_frames) & " frames) ===" & vbCrLf & _
+    s = "=== DX12 PROFILE V3 (avg ms over " & CStr(g_frames) & " frames) ===" & vbCrLf & _
         "  Wait:    " & FmtMs(g_acc(PROF_WAIT) / denom) & vbCrLf & _
         "  Reset:   " & FmtMs(g_acc(PROF_RESET) / denom) & vbCrLf & _
         "  Update:  " & FmtMs(g_acc(PROF_UPDATE) / denom) & vbCrLf & _
@@ -849,7 +822,6 @@ Private Sub ProfilerDumpAverage()
     Open PROF_LOG_PATH For Append As #ff
     Print #ff, s
     Close #ff
-
 End Sub
 
 Private Function FmtMs(ByVal v As Double) As String
@@ -862,9 +834,9 @@ End Function
 Private Sub LogOpen()
     On Error Resume Next
     CreateDirectoryW StrPtr("C:\TEMP"), 0
-    g_log = CreateFileW(StrPtr("C:\TEMP\dx12_raymarching_opt.log"), GENERIC_WRITE, FILE_SHARE_READ Or FILE_SHARE_WRITE, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0)
+    g_log = CreateFileW(StrPtr("C:\TEMP\dx12_raymarching_v3.log"), GENERIC_WRITE, FILE_SHARE_READ Or FILE_SHARE_WRITE, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0)
     If g_log = 0 Or g_log = -1 Then g_log = 0
-    LogMsg "==== DX12 RAYMARCHING LOG START (OPTIMIZED) ===="
+    LogMsg "==== DX12 RAYMARCHING LOG START (OPTIMIZED V3) ===="
 End Sub
 
 Private Sub LogClose()
@@ -905,22 +877,18 @@ Private Function PtrToAnsiString(ByVal p As LongPtr) As String
     PtrToAnsiString = StrConv(b, vbUnicode)
 End Function
 
-' OPTIMIZATION: Initialize QPC frequency once at startup
 Private Sub InitQpcFrequency()
     Dim f As LARGE_INTEGER
     If QueryPerformanceFrequency(f) <> 0 Then
-        g_qpcFreq = CDbl(f.QuadPart)
-        g_qpcFreqInv = 1# / g_qpcFreq   ' Pre-calculate inverse for faster computation
+        g_qpcFreqInv = 1# / CDbl(f.QuadPart)
     End If
 End Sub
 
-' OPTIMIZATION: Faster GetTime with pre-cached frequency inverse
 Private Function GetTime() As Double
     Dim c As LARGE_INTEGER
     QueryPerformanceCounter c
-    GetTime = CDbl(c.QuadPart) * g_qpcFreqInv  ' Multiplication instead of division
+    GetTime = CDbl(c.QuadPart) * g_qpcFreqInv
 End Function
-
 
 ' ============================================================
 ' GUIDs
@@ -970,7 +938,7 @@ Private Function IID_IDXGISwapChain3() As GUID
 End Function
 
 ' ============================================================
-' Vtable helpers
+' VTable helpers
 ' ============================================================
 Private Function GetVTableMethod(ByVal pObj As LongPtr, ByVal vtIndex As Long) As LongPtr
     Dim vtable As LongPtr
@@ -981,9 +949,9 @@ Private Function GetVTableMethod(ByVal pObj As LongPtr, ByVal vtIndex As Long) A
 End Function
 
 ' ============================================================
-' Cached Thunk builders
+' Thunk builders
 ' ============================================================
-Private Function BuildThunk1Cached() As LongPtr
+Private Function BuildThunk1() As LongPtr
     Dim code(0 To 39) As Byte
     Dim i As Long: i = 0
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H28: i = i + 1
@@ -997,10 +965,10 @@ Private Function BuildThunk1Cached() As LongPtr
     Dim mem As LongPtr: mem = VirtualAlloc(0, 64, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 8996
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk1Cached = mem
+    BuildThunk1 = mem
 End Function
 
-Private Function BuildThunk2Cached() As LongPtr
+Private Function BuildThunk2() As LongPtr
     Dim code(0 To 47) As Byte: Dim i As Long: i = 0
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
@@ -1014,10 +982,10 @@ Private Function BuildThunk2Cached() As LongPtr
     Dim mem As LongPtr: mem = VirtualAlloc(0, 64, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 8997
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk2Cached = mem
+    BuildThunk2 = mem
 End Function
 
-Private Function BuildThunk3Cached() As LongPtr
+Private Function BuildThunk3() As LongPtr
     Dim code(0 To 55) As Byte: Dim i As Long: i = 0
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
@@ -1032,10 +1000,10 @@ Private Function BuildThunk3Cached() As LongPtr
     Dim mem As LongPtr: mem = VirtualAlloc(0, 64, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 8998
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk3Cached = mem
+    BuildThunk3 = mem
 End Function
 
-Private Function BuildThunk4Cached() As LongPtr
+Private Function BuildThunk4() As LongPtr
     Dim code(0 To 63) As Byte: Dim i As Long: i = 0
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
@@ -1051,10 +1019,10 @@ Private Function BuildThunk4Cached() As LongPtr
     Dim mem As LongPtr: mem = VirtualAlloc(0, 128, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 8999
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk4Cached = mem
+    BuildThunk4 = mem
 End Function
 
-Private Function BuildThunk5Cached() As LongPtr
+Private Function BuildThunk5() As LongPtr
     Dim code(0 To 79) As Byte: Dim i As Long: i = 0
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H38: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
@@ -1072,10 +1040,10 @@ Private Function BuildThunk5Cached() As LongPtr
     Dim mem As LongPtr: mem = VirtualAlloc(0, 128, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9000
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk5Cached = mem
+    BuildThunk5 = mem
 End Function
 
-Private Function BuildThunk6Cached() As LongPtr
+Private Function BuildThunk6() As LongPtr
     Dim code(0 To 99) As Byte: Dim i As Long: i = 0
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H48: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
@@ -1095,10 +1063,10 @@ Private Function BuildThunk6Cached() As LongPtr
     Dim mem As LongPtr: mem = VirtualAlloc(0, 128, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9001
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk6Cached = mem
+    BuildThunk6 = mem
 End Function
 
-Private Function BuildThunk7Cached() As LongPtr
+Private Function BuildThunk7() As LongPtr
     Dim code(0 To 119) As Byte: Dim i As Long: i = 0
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H58: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
@@ -1120,10 +1088,10 @@ Private Function BuildThunk7Cached() As LongPtr
     Dim mem As LongPtr: mem = VirtualAlloc(0, 128, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9002
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk7Cached = mem
+    BuildThunk7 = mem
 End Function
 
-Private Function BuildThunk8Cached() As LongPtr
+Private Function BuildThunk8() As LongPtr
     Dim code(0 To 127) As Byte: Dim i As Long: i = 0
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H68: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
@@ -1147,10 +1115,10 @@ Private Function BuildThunk8Cached() As LongPtr
     Dim mem As LongPtr: mem = VirtualAlloc(0, 160, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9003
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk8Cached = mem
+    BuildThunk8 = mem
 End Function
 
-Private Function BuildThunk9Cached() As LongPtr
+Private Function BuildThunk9() As LongPtr
     Dim code(0 To 143) As Byte: Dim i As Long: i = 0
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H68: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
@@ -1176,10 +1144,10 @@ Private Function BuildThunk9Cached() As LongPtr
     Dim mem As LongPtr: mem = VirtualAlloc(0, 160, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9004
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunk9Cached = mem
+    BuildThunk9 = mem
 End Function
 
-Private Function BuildThunkRetStructCached() As LongPtr
+Private Function BuildThunkRetStruct() As LongPtr
     Dim code(0 To 47) As Byte: Dim i As Long: i = 0
     code(i) = &H48: i = i + 1: code(i) = &H83: i = i + 1: code(i) = &HEC: i = i + 1: code(i) = &H28: i = i + 1
     code(i) = &H4D: i = i + 1: code(i) = &H89: i = i + 1: code(i) = &HC2: i = i + 1
@@ -1193,25 +1161,84 @@ Private Function BuildThunkRetStructCached() As LongPtr
     Dim mem As LongPtr: mem = VirtualAlloc(0, 64, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     If mem = 0 Then Err.Raise vbObjectError + 9005
     CopyMemory mem, VarPtr(code(0)), CLngPtr(i + 1)
-    BuildThunkRetStructCached = mem
+    BuildThunkRetStruct = mem
 End Function
+
+Private Sub SetThunkTarget(ByVal pThunk As LongPtr, ByVal offset As Long, ByVal target As LongPtr)
+    CopyMemory pThunk + CLngPtr(offset), VarPtr(target), 8
+End Sub
 
 Private Sub InitThunks()
     If g_thunksInitialized Then Exit Sub
-    LogMsg "InitThunks: Building cached thunks..."
-    g_thunk1 = BuildThunk1Cached()
-    g_thunk2 = BuildThunk2Cached()
-    g_thunk3 = BuildThunk3Cached()
-    g_thunk4 = BuildThunk4Cached()
-    g_thunk5 = BuildThunk5Cached()
-    g_thunk6 = BuildThunk6Cached()
-    g_thunk7 = BuildThunk7Cached()
-    g_thunk8 = BuildThunk8Cached()
-    g_thunk9 = BuildThunk9Cached()
-    g_thunkRetStruct = BuildThunkRetStructCached()
-    g_thunkRetStructGPU = BuildThunkRetStructCached()
+    LogMsg "InitThunks: Building generic thunks..."
+    
+    ' Generic thunks for initialization
+    g_thunk1 = BuildThunk1()
+    g_thunk2 = BuildThunk2()
+    g_thunk3 = BuildThunk3()
+    g_thunk4 = BuildThunk4()
+    g_thunk5 = BuildThunk5()
+    g_thunk6 = BuildThunk6()
+    g_thunk7 = BuildThunk7()
+    g_thunk8 = BuildThunk8()
+    g_thunk9 = BuildThunk9()
+    g_thunkRetStruct = BuildThunkRetStruct()
+    g_thunkRetStructGPU = BuildThunkRetStruct()
+    
+    ' *** NEW: Dedicated thunks for hot path (will be bound later) ***
+    g_thunk_SwapChain3_GetCurrentBackBufferIndex = BuildThunk1()
+    g_thunk_Fence_GetCompletedValue = BuildThunk1()
+    g_thunk_Fence_SetEventOnCompletion = BuildThunk3()
+    g_thunk_CmdQueue_ExecuteCommandLists = BuildThunk3()
+    g_thunk_CmdQueue_Signal = BuildThunk3()
+    g_thunk_SwapChain_Present = BuildThunk3()
+    
     g_thunksInitialized = True
     LogMsg "InitThunks: done"
+End Sub
+
+' *** NEW: Bind dedicated thunks to actual function addresses ***
+Private Sub BindHotPathThunks()
+    LogMsg "BindHotPathThunks: Binding dedicated thunks to function addresses..."
+    
+    ' SwapChain3::GetCurrentBackBufferIndex
+    SetThunkTarget g_thunk_SwapChain3_GetCurrentBackBufferIndex, THUNK1_TARGET_OFFSET, _
+                   GetVTableMethod(g_pSwapChain3, VTBL_SwapChain3_GetCurrentBackBufferIndex)
+    g_args1_GetBackBufferIndex.a1 = g_pSwapChain3
+    
+    ' Fence::GetCompletedValue
+    SetThunkTarget g_thunk_Fence_GetCompletedValue, THUNK1_TARGET_OFFSET, _
+                   GetVTableMethod(g_pFence, VTBL_Fence_GetCompletedValue)
+    g_args1_GetFenceValue.a1 = g_pFence
+    
+    ' Fence::SetEventOnCompletion
+    SetThunkTarget g_thunk_Fence_SetEventOnCompletion, THUNK3_TARGET_OFFSET, _
+                   GetVTableMethod(g_pFence, VTBL_Fence_SetEventOnCompletion)
+    g_args3_SetEventOnCompletion.a1 = g_pFence
+    ' a2 (fenceValue) and a3 (event) set per call
+    
+    ' CommandQueue::ExecuteCommandLists
+    SetThunkTarget g_thunk_CmdQueue_ExecuteCommandLists, THUNK3_TARGET_OFFSET, _
+                   GetVTableMethod(g_pCommandQueue, VTBL_CmdQueue_ExecuteCommandLists)
+    g_args3_ExecuteCommandLists.a1 = g_pCommandQueue
+    g_args3_ExecuteCommandLists.a2 = 1  ' NumCommandLists = 1
+    ' a3 (ppCommandLists) set per call
+    
+    ' CommandQueue::Signal
+    SetThunkTarget g_thunk_CmdQueue_Signal, THUNK3_TARGET_OFFSET, _
+                   GetVTableMethod(g_pCommandQueue, VTBL_CmdQueue_Signal)
+    g_args3_Signal.a1 = g_pCommandQueue
+    g_args3_Signal.a2 = g_pFence
+    ' a3 (fenceValue) set per call
+    
+    ' SwapChain::Present
+    SetThunkTarget g_thunk_SwapChain_Present, THUNK3_TARGET_OFFSET, _
+                   GetVTableMethod(g_pSwapChain, VTBL_SwapChain_Present)
+    g_args3_Present.a1 = g_pSwapChain
+    g_args3_Present.a2 = 0  ' SyncInterval = 0
+    g_args3_Present.a3 = 0  ' Flags = 0
+    
+    LogMsg "BindHotPathThunks: done"
 End Sub
 
 Private Sub FreeThunks()
@@ -1227,15 +1254,20 @@ Private Sub FreeThunks()
     If g_thunk9 <> 0 Then VirtualFree g_thunk9, 0, MEM_RELEASE: g_thunk9 = 0
     If g_thunkRetStruct <> 0 Then VirtualFree g_thunkRetStruct, 0, MEM_RELEASE: g_thunkRetStruct = 0
     If g_thunkRetStructGPU <> 0 Then VirtualFree g_thunkRetStructGPU, 0, MEM_RELEASE: g_thunkRetStructGPU = 0
+    
+    ' Free dedicated thunks
+    If g_thunk_SwapChain3_GetCurrentBackBufferIndex <> 0 Then VirtualFree g_thunk_SwapChain3_GetCurrentBackBufferIndex, 0, MEM_RELEASE: g_thunk_SwapChain3_GetCurrentBackBufferIndex = 0
+    If g_thunk_Fence_GetCompletedValue <> 0 Then VirtualFree g_thunk_Fence_GetCompletedValue, 0, MEM_RELEASE: g_thunk_Fence_GetCompletedValue = 0
+    If g_thunk_Fence_SetEventOnCompletion <> 0 Then VirtualFree g_thunk_Fence_SetEventOnCompletion, 0, MEM_RELEASE: g_thunk_Fence_SetEventOnCompletion = 0
+    If g_thunk_CmdQueue_ExecuteCommandLists <> 0 Then VirtualFree g_thunk_CmdQueue_ExecuteCommandLists, 0, MEM_RELEASE: g_thunk_CmdQueue_ExecuteCommandLists = 0
+    If g_thunk_CmdQueue_Signal <> 0 Then VirtualFree g_thunk_CmdQueue_Signal, 0, MEM_RELEASE: g_thunk_CmdQueue_Signal = 0
+    If g_thunk_SwapChain_Present <> 0 Then VirtualFree g_thunk_SwapChain_Present, 0, MEM_RELEASE: g_thunk_SwapChain_Present = 0
+    
     g_thunksInitialized = False
 End Sub
 
-Private Sub SetThunkTarget(ByVal pThunk As LongPtr, ByVal offset As Long, ByVal target As LongPtr)
-    CopyMemory pThunk + CLngPtr(offset), VarPtr(target), 8
-End Sub
-
 ' ============================================================
-' COM Call helpers
+' COM Call helpers (generic - for initialization)
 ' ============================================================
 Private Function COM_Call1(ByVal pObj As LongPtr, ByVal vtIndex As Long) As LongPtr
     SetThunkTarget g_thunk1, THUNK1_TARGET_OFFSET, GetVTableMethod(pObj, vtIndex)
@@ -1300,6 +1332,50 @@ Private Function ToHResult(ByVal v As LongPtr) As Long
 End Function
 
 ' ============================================================
+' *** OPTIMIZED: Fast inline calls using pre-bound thunks ***
+' These functions use dedicated thunks with pre-set targets
+' No SetThunkTarget or GetVTableMethod calls!
+' ============================================================
+
+' Fast GetCurrentBackBufferIndex - no SetThunkTarget!
+Private Function Fast_GetCurrentBackBufferIndex() As Long
+    Fast_GetCurrentBackBufferIndex = CLng(CallWindowProcW(g_thunk_SwapChain3_GetCurrentBackBufferIndex, 0, 0, VarPtr(g_args1_GetBackBufferIndex), 0))
+End Function
+
+' Fast GetCompletedValue - no SetThunkTarget!
+Private Function Fast_GetFenceCompletedValue() As LongLong
+    Dim result As LongLong
+    Dim retVal As LongPtr
+    retVal = CallWindowProcW(g_thunk_Fence_GetCompletedValue, 0, 0, VarPtr(g_args1_GetFenceValue), 0)
+    CopyMemory VarPtr(result), VarPtr(retVal), 8
+    Fast_GetFenceCompletedValue = result
+End Function
+
+' Fast SetEventOnCompletion - no SetThunkTarget!
+Private Sub Fast_SetEventOnCompletion(ByVal fenceValue As LongLong, ByVal hEvent As LongPtr)
+    g_args3_SetEventOnCompletion.a2 = CLngPtr(fenceValue)
+    g_args3_SetEventOnCompletion.a3 = hEvent
+    CallWindowProcW g_thunk_Fence_SetEventOnCompletion, 0, 0, VarPtr(g_args3_SetEventOnCompletion), 0
+End Sub
+
+' Fast ExecuteCommandLists - no SetThunkTarget!
+Private Sub Fast_ExecuteCommandLists(ByVal ppCommandLists As LongPtr)
+    g_args3_ExecuteCommandLists.a3 = ppCommandLists
+    CallWindowProcW g_thunk_CmdQueue_ExecuteCommandLists, 0, 0, VarPtr(g_args3_ExecuteCommandLists), 0
+End Sub
+
+' Fast Signal - no SetThunkTarget!
+Private Sub Fast_Signal(ByVal fenceValue As LongLong)
+    g_args3_Signal.a3 = CLngPtr(fenceValue)
+    CallWindowProcW g_thunk_CmdQueue_Signal, 0, 0, VarPtr(g_args3_Signal), 0
+End Sub
+
+' Fast Present - no SetThunkTarget!
+Private Sub Fast_Present()
+    CallWindowProcW g_thunk_SwapChain_Present, 0, 0, VarPtr(g_args3_Present), 0
+End Sub
+
+' ============================================================
 ' Shader compilation
 ' ============================================================
 Private Function CompileShaderFromFile(ByVal filePath As String, ByVal entryPoint As String, ByVal profile As String) As LongPtr
@@ -1338,7 +1414,7 @@ Public Function WindowProc(ByVal hWnd As LongPtr, ByVal uMsg As Long, ByVal wPar
 End Function
 
 ' ============================================================
-' Initialize DirectX 12 with per-frame command allocators
+' Initialize DirectX 12
 ' ============================================================
 Private Function InitD3D12(ByVal hWnd As LongPtr) As Boolean
     LogMsg "InitD3D12: start (pipelined)"
@@ -1384,7 +1460,6 @@ Private Function InitD3D12(ByVal hWnd As LongPtr) As Boolean
     
     Dim cbvHeapDesc As D3D12_DESCRIPTOR_HEAP_DESC
     cbvHeapDesc.cType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
-    '(cbvHeapDesc.NumDescriptors = 1
     cbvHeapDesc.NumDescriptors = FRAME_COUNT
     cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
     hr = ToHResult(COM_Call4(g_pDevice, VTBL_Device_CreateDescriptorHeap, VarPtr(cbvHeapDesc), VarPtr(heapIID), VarPtr(g_pCbvHeap)))
@@ -1401,7 +1476,6 @@ Private Function InitD3D12(ByVal hWnd As LongPtr) As Boolean
         rtvHandle.ptr = rtvHandle.ptr + g_rtvDescriptorSize
     Next frameIdx
     
-    ' *** KEY CHANGE: Create per-frame command allocators ***
     Dim allocIID As GUID: allocIID = IID_ID3D12CommandAllocator()
     For frameIdx = 0 To FRAME_COUNT - 1
         hr = ToHResult(COM_Call4(g_pDevice, VTBL_Device_CreateCommandAllocator, D3D12_COMMAND_LIST_TYPE_DIRECT, VarPtr(allocIID), VarPtr(g_pCommandAllocators(frameIdx))))
@@ -1486,8 +1560,6 @@ Private Function CreatePipelineState(ByVal shaderPath As String) As Boolean
 End Function
 
 Private Function CreateFrameCommandLists() As Boolean
-    ' Create one direct command list per swapchain buffer (frame).
-    ' We will record each list once at init and reuse it every frame.
     Dim cmdListIID As GUID: cmdListIID = IID_ID3D12GraphicsCommandList()
     Dim hr As Long
     Dim frameIdx As Long
@@ -1499,14 +1571,11 @@ Private Function CreateFrameCommandLists() As Boolean
             CreateFrameCommandLists = False
             Exit Function
         End If
-
-        ' Close for now; will be Reset+recorded once after all resources are ready.
         COM_Call1 g_pFrameCommandLists(frameIdx), VTBL_CmdList_Close
     Next frameIdx
 
     CreateFrameCommandLists = True
 End Function
-
 
 Private Function CreateVertexBuffer() As Boolean
     Dim vertices(0 To 5) As VERTEX
@@ -1591,7 +1660,6 @@ Private Function CreateConstantBuffer() As Boolean
         cbvHandle.ptr = cbvHandle.ptr + g_cbvDescriptorSize
     Next frameIdx
     
-    ' OPTIMIZATION: Pre-set static values in g_cbData
     g_cbData.iResolutionX = CSng(Width)
     g_cbData.iResolutionY = CSng(Height)
     g_cbData.padding = 0!
@@ -1609,30 +1677,6 @@ Private Function CreateFence() As Boolean
     CreateFence = (g_fenceEvent <> 0)
 End Function
 
-' UINT64を正しく取得するための専用サンク
-Private Function GetFenceCompletedValue(ByVal pFence As LongPtr) As LongLong
-    ' GetCompletedValueはUINT64を返す - RAXレジスタから直接取得
-    Dim result As LongLong
-    SetThunkTarget g_thunk1, THUNK1_TARGET_OFFSET, GetVTableMethod(pFence, VTBL_Fence_GetCompletedValue)
-    Dim args As ThunkArgs1: args.a1 = pFence
-    
-    ' 戻り値を直接LongLongとして受け取る
-    Dim retVal As LongPtr
-    retVal = CallWindowProcW(g_thunk1, 0, 0, VarPtr(args), 0)
-    CopyMemory VarPtr(result), VarPtr(retVal), 8
-    GetFenceCompletedValue = result
-End Function
-
-' ============================================================
-' *** KEY CHANGE: Wait only for the specific frame's resources ***
-' This allows pipelining - we only wait when we need to reuse resources
-' ============================================================
-'
-' ============================================================
-' Record per-frame command lists ONCE (no per-frame recording).
-' This is the single biggest performance lever for VBA + DX12:
-' it collapses hundreds of COM/vtbl calls per frame to ~0.
-' ============================================================
 Private Sub RecordAllFrameCommandListsOnce()
     Dim frameIdx As Long
     For frameIdx = 0 To FRAME_COUNT - 1
@@ -1644,28 +1688,23 @@ Private Sub RecordCommandListForFrame(ByVal frameIdx As Long)
     Dim pCmd As LongPtr: pCmd = g_pFrameCommandLists(frameIdx)
     If pCmd = 0 Then Exit Sub
 
-    ' Reset allocator/list ONCE (at init only)
     COM_Call1 g_pCommandAllocators(frameIdx), VTBL_CmdAlloc_Reset
     COM_Call3 pCmd, VTBL_CmdList_Reset, g_pCommandAllocators(frameIdx), g_pPipelineState
 
-    ' Root signature + heaps
     COM_Call2 pCmd, VTBL_CmdList_SetGraphicsRootSignature, g_pRootSignature
     Dim ppHeaps As LongPtr: ppHeaps = g_pCbvHeap
     COM_Call3 pCmd, VTBL_CmdList_SetDescriptorHeaps, 1, VarPtr(ppHeaps)
 
-    ' Frame-specific CBV descriptor (baked into the command list)
     Dim gpuHandle As D3D12_GPU_DESCRIPTOR_HANDLE
     COM_GetGPUDescriptorHandle g_pCbvHeap, gpuHandle
     gpuHandle.ptr = gpuHandle.ptr + CLngLng(frameIdx) * CLngLng(g_cbvDescriptorSize)
     COM_Call3 pCmd, VTBL_CmdList_SetGraphicsRootDescriptorTable, 0, CLngPtr(gpuHandle.ptr)
 
-    ' Viewport / scissor (fixed size in this sample)
     Dim vp As D3D12_VIEWPORT: vp.Width = CSng(Width): vp.Height = CSng(Height): vp.MaxDepth = 1!
     COM_Call3 pCmd, VTBL_CmdList_RSSetViewports, 1, VarPtr(vp)
     Dim sr As D3D12_RECT: sr.Right = Width: sr.Bottom = Height
     COM_Call3 pCmd, VTBL_CmdList_RSSetScissorRects, 1, VarPtr(sr)
 
-    ' PRESENT -> RT
     Dim barrierToRT As D3D12_RESOURCE_BARRIER
     barrierToRT.cType = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
     barrierToRT.Transition.pResource = g_pRenderTargets(frameIdx)
@@ -1674,12 +1713,10 @@ Private Sub RecordCommandListForFrame(ByVal frameIdx As Long)
     barrierToRT.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
     COM_Call3 pCmd, VTBL_CmdList_ResourceBarrier, 1, VarPtr(barrierToRT)
 
-    ' RTV handle for this backbuffer
     Dim rtvHandle As D3D12_CPU_DESCRIPTOR_HANDLE
     COM_GetCPUDescriptorHandle g_pRtvHeap, rtvHandle
     rtvHandle.ptr = rtvHandle.ptr + CLngPtr(frameIdx) * CLngPtr(g_rtvDescriptorSize)
 
-    ' Clear + draw fullscreen triangle (raymarch in PS)
     Dim clearColor(0 To 3) As Single: clearColor(3) = 1!
     COM_Call5 pCmd, VTBL_CmdList_ClearRenderTargetView, rtvHandle.ptr, VarPtr(clearColor(0)), 0, 0
     COM_Call5 pCmd, VTBL_CmdList_OMSetRenderTargets, 1, VarPtr(rtvHandle), 1, 0
@@ -1688,7 +1725,6 @@ Private Sub RecordCommandListForFrame(ByVal frameIdx As Long)
     COM_Call4 pCmd, VTBL_CmdList_IASetVertexBuffers, 0, 1, VarPtr(g_vertexBufferView)
     COM_Call5 pCmd, VTBL_CmdList_DrawInstanced, 6, 1, 0, 0
 
-    ' RT -> PRESENT
     Dim barrierToPresent As D3D12_RESOURCE_BARRIER
     barrierToPresent.cType = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
     barrierToPresent.Transition.pResource = g_pRenderTargets(frameIdx)
@@ -1700,96 +1736,67 @@ Private Sub RecordCommandListForFrame(ByVal frameIdx As Long)
     COM_Call1 pCmd, VTBL_CmdList_Close
 End Sub
 
-' Private Sub WaitForFrame(ByVal frameIdx As Long)
-'     ' Standard DX12 frame pacing: wait only when reusing a backbuffer that is still in flight.
-'     Dim fenceValue As LongLong
-'     fenceValue = g_frameFenceValues(frameIdx)
-' 
-'     ' First time for this buffer: no wait necessary
-'     If fenceValue = 0 Then Exit Sub
-' 
-'     Dim completed As LongLong
-'     completed = GetFenceCompletedValue(g_pFence)
-' 
-'     If completed >= fenceValue Then Exit Sub
-' 
-'     ' Block until GPU reaches fenceValue for this backbuffer
-'     COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(fenceValue), g_fenceEvent
-'     Call WaitForSingleObject(g_fenceEvent, INFINITE)
-' End Sub
-
-
-
+' *** OPTIMIZED: WaitForFrame using pre-bound thunks ***
 Private Sub WaitForFrame(ByVal frameIdx As Long)
     Dim fenceValue As LongLong
     fenceValue = g_frameFenceValues(frameIdx)
     
-    If fenceValue = 0 Then Exit Sub  ' 初回は待機不要
+    If fenceValue = 0 Then Exit Sub
     
     Dim completed As LongLong
-    completed = GetFenceCompletedValue(g_pFence)
+    completed = Fast_GetFenceCompletedValue()  ' *** Uses pre-bound thunk! ***
     
-    ' 既に完了していれば待機しない
     If completed >= fenceValue Then Exit Sub
     
-    ' OPTIMIZATION: Reduced spin-wait (100 iterations instead of 1000)
-    ' Since GPU is the bottleneck, extensive spinning wastes CPU cycles
+    ' Reduced spin-wait (10 iterations instead of 100)
     Dim spinCount As Long
-    For spinCount = 0 To 99
-        completed = GetFenceCompletedValue(g_pFence)
+    For spinCount = 0 To 9
+        completed = Fast_GetFenceCompletedValue()  ' *** Uses pre-bound thunk! ***
         If completed >= fenceValue Then Exit Sub
     Next spinCount
     
-    ' OPTIMIZATION: Use INFINITE timeout since GPU processing takes ~50ms
-    ' 50ms timeout caused unnecessary timeout handling
-    COM_Call3 g_pFence, VTBL_Fence_SetEventOnCompletion, CLngPtr(fenceValue), g_fenceEvent
+    ' Fall back to event wait
+    Fast_SetEventOnCompletion fenceValue, g_fenceEvent  ' *** Uses pre-bound thunk! ***
     WaitForSingleObject g_fenceEvent, INFINITE
 End Sub
 
-' ============================================================
-' Render frame with pipelining
-' ============================================================
+' *** OPTIMIZED: RenderFrame using pre-bound thunks ***
 Private Sub RenderFrame()
     ProfilerBeginFrame
 
-    g_frameIndex = CLng(COM_Call1(g_pSwapChain3, VTBL_SwapChain3_GetCurrentBackBufferIndex))
+    ' *** Uses pre-bound thunk! ***
+    g_frameIndex = Fast_GetCurrentBackBufferIndex()
     ProfilerMark PROF_INDEX
 
     WaitForFrame g_frameIndex
     ProfilerMark PROF_WAIT
 
-    ' OPTIMIZATION: Update only iTime (resolution is pre-set and static)
+    ' Update constant buffer (only iTime changes)
     g_cbData.iTime = CSng(GetTime() - g_startTime)
     CopyMemory g_constantBufferDataBegins(g_frameIndex), VarPtr(g_cbData), g_cbDataSize
     ProfilerMark PROF_UPDATE
 
-    ' No per-frame Reset/Record anymore
     ProfilerMark PROF_RESET
     ProfilerMark PROF_RECORD
 
-    ' Execute pre-recorded command list for this backbuffer
+    ' *** Uses pre-bound thunk! ***
     Dim pCmd As LongPtr: pCmd = g_pFrameCommandLists(g_frameIndex)
-    Dim ppCommandLists As LongPtr: ppCommandLists = pCmd
-    COM_Call3 g_pCommandQueue, VTBL_CmdQueue_ExecuteCommandLists, 1, VarPtr(ppCommandLists)
+    Fast_ExecuteCommandLists VarPtr(pCmd)
     ProfilerMark PROF_EXECUTE
 
-    ' OPTIMIZATION: Present BEFORE Signal for better GPU utilization
-    COM_Call3 g_pSwapChain, VTBL_SwapChain_Present, 0, 0
+    ' *** Uses pre-bound thunk! ***
+    Fast_Present
     ProfilerMark PROF_PRESENT
 
-    ' Signal fence after Present
+    ' *** Uses pre-bound thunk! ***
     g_frameFenceValues(g_frameIndex) = g_currentFenceValue
-    COM_Call3 g_pCommandQueue, VTBL_CmdQueue_Signal, g_pFence, CLngPtr(g_currentFenceValue)
+    Fast_Signal g_currentFenceValue
     ProfilerMark PROF_SIGNAL
     g_currentFenceValue = g_currentFenceValue + 1
 
     ProfilerEndFrame
 End Sub
 
-
-' ============================================================
-' Wait for all GPU work to complete (for cleanup)
-' ============================================================
 Private Sub WaitForAllFrames()
     Dim i As Long
     For i = 0 To FRAME_COUNT - 1
@@ -1797,15 +1804,11 @@ Private Sub WaitForAllFrames()
     Next i
 End Sub
 
-' ============================================================
-' Cleanup
-' ============================================================
 Private Sub CleanupD3D12()
     LogMsg "CleanupD3D12: start"
     WaitForAllFrames
     
     If g_fenceEvent <> 0 Then CloseHandle g_fenceEvent: g_fenceEvent = 0
-    'If g_pConstantBuffer <> 0 Then COM_Release g_pConstantBuffer: g_pConstantBuffer = 0
     If g_pVertexBuffer <> 0 Then COM_Release g_pVertexBuffer: g_pVertexBuffer = 0
     If g_pFence <> 0 Then COM_Release g_pFence: g_pFence = 0
     Dim frameIdx As Long
@@ -1836,11 +1839,9 @@ End Sub
 Public Sub Main()
     LogOpen
     On Error GoTo EH
-    LogMsg "Main: start (OPTIMIZED VERSION V2)"
+    LogMsg "Main: start (OPTIMIZED VERSION V3 - Pre-bound Thunks)"
     
-    ' OPTIMIZATION: Initialize QPC frequency once at startup
     InitQpcFrequency
-    
     InitThunks
     
     Dim shaderPath As String: shaderPath = ThisWorkbook.Path & "\hello.hlsl"
@@ -1874,15 +1875,15 @@ Public Sub Main()
     If Not CreateConstantBuffer() Then MsgBox "Failed to create constant buffer.", vbCritical: GoTo FIN
     If Not CreateFence() Then MsgBox "Failed to create fence.", vbCritical: GoTo FIN
 
-    ' Record command lists once (per backbuffer)
+    ' *** NEW: Bind dedicated thunks to actual function addresses ***
+    BindHotPathThunks
+    
     RecordAllFrameCommandListsOnce
 
     g_startTime = GetTime()
 
-    ' ---- Profiler (CPU-side timing) ----
     ProfilerInit
     ProfilerReset
-
 
     Dim msg As MSGW
     Dim quit As Boolean: quit = False
@@ -1895,13 +1896,11 @@ Public Sub Main()
         Else
             RenderFrame
             frame = frame + 1
-            ' OPTIMIZATION: DoEvents every 300 frames (reduced from 180)
-            If (frame Mod 300) = 0 Then DoEvents
+            If (frame Mod 500) = 0 Then DoEvents  ' Increased interval
         End If
     Loop
 
 FIN:
-    ' ---- Profiler flush ----
     ProfilerFlush
     LogMsg "Cleanup: start"
     CleanupD3D12
