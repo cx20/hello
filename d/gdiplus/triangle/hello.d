@@ -10,7 +10,7 @@ auto toUTF16z(S)(S s)
 import core.sys.windows.windef;
 import core.sys.windows.winuser;
 import core.sys.windows.wingdi;
-import core.sys.windows.winbase;  // LoadLibraryA, FreeLibrary用
+import core.sys.windows.winbase;
 
 // GDI+ bindings
 alias GpStatus = int;
@@ -18,6 +18,8 @@ alias GpGraphics = void*;
 alias GpBrush = void*;
 alias GpSolidFill = void*;
 alias GpPen = void*;
+alias GpPath = void*;
+alias GpPathGradient = void*;
 alias ARGB = uint;
 alias REAL = float;
 
@@ -61,14 +63,29 @@ extern(Windows) nothrow @nogc
     GpStatus GdipDeletePen(GpPen pen);
     GpStatus GdipDrawPolygonI(GpGraphics graphics, GpPen pen, GpPoint* points, int count);
     GpStatus GdipSetSmoothingMode(GpGraphics graphics, int smoothingMode);
+    
+    // GraphicsPath functions
+    GpStatus GdipCreatePath(int brushMode, GpPath* path);
+    GpStatus GdipDeletePath(GpPath path);
+    GpStatus GdipAddPathLine2I(GpPath path, GpPoint* points, int count);
+    GpStatus GdipClosePathFigure(GpPath path);
+    
+    // PathGradientBrush functions
+    GpStatus GdipCreatePathGradientI(GpPoint* points, int count, int wrapMode, GpPathGradient* polyGradient);
+    GpStatus GdipSetPathGradientCenterColor(GpPathGradient brush, ARGB colors);
+    GpStatus GdipSetPathGradientSurroundColorsWithCount(GpPathGradient brush, ARGB* color, int* count);
+    
+    // FillPath function
+    GpStatus GdipFillPath(GpGraphics graphics, GpBrush brush, GpPath path);
 }
 
 // GDI+ constants
 enum FillModeAlternate = 0;
 enum UnitPixel = 2;
 enum SmoothingModeAntiAlias = 4;
+enum WrapModeClamp = 4;
 
-// Helper to create ARGB color (nothrow @nogc追加)
+// Helper to create ARGB color
 ARGB makeARGB(ubyte a, ubyte r, ubyte g, ubyte b) nothrow @nogc
 {
     return (cast(ARGB)a << 24) | (cast(ARGB)r << 16) | (cast(ARGB)g << 8) | b;
@@ -146,7 +163,7 @@ int myWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int
         DispatchMessage(&msg);
     }
 
-    return cast(int)msg.wParam;  // cast追加
+    return cast(int)msg.wParam;
 }
 
 extern(Windows)
@@ -200,22 +217,33 @@ void DrawTriangle(HDC hdc) nothrow @nogc
     points[2].X = WIDTH  * 1 / 4;
     points[2].Y = HEIGHT * 3 / 4;
 
-    // Create a solid brush (blue color with full opacity)
-    GpSolidFill brush;
-    GdipCreateSolidFill(makeARGB(255, 0, 0, 255), &brush);
+    // Create PathGradientBrush from points
+    GpPathGradient pthGrBrush;
+    GdipCreatePathGradientI(&points[0], 3, WrapModeClamp, &pthGrBrush);
 
-    // Fill the triangle
-    GdipFillPolygonI(graphics, brush, &points[0], 3, FillModeAlternate);
+    // Set center color (average of RGB)
+    ARGB centerColor = makeARGB(255, 255/3, 255/3, 255/3);
+    GdipSetPathGradientCenterColor(pthGrBrush, centerColor);
 
-    // Create a pen for the outline (red color)
-    GpPen pen;
-    GdipCreatePen1(makeARGB(255, 255, 0, 0), 2.0f, UnitPixel, &pen);
+    // Set surround colors (vertex colors)
+    ARGB[3] colors;
+    colors[0] = makeARGB(255, 255,   0,   0);  // red
+    colors[1] = makeARGB(255,   0, 255,   0);  // green
+    colors[2] = makeARGB(255,   0,   0, 255);  // blue
+    int count = 3;
+    GdipSetPathGradientSurroundColorsWithCount(pthGrBrush, &colors[0], &count);
 
-    // Draw the triangle outline
-    GdipDrawPolygonI(graphics, pen, &points[0], 3);
+    // Create path and add polygon
+    GpPath path;
+    GdipCreatePath(FillModeAlternate, &path);
+    GdipAddPathLine2I(path, &points[0], 3);
+    GdipClosePathFigure(path);
+
+    // Fill the path with gradient brush
+    GdipFillPath(graphics, pthGrBrush, path);
 
     // Cleanup
-    GdipDeletePen(pen);
-    GdipDeleteBrush(brush);
+    GdipDeletePath(path);
+    GdipDeleteBrush(pthGrBrush);
     GdipDeleteGraphics(graphics);
 }
