@@ -1,0 +1,6 @@
+{
+    "name": "hello",
+    "targetType": "executable",
+    "targetName": "hello",
+    "libs": ["d3d9", "user32", "gdi32"]
+}
