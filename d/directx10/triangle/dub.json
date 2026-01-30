@@ -1,0 +1,11 @@
+{
+    "name": "hello",
+    "description": "DirectX10 Triangle Demo",
+    "targetType": "executable",
+    "authors": [ "cx20" ],
+    "libs": [ "ole32", "user32", "d3dcompiler", "dxgi", "d3d10" ],
+    "mainSourceFile": "source/hello.d",
+    "dependencies": {
+        "directx-d": {"version": "~master"}
+    }
+}
