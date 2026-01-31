@@ -1,1 +1,0 @@
-jsc Hello.js

@@ -1,0 +1,11 @@
+[package]
+name = "hello"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies.windows]
+version = "0.58.0"
+features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+]
