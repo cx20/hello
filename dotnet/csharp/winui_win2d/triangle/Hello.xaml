@@ -1,0 +1,15 @@
+<Window
+    x:Class="Hello.Hello"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:canvas="using:Microsoft.Graphics.Canvas.UI.Xaml"
+    Title="Hello, World!">
+
+    <Grid>
+        <canvas:CanvasControl
+            x:Name="Canvas"
+            ClearColor="White"
+            Draw="Canvas_Draw"
+            SizeChanged="Canvas_SizeChanged" />
+    </Grid>
+</Window>
