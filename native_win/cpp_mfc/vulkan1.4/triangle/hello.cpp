@@ -26,10 +26,10 @@
 #include <cstring>
 #include <cstdlib>
 #include <cstdint>
-#include <optional>
 #include <set>
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
+const uint32_t INVALID_QUEUE_FAMILY = UINT32_MAX;
 
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
@@ -51,7 +51,7 @@ VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
     const VkAllocationCallbacks* pAllocator,
     VkDebugUtilsMessengerEXT* pDebugMessenger)
 {
-    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)
+    PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)
         vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
     if (func != nullptr) {
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
@@ -63,20 +63,22 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance,
     VkDebugUtilsMessengerEXT debugMessenger,
     const VkAllocationCallbacks* pAllocator)
 {
-    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)
+    PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT)
         vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
     if (func != nullptr) {
         func(instance, debugMessenger, pAllocator);
     }
 }
 
-// Queue family indices
+// Queue family indices (C++14 compatible, no std::optional)
 struct QueueFamilyIndices {
-    std::optional<uint32_t> graphicsFamily;
-    std::optional<uint32_t> presentFamily;
+    uint32_t graphicsFamily;
+    uint32_t presentFamily;
 
-    bool isComplete() {
-        return graphicsFamily.has_value() && presentFamily.has_value();
+    QueueFamilyIndices() : graphicsFamily(INVALID_QUEUE_FAMILY), presentFamily(INVALID_QUEUE_FAMILY) {}
+
+    bool isComplete() const {
+        return graphicsFamily != INVALID_QUEUE_FAMILY && presentFamily != INVALID_QUEUE_FAMILY;
     }
 };
 
@@ -270,6 +272,8 @@ void CMainFrame::OnSize(UINT nType, int cx, int cy)
 
     if (cx > 0 && cy > 0 && vulkanInitialized) {
         framebufferResized = true;
+        // Trigger repaint to recreate swap chain with new size
+        Invalidate(FALSE);
     }
 }
 
@@ -486,8 +490,8 @@ void CMainFrame::createLogicalDevice()
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     std::set<uint32_t> uniqueQueueFamilies = {
-        indices.graphicsFamily.value(),
-        indices.presentFamily.value()
+        indices.graphicsFamily,
+        indices.presentFamily
     };
 
     float queuePriority = 1.0f;
@@ -522,8 +526,8 @@ void CMainFrame::createLogicalDevice()
         throw std::runtime_error("failed to create logical device!");
     }
 
-    vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
-    vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
+    vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
+    vkGetDeviceQueue(device, indices.presentFamily, 0, &presentQueue);
 }
 
 void CMainFrame::createSwapChain()
@@ -552,8 +556,8 @@ void CMainFrame::createSwapChain()
 
     QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
     uint32_t queueFamilyIndices[] = {
-        indices.graphicsFamily.value(),
-        indices.presentFamily.value()
+        indices.graphicsFamily,
+        indices.presentFamily
     };
 
     if (indices.graphicsFamily != indices.presentFamily) {
@@ -799,7 +803,7 @@ void CMainFrame::createCommandPool()
 
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily;
 
     if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create command pool!");
@@ -879,6 +883,12 @@ void CMainFrame::createSyncObjects()
 void CMainFrame::drawFrame()
 {
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+    // Recreate swap chain if window was resized
+    if (framebufferResized) {
+        framebufferResized = false;
+        recreateSwapChain();
+    }
 
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX,
