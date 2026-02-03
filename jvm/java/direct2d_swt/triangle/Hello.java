@@ -18,15 +18,12 @@ import java.util.UUID;
 /**
  * Hello Direct2D (Java + SWT + JNA)
  *
- * Draws a centered triangle similar to typical Direct2D "hello" samples:
- * - White background
- * - Blue thin stroke
- * - Triangle fits within the client area
+ * DPI-aware version for Windows scaling (e.g. 150%).
  *
- * Notes:
- * - Direct2D COM methods here are invoked via vtable indices (see vtable.txt).
- * - Small structs such as D2D1_COLOR_F / D2D1_POINT_2F / D2D1_SIZE_U MUST be
- *   passed by value; otherwise drawing may silently do nothing.
+ * Key idea:
+ * - Create/Resize render target using *pixel* client size from GetClientRect (required by D2D1_SIZE_U).
+ * - Draw using *DIPs* (device-independent pixels) and set render target DPI to the window DPI.
+ *   DIP = px * 96 / dpi.
  */
 public final class Hello {
 
@@ -48,10 +45,7 @@ public final class Hello {
         }
         String line = String.format("[HelloD2D][%d] %s\n", Thread.currentThread().getId(), msg);
         System.out.print(line);
-        try {
-            Kernel32.INSTANCE.OutputDebugStringW(line);
-        } catch (Throwable ignored) {
-        }
+        try { Kernel32.INSTANCE.OutputDebugStringW(line); } catch (Throwable ignored) {}
     }
 
     // ----------------------------
@@ -64,6 +58,47 @@ public final class Hello {
         Ole32 INSTANCE = Native.load("ole32", Ole32.class, W32APIOptions.DEFAULT_OPTIONS);
         int CoInitializeEx(Pointer pvReserved, int dwCoInit);
         void CoUninitialize();
+    }
+
+    public static final class RECT extends Structure {
+        public int left, top, right, bottom;
+
+        @Override
+        protected List<String> getFieldOrder() {
+            return Arrays.asList("left", "top", "right", "bottom");
+        }
+
+        public int width() { return right - left; }
+        public int height() { return bottom - top; }
+    }
+
+    public interface User32 extends StdCallLibrary {
+        User32 INSTANCE = Native.load("user32", User32.class, W32APIOptions.DEFAULT_OPTIONS);
+        boolean GetClientRect(long hWnd, RECT lpRect);
+        int GetDpiForWindow(long hWnd); // Win10+
+    }
+
+    private static int getWindowDpi(long hwnd) {
+        try {
+            int dpi = User32.INSTANCE.GetDpiForWindow(hwnd);
+            if (dpi <= 0) return 96;
+            return dpi;
+        } catch (Throwable t) {
+            // If GetDpiForWindow is unavailable, fall back to 96.
+            return 96;
+        }
+    }
+
+    private static int[] getClientSizePx(long hwnd) {
+        RECT rc = new RECT();
+        boolean ok = User32.INSTANCE.GetClientRect(hwnd, rc);
+        if (!ok) {
+            // Fallback (should be rare)
+            return new int[] { 1, 1 };
+        }
+        int w = Math.max(1, rc.width());
+        int h = Math.max(1, rc.height());
+        return new int[] { w, h };
     }
 
     // ----------------------------
@@ -221,10 +256,9 @@ public final class Hello {
     }
 
     // ----------------------------
-    // Direct2D - vtable invocation helpers
+    // Direct2D - vtable indices
     // ----------------------------
 
-    // vtable indices from vtable.txt (your attachment)
     private static final int VTBL_IUNKNOWN_RELEASE = 2;
     private static final int VTBL_ID2D1FACTORY_CREATEHWNDRENDERTARGET = 14;
     private static final int VTBL_ID2D1RENDERTARGET_CREATESOLIDCOLORBRUSH = 8;
@@ -234,8 +268,15 @@ public final class Hello {
     private static final int VTBL_ID2D1RENDERTARGET_ENDDRAW = 49;
     private static final int VTBL_ID2D1HWNDRENDERTARGET_RESIZE = 58;
 
+    // ----------------------------
+    // Direct2D - COM callbacks
+    // ----------------------------
+
     public interface Fn_CreateHwndRenderTarget extends StdCallLibrary.StdCallCallback {
-        int invoke(Pointer pThis, D2D1_RENDER_TARGET_PROPERTIES rtProps, D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps, PointerByReference ppRenderTarget);
+        int invoke(Pointer pThis,
+                   D2D1_RENDER_TARGET_PROPERTIES rtProps,
+                   D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps,
+                   PointerByReference ppRenderTarget);
     }
 
     public interface Fn_CreateSolidColorBrush extends StdCallLibrary.StdCallCallback {
@@ -255,7 +296,12 @@ public final class Hello {
     }
 
     public interface Fn_DrawLine extends StdCallLibrary.StdCallCallback {
-        void invoke(Pointer pThis, D2D1_POINT_2F.ByValue p0, D2D1_POINT_2F.ByValue p1, Pointer brush, float strokeWidth, Pointer strokeStyleNullable);
+        void invoke(Pointer pThis,
+                    D2D1_POINT_2F.ByValue p0,
+                    D2D1_POINT_2F.ByValue p1,
+                    Pointer brush,
+                    float strokeWidth,
+                    Pointer strokeStyleNullable);
     }
 
     public interface Fn_Resize extends StdCallLibrary.StdCallCallback {
@@ -265,6 +311,10 @@ public final class Hello {
     public interface Fn_Release extends StdCallLibrary.StdCallCallback {
         int invoke(Pointer pThis);
     }
+
+    // ----------------------------
+    // COM vtable helpers
+    // ----------------------------
 
     private static Pointer vtbl(Pointer comObj) {
         return comObj.getPointer(0);
@@ -303,28 +353,35 @@ public final class Hello {
     private static Pointer g_factory;
     private static Pointer g_hwndRenderTarget;
     private static Pointer g_brush;
+    private static int g_dpi = 96;
 
-    private static void initD2D(long hwnd, int width, int height) {
-        log("initD2D: enter hwnd=0x%X size=%dx%d", hwnd, width, height);
+    private static void initD2D(long hwnd) {
+        g_dpi = getWindowDpi(hwnd);
+        int[] whPx = getClientSizePx(hwnd);
+        int wPx = whPx[0];
+        int hPx = whPx[1];
+
+        log("initD2D: hwnd=0x%X dpi=%d clientPx=%dx%d", hwnd, g_dpi, wPx, hPx);
 
         PointerByReference ppFactory = new PointerByReference();
         int hr = D2D1.INSTANCE.D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, IID_ID2D1Factory, Pointer.NULL, ppFactory);
         checkHR("D2D1CreateFactory", hr);
         g_factory = ppFactory.getValue();
-        log("initD2D: factory=%s", g_factory);
 
         D2D1_RENDER_TARGET_PROPERTIES rtProps = new D2D1_RENDER_TARGET_PROPERTIES();
         rtProps.type = D2D1_RENDER_TARGET_TYPE_DEFAULT;
         rtProps.pixelFormat = new D2D1_PIXEL_FORMAT(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_UNKNOWN);
-        rtProps.dpiX = 0.0f;
-        rtProps.dpiY = 0.0f;
+        // Important: set render target DPI to match the window DPI.
+        rtProps.dpiX = (float) g_dpi;
+        rtProps.dpiY = (float) g_dpi;
         rtProps.usage = D2D1_RENDER_TARGET_USAGE_NONE;
         rtProps.minLevel = D2D1_FEATURE_LEVEL_DEFAULT;
         rtProps.write();
 
         D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps = new D2D1_HWND_RENDER_TARGET_PROPERTIES();
         hwndProps.hwnd = hwnd;
-        hwndProps.pixelSize = new D2D1_SIZE_U(width, height);
+        // pixelSize is in *pixels*.
+        hwndProps.pixelSize = new D2D1_SIZE_U(wPx, hPx);
         hwndProps.presentOptions = D2D1_PRESENT_OPTIONS_NONE;
         hwndProps.write();
 
@@ -333,9 +390,8 @@ public final class Hello {
         hr = createRT.invoke(g_factory, rtProps, hwndProps, ppRT);
         checkHR("ID2D1Factory::CreateHwndRenderTarget", hr);
         g_hwndRenderTarget = ppRT.getValue();
-        log("initD2D: hwndRenderTarget=%s", g_hwndRenderTarget);
 
-        // Blue brush (similar to typical samples)
+        // Blue brush
         PointerByReference ppBrush = new PointerByReference();
         Fn_CreateSolidColorBrush createBrush = fn(g_hwndRenderTarget, VTBL_ID2D1RENDERTARGET_CREATESOLIDCOLORBRUSH, Fn_CreateSolidColorBrush.class);
         D2D1_COLOR_F.ByValue blue = new D2D1_COLOR_F.ByValue(0.0f, 0.0f, 1.0f, 1.0f);
@@ -343,22 +399,39 @@ public final class Hello {
         hr = createBrush.invoke(g_hwndRenderTarget, blue, Pointer.NULL, ppBrush);
         checkHR("ID2D1RenderTarget::CreateSolidColorBrush", hr);
         g_brush = ppBrush.getValue();
-        log("initD2D: brush=%s", g_brush);
 
-        log("initD2D: leave");
+        log("initD2D: factory=%s rt=%s brush=%s", g_factory, g_hwndRenderTarget, g_brush);
     }
 
-    private static void resizeD2D(int width, int height) {
+    private static void resizeD2D(long hwnd) {
         if (g_hwndRenderTarget == null || Pointer.nativeValue(g_hwndRenderTarget) == 0) return;
+
+        // Update dpi (can change when moving across monitors)
+        g_dpi = getWindowDpi(hwnd);
+        int[] whPx = getClientSizePx(hwnd);
+        int wPx = whPx[0];
+        int hPx = whPx[1];
+
         Fn_Resize resize = fn(g_hwndRenderTarget, VTBL_ID2D1HWNDRENDERTARGET_RESIZE, Fn_Resize.class);
-        D2D1_SIZE_U.ByValue size = new D2D1_SIZE_U.ByValue(Math.max(1, width), Math.max(1, height));
+        D2D1_SIZE_U.ByValue size = new D2D1_SIZE_U.ByValue(wPx, hPx);
         size.write();
         int hr = resize.invoke(g_hwndRenderTarget, size);
         checkHR("ID2D1HwndRenderTarget::Resize", hr);
+
+        log("resizeD2D: dpi=%d clientPx=%dx%d", g_dpi, wPx, hPx);
     }
 
-    private static void drawTriangle(int width, int height) {
+    private static void drawTriangle(long hwnd) {
         if (g_hwndRenderTarget == null || Pointer.nativeValue(g_hwndRenderTarget) == 0) return;
+
+        int[] whPx = getClientSizePx(hwnd);
+        int wPx = whPx[0];
+        int hPx = whPx[1];
+        int dpi = Math.max(96, g_dpi);
+
+        // Convert pixels to DIPs for drawing.
+        float wDip = (float) (wPx * 96.0 / dpi);
+        float hDip = (float) (hPx * 96.0 / dpi);
 
         Fn_BeginDraw beginDraw = fn(g_hwndRenderTarget, VTBL_ID2D1RENDERTARGET_BEGINDRAW, Fn_BeginDraw.class);
         Fn_Clear clear = fn(g_hwndRenderTarget, VTBL_ID2D1RENDERTARGET_CLEAR, Fn_Clear.class);
@@ -367,18 +440,21 @@ public final class Hello {
 
         beginDraw.invoke(g_hwndRenderTarget);
 
-        // White background (match common hello samples)
+        // White background
         D2D1_COLOR_F.ByValue white = new D2D1_COLOR_F.ByValue(1.0f, 1.0f, 1.0f, 1.0f);
         white.write();
         clear.invoke(g_hwndRenderTarget, white);
 
-        float w = Math.max(1, width);
-        float h = Math.max(1, height);
+        // Centered equilateral-ish triangle in DIPs.
+        float cx = wDip * 0.5f;
+        float cy = hDip * 0.5f;
+        float side = Math.min(wDip, hDip) * 0.65f;
+        float triH = (float) (Math.sqrt(3.0) * 0.5 * side);
 
-        // A nice centered triangle with margins
-        D2D1_POINT_2F.ByValue p0 = new D2D1_POINT_2F.ByValue(w * 0.50f, h * 0.18f);
-        D2D1_POINT_2F.ByValue p1 = new D2D1_POINT_2F.ByValue(w * 0.22f, h * 0.78f);
-        D2D1_POINT_2F.ByValue p2 = new D2D1_POINT_2F.ByValue(w * 0.78f, h * 0.78f);
+        // Equilateral vertices around center
+        D2D1_POINT_2F.ByValue p0 = new D2D1_POINT_2F.ByValue(cx, cy - triH * 0.55f);
+        D2D1_POINT_2F.ByValue p1 = new D2D1_POINT_2F.ByValue(cx - side * 0.5f, cy + triH * 0.45f);
+        D2D1_POINT_2F.ByValue p2 = new D2D1_POINT_2F.ByValue(cx + side * 0.5f, cy + triH * 0.45f);
         p0.write(); p1.write(); p2.write();
 
         float stroke = 2.5f;
@@ -388,6 +464,9 @@ public final class Hello {
 
         int hr = endDraw.invoke(g_hwndRenderTarget, Pointer.NULL, Pointer.NULL);
         checkHR("ID2D1RenderTarget::EndDraw", hr);
+
+        // Optional: helpful one-liner when verifying scaling.
+        log("draw: dpi=%d px=%dx%d dip=%.1fx%.1f", dpi, wPx, hPx, wDip, hDip);
     }
 
     private static void cleanup() {
@@ -418,23 +497,20 @@ public final class Hello {
         shell.open();
 
         long hwnd = shell.handle;
-        log("main: SWT shell hwnd=0x%X", hwnd);
-        initD2D(hwnd, shell.getClientArea().width, shell.getClientArea().height);
+        log("main: hwnd=0x%X", hwnd);
+
+        initD2D(hwnd);
 
         shell.addControlListener(new ControlAdapter() {
             @Override
             public void controlResized(ControlEvent e) {
-                int w = shell.getClientArea().width;
-                int h = shell.getClientArea().height;
-                resizeD2D(w, h);
+                resizeD2D(hwnd);
                 shell.redraw();
             }
         });
 
         shell.addListener(SWT.Paint, e -> {
-            int w = shell.getClientArea().width;
-            int h = shell.getClientArea().height;
-            drawTriangle(w, h);
+            drawTriangle(hwnd);
         });
 
         shell.redraw();
