@@ -1,0 +1,3 @@
+headers = windows.h
+compilerOpts = -DUNICODE -D_UNICODE
+linkerOpts = -lmsimg32
