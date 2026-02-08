@@ -1290,7 +1290,8 @@ $d3dCompile = FFI::cast($d3d12Types->type('D3DCompileFunc'), $pfnD3DCompile);
         exit(1);
     }
     $gFence = FFI::cast($d3d12Types->type('IUnknown*'), out_ptr($d3d12Types, $ppFence));
-    $gFenceValues = [1, 1];
+    $gFenceValues = [0, 0];
+    $gFenceValue = 0;  // Global fence value that monotonically increases
 
     echo "[PHPD3D12] fence created\n";
 
@@ -1302,11 +1303,43 @@ $d3dCompile = FFI::cast($d3d12Types->type('D3DCompileFunc'), $pfnD3DCompile);
 
     echo "[PHPD3D12] entering render loop\n";
 
-    function wait_for_previous_frame(FFI $ffi, FFI\CData $gSwapChain, int &$frameIndex): void
-    {
-        // Simply get the current frame index
+    function wait_for_previous_frame(
+        FFI $ffi,
+        FFI\CData $gSwapChain,
+        FFI\CData $gFence,
+        array &$gFenceValues,
+        FFI\CData $fenceEvent,
+        $kernel32,
+        $user32,
+        FFI\CData $hwnd,
+        int &$frameIndex
+    ): void {
+        // Get the current frame index
         $getFrameIndex = FFI::cast($ffi->type('GetCurrentBackBufferIndexFunc'), $gSwapChain->lpVtbl[VTBL_SWAP_GET_CURRENT_BACKBUFFER_INDEX]);
         $frameIndex = $getFrameIndex($gSwapChain);
+
+        // Wait for the previous frame to complete (only if this frame has been used before)
+        if ($gFenceValues[$frameIndex] > 0) {
+            $getCompleted = FFI::cast($ffi->type('GetCompletedValueFunc'), $gFence->lpVtbl[VTBL_FENCE_GET_COMPLETED]);
+            $completedValue = $getCompleted($gFence);
+
+            // Poll until GPU completes, processing messages to maintain responsiveness
+            $maxWaitIterations = 1000; // Max 1000ms (1 second)
+            $iteration = 0;
+            while ($completedValue < $gFenceValues[$frameIndex] && $iteration < $maxWaitIterations) {
+                // Process any pending messages
+                $msg = $user32->new('MSG');
+                while ($user32->PeekMessageW(FFI::addr($msg), $hwnd, 0, 0, PM_REMOVE)) {
+                    $user32->TranslateMessage(FFI::addr($msg));
+                    $user32->DispatchMessageW(FFI::addr($msg));
+                }
+                
+                // Sleep briefly and check again
+                $kernel32->Sleep(1);
+                $completedValue = $getCompleted($gFence);
+                $iteration++;
+            }
+        }
     }
 
     $user32->ShowWindow($hwnd, SW_SHOWDEFAULT);
@@ -1324,7 +1357,7 @@ $d3dCompile = FFI::cast($d3d12Types->type('D3DCompileFunc'), $pfnD3DCompile);
         }
 
         // Get current frame index
-        wait_for_previous_frame($d3d12Types, $gSwapChain, $gFrameIndex);
+        wait_for_previous_frame($d3d12Types, $gSwapChain, $gFence, $gFenceValues, $fenceEvent, $kernel32, $user32, $hwnd, $gFrameIndex);
 
         $resetAllocator = FFI::cast($d3d12Types->type('ResetCommandAllocatorFunc'), $gCommandAllocators[$gFrameIndex]->lpVtbl[VTBL_COMMAND_ALLOCATOR_RESET]);
         $resetAllocator($gCommandAllocators[$gFrameIndex]);
@@ -1405,8 +1438,9 @@ $d3dCompile = FFI::cast($d3d12Types->type('D3DCompileFunc'), $pfnD3DCompile);
 
         // Signal fence for this frame (after execute, before present)
         $signal = FFI::cast($d3d12Types->type('SignalFunc'), $gCommandQueue->lpVtbl[VTBL_COMMAND_QUEUE_SIGNAL]);
-        $signal($gCommandQueue, $gFence, $gFenceValues[$gFrameIndex]);
-        $gFenceValues[$gFrameIndex]++;
+        $gFenceValue++;  // Increment global fence value
+        $signal($gCommandQueue, $gFence, $gFenceValue);
+        $gFenceValues[$gFrameIndex] = $gFenceValue;  // Record this frame's fence value
 
         $present = FFI::cast($d3d12Types->type('PresentFunc'), $gSwapChain->lpVtbl[VTBL_SWAP_PRESENT]);
         $present($gSwapChain, 1, 0);
@@ -1414,9 +1448,19 @@ $d3dCompile = FFI::cast($d3d12Types->type('D3DCompileFunc'), $pfnD3DCompile);
         $kernel32->Sleep(1);
     }
 
-    try {
-        wait_for_previous_frame($d3d12Types, $gSwapChain, $gFrameIndex);
-    } catch (Throwable $e) {
+
+    // Wait for all GPU work to complete before cleanup
+    echo "[PHPD3D12] waiting for GPU to complete all work\n";
+    $getCompleted = FFI::cast($d3d12Types->type('GetCompletedValueFunc'), $gFence->lpVtbl[VTBL_FENCE_GET_COMPLETED]);
+    $maxFenceValue = max($gFenceValues[0], $gFenceValues[1]);
+    
+    if ($maxFenceValue > 0) {
+        $completedValue = $getCompleted($gFence);
+        if ($completedValue < $maxFenceValue) {
+            $setEvent = FFI::cast($d3d12Types->type('SetEventOnCompletionFunc'), $gFence->lpVtbl[VTBL_FENCE_SET_EVENT]);
+            $setEvent($gFence, $maxFenceValue, $fenceEvent);
+            $kernel32->WaitForSingleObject($fenceEvent, 5000); // 5 second timeout for cleanup
+        }
     }
 
     $kernel32->CloseHandle($fenceEvent);
