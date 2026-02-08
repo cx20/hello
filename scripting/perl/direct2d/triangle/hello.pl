@@ -188,6 +188,9 @@ my $render_target;
 my $brush;
 my $hwnd;
 
+# Verbose flag for debug output (0 = quiet, 1 = verbose)
+my $verbose = 0;
+
 sub alloc_work {
     my ($size) = @_;
     my $ptr = $work_mem + $work_offset;
@@ -338,7 +341,6 @@ sub draw_triangle {
     $code .= pack('H*', '4883C428');                      # add rsp, 0x28
     $code .= pack('H*', 'C3');                            # ret
     call_thunk($code);
-    print "  BeginDraw called\n";
     
     # Clear (vtable #47) - x64
     my $clear_addr = read_ptr($rt_vtbl + 47 * 8);
@@ -356,7 +358,7 @@ sub draw_triangle {
     $code .= pack('H*', '4883C428');                      # add rsp, 0x28
     $code .= pack('H*', 'C3');                            # ret
     call_thunk($code);
-    print "  Clear called\n";
+    # Suppress output during message loop redraw
     
     # DrawLine (vtable #15) - Draw triangle using 3 lines (x64)
     # void DrawLine(D2D1_POINT_2F point0, D2D1_POINT_2F point1, 
@@ -389,7 +391,7 @@ sub draw_triangle {
     $code .= pack('H*', '4883C448');                      # add rsp, 0x48
     $code .= pack('H*', 'C3');                            # ret
     call_thunk($code);
-    print "  DrawLine 1 called\n";
+    # Suppress output during message loop redraw
     
     # Line 2: p2 to p3
     $code = pack('H*', '4883EC48');                       # sub rsp, 0x48
@@ -404,7 +406,7 @@ sub draw_triangle {
     $code .= pack('H*', '4883C448');                      # add rsp, 0x48
     $code .= pack('H*', 'C3');                            # ret
     call_thunk($code);
-    print "  DrawLine 2 called\n";
+    # Suppress output during message loop redraw
     
     # Line 3: p3 to p1
     $code = pack('H*', '4883EC48');                       # sub rsp, 0x48
@@ -419,7 +421,7 @@ sub draw_triangle {
     $code .= pack('H*', '4883C448');                      # add rsp, 0x48
     $code .= pack('H*', 'C3');                            # ret
     call_thunk($code);
-    print "  DrawLine 3 called\n";
+    # Suppress output during message loop redraw
     
     # EndDraw (vtable #49) - x64
     my $end_draw_addr = read_ptr($rt_vtbl + 49 * 8);
@@ -433,7 +435,7 @@ sub draw_triangle {
     $code .= pack('H*', '4883C428');                      # add rsp, 0x28
     $code .= pack('H*', 'C3');                            # ret
     call_thunk($code);
-    print "  EndDraw called\n";
+    # Suppress output during message loop redraw
     
     $VirtualFree->Call($draw_work_mem, 0, MEM_RELEASE);
 }
@@ -479,13 +481,30 @@ eval {
     my $defproc_addr = $GetProcAddress->Call($user32, "DefWindowProcW\0");
     print "DefWindowProcW address: ", sprintf("0x%X", $defproc_addr), "\n";
     
-    # Create window class with DefWindowProcW as procedure
-    my $class_name = encode_utf16("PerlD2DClass" . $$);  # Add PID for uniqueness
-    my $class_name_addr = alloc_work(length($class_name));
-    write_mem($class_name_addr, $class_name);
-    print "Class name address: ", sprintf("0x%X", $class_name_addr), "\n";
+    # Prepare class name as UTF-16LE string (keep in Perl variable for reference)
+    my $class_name = encode_utf16("PerlD2DClass");
     
-    # Build WNDCLASSEXW structure (80 bytes for x64)
+    # Get the memory address of the class name string
+    # We need to keep $class_name alive and get its address
+    my $class_name_ptr = unpack('Q', pack('p', $class_name));
+    print "Class name pointer: ", sprintf("0x%X", $class_name_ptr), "\n";
+    
+    # WNDCLASSEXW structure for 64-bit Windows
+    # Total size: 80 bytes
+    # Layout:
+    #   UINT      cbSize;        // 4 bytes, offset 0
+    #   UINT      style;         // 4 bytes, offset 4
+    #   WNDPROC   lpfnWndProc;   // 8 bytes, offset 8
+    #   int       cbClsExtra;    // 4 bytes, offset 16
+    #   int       cbWndExtra;    // 4 bytes, offset 20
+    #   HINSTANCE hInstance;     // 8 bytes, offset 24
+    #   HICON     hIcon;         // 8 bytes, offset 32
+    #   HCURSOR   hCursor;       // 8 bytes, offset 40
+    #   HBRUSH    hbrBackground; // 8 bytes, offset 48
+    #   LPCWSTR   lpszMenuName;  // 8 bytes, offset 56
+    #   LPCWSTR   lpszClassName; // 8 bytes, offset 64
+    #   HICON     hIconSm;       // 8 bytes, offset 72
+    
     my $wndclass = pack('L L Q l l Q Q Q Q Q Q Q',
         80,                        # cbSize = 80 bytes
         CS_HREDRAW | CS_VREDRAW,   # style
@@ -497,12 +516,9 @@ eval {
         $hcursor,                  # hCursor
         COLOR_WINDOW + 1,          # hbrBackground
         0,                         # lpszMenuName
-        $class_name_addr,          # lpszClassName
+        $class_name_ptr,           # lpszClassName - pointer to class name
         0                          # hIconSm
     );
-    
-    my $wndclass_addr = alloc_work(80);
-    write_mem($wndclass_addr, $wndclass);
     
     print "WNDCLASSEX size: ", length($wndclass), " bytes\n";
     print "hInstance: ", sprintf("0x%X", $hinstance), "\n";
@@ -567,7 +583,9 @@ eval {
     
     # Demonstrate one draw call
     print "Executing draw sequence...\n";
+    $verbose = 1;  # Enable verbose output for first draw
     draw_triangle();
+    $verbose = 0;  # Disable verbose output for message loop
     print "Draw sequence completed successfully.\n\n";
     
     print "Window is now visible. Running message loop for 5 seconds...\n";
