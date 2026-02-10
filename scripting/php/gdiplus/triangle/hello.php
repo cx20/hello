@@ -5,9 +5,10 @@ declare(strict_types=1);
   Win32 GUI from PHP via FFI - GDI+ Path Gradient Triangle Demo
   
   Draws a path gradient-filled triangle (red, green, blue corners, gray center)
-  using GDI+ Path Gradient Brush.
+  using GDI+ Path Gradient Brush with double buffering to prevent flickering.
 */
 
+// Window styles
 const WS_OVERLAPPED     = 0x00000000;
 const WS_CAPTION        = 0x00C00000;
 const WS_SYSMENU        = 0x00080000;
@@ -23,16 +24,24 @@ const CS_OWNDC          = 0x0020;
 const CW_USEDEFAULT     = 0x80000000;
 const SW_SHOWDEFAULT    = 10;
 
+// Window messages
 const WM_QUIT           = 0x0012;
 const WM_PAINT          = 0x000F;
 const WM_ERASEBKGND     = 0x0014;
 const PM_REMOVE         = 0x0001;
 
+// System resources
 const IDI_APPLICATION   = 32512;
 const IDC_ARROW         = 32512;
 const BLACK_BRUSH       = 4;
 const WHITE_BRUSH       = 0;
 
+// BitBlt raster operation
+const SRCCOPY           = 0x00CC0020;
+
+/**
+ * Convert UTF-8 string to UTF-16LE (wide string) buffer
+ */
 function wbuf(string $s): FFI\CData
 {
     $bytes = iconv('UTF-8', 'UTF-16LE', $s) . "\x00\x00";
@@ -42,6 +51,9 @@ function wbuf(string $s): FFI\CData
     return $buf;
 }
 
+/**
+ * Convert string to ANSI char buffer
+ */
 function abuf(string $s): FFI\CData
 {
     $len = strlen($s) + 1;
@@ -50,6 +62,7 @@ function abuf(string $s): FFI\CData
     return $buf;
 }
 
+// Load kernel32.dll
 $kernel32 = FFI::cdef('
     typedef void* HANDLE;
     typedef HANDLE HINSTANCE;
@@ -65,6 +78,7 @@ $kernel32 = FFI::cdef('
     void Sleep(unsigned long dwMilliseconds);
 ', 'kernel32.dll');
 
+// Load user32.dll
 $user32 = FFI::cdef('
     typedef void* HANDLE;
     typedef HANDLE HWND;
@@ -121,6 +135,15 @@ $user32 = FFI::cdef('
         LONG bottom;
     } RECT;
 
+    typedef struct tagPAINTSTRUCT {
+        HDC  hdc;
+        BOOL fErase;
+        RECT rcPaint;
+        BOOL fRestore;
+        BOOL fIncUpdate;
+        uint8_t rgbReserved[32];
+    } PAINTSTRUCT;
+
     ATOM RegisterClassExW(const WNDCLASSEXW *lpwcx);
 
     HWND CreateWindowExW(
@@ -140,7 +163,6 @@ $user32 = FFI::cdef('
 
     BOOL ShowWindow(HWND hWnd, int nCmdShow);
     BOOL UpdateWindow(HWND hWnd);
-    BOOL InvalidateRect(HWND hWnd, const RECT *lpRect, BOOL bErase);
 
     HDC  GetDC(HWND hWnd);
     int  ReleaseDC(HWND hWnd, HDC hDC);
@@ -157,31 +179,30 @@ $user32 = FFI::cdef('
     BOOL GetClientRect(HWND hWnd, RECT *lpRect);
     BOOL InvalidateRect(HWND hWnd, const RECT *lpRect, BOOL bErase);
 
-    typedef struct tagPAINTSTRUCT {
-        HDC  hdc;
-        BOOL fErase;
-        RECT rcPaint;
-        BOOL fRestore;
-        BOOL fIncUpdate;
-        uint8_t rgbReserved[32];
-    } PAINTSTRUCT;
-
     HDC  BeginPaint(HWND hWnd, PAINTSTRUCT *lpPaint);
     BOOL EndPaint(HWND hWnd, const PAINTSTRUCT *lpPaint);
 
     int FillRect(HDC hDC, const RECT *lprc, HBRUSH hbr);
 ', 'user32.dll');
 
+// Load gdi32.dll with double buffering functions
 $gdi32 = FFI::cdef('
     typedef void* HDC;
     typedef void* HGDIOBJ;
+    typedef void* HBITMAP;
     typedef int BOOL;
     typedef unsigned long COLORREF;
 
     HGDIOBJ GetStockObject(int i);
+    HDC CreateCompatibleDC(HDC hdc);
+    HBITMAP CreateCompatibleBitmap(HDC hdc, int cx, int cy);
+    HGDIOBJ SelectObject(HDC hdc, HGDIOBJ h);
+    BOOL DeleteObject(HGDIOBJ ho);
+    BOOL DeleteDC(HDC hdc);
+    BOOL BitBlt(HDC hdc, int x, int y, int cx, int cy, HDC hdcSrc, int x1, int y1, unsigned long rop);
 ', 'gdi32.dll');
 
-// GDI+ via gdiplus.dll
+// Load gdiplus.dll
 $gdiplus = FFI::cdef('
     typedef void* HDC;
     typedef void* GpGraphics;
@@ -223,7 +244,7 @@ $gdiplus = FFI::cdef('
 // Get module handle
 $hInstance = $kernel32->GetModuleHandleW(null);
 
-// Get DefWindowProcW address
+// Get DefWindowProcW address for window procedure
 $user32DllName = wbuf("user32.dll");
 $hUser32 = $kernel32->LoadLibraryW(FFI::cast('uint16_t*', FFI::addr($user32DllName[0])));
 $procName = abuf("DefWindowProcW");
@@ -303,35 +324,67 @@ $user32->ShowWindow($hwnd, SW_SHOWDEFAULT);
 $user32->UpdateWindow($hwnd);
 
 /**
- * Draw path gradient triangle using GDI+
+ * Draw path gradient triangle using GDI+ with double buffering
+ * 
+ * Double buffering eliminates flickering by:
+ * 1. Creating an off-screen bitmap
+ * 2. Drawing everything to the off-screen bitmap
+ * 3. Copying the completed image to the screen in one operation
  */
 function drawTriangleGDIPlus($gdiplus, $user32, $gdi32, $hdc, $hwnd): void
 {
-    // Get client area size
+    // Get client area dimensions
     $rect = $user32->new('RECT');
     $user32->GetClientRect($hwnd, FFI::addr($rect));
     $width  = $rect->right - $rect->left;
     $height = $rect->bottom - $rect->top;
 
-    // Create GDI+ graphics object
-    $graphics = $gdiplus->new('GpGraphics*');
-    $status = $gdiplus->GdipCreateFromHDC($hdc, FFI::addr($graphics));
-    if ($status != 0) {
+    // Skip if window is minimized or has no size
+    if ($width <= 0 || $height <= 0) {
         return;
     }
 
-    // Clear background (white)
-    $whiteBrush = $gdi32->GetStockObject(WHITE_BRUSH);
-    $user32->FillRect($hdc, FFI::addr($rect), $whiteBrush);
+    // === Double Buffering Setup ===
+    // Create memory DC compatible with screen DC
+    $memDC = $gdi32->CreateCompatibleDC($hdc);
+    if ($memDC === null) {
+        return;
+    }
 
-    // Create path
+    // Create bitmap for off-screen rendering
+    $memBitmap = $gdi32->CreateCompatibleBitmap($hdc, $width, $height);
+    if ($memBitmap === null) {
+        $gdi32->DeleteDC($memDC);
+        return;
+    }
+
+    // Select bitmap into memory DC (save old bitmap for cleanup)
+    $oldBitmap = $gdi32->SelectObject($memDC, $memBitmap);
+
+    // === Drawing to Off-Screen Buffer ===
+    // Clear background with white
+    $whiteBrush = $gdi32->GetStockObject(WHITE_BRUSH);
+    $user32->FillRect($memDC, FFI::addr($rect), $whiteBrush);
+
+    // Create GDI+ graphics from memory DC (not screen DC)
+    $graphics = $gdiplus->new('GpGraphics*');
+    $status = $gdiplus->GdipCreateFromHDC($memDC, FFI::addr($graphics));
+    if ($status != 0) {
+        // Cleanup on error
+        $gdi32->SelectObject($memDC, $oldBitmap);
+        $gdi32->DeleteObject($memBitmap);
+        $gdi32->DeleteDC($memDC);
+        return;
+    }
+
+    // Create graphics path for the triangle
     $path = $gdiplus->new('GpPath*');
     $gdiplus->GdipCreatePath(0, FFI::addr($path));
 
-    // Create triangle points
+    // Define triangle vertices
     $points = $gdiplus->new('GpPoint[3]');
     
-    // Top vertex
+    // Top vertex (center-top)
     $points[0]->x = (int)($width / 2);
     $points[0]->y = (int)($height / 4);
     
@@ -343,47 +396,58 @@ function drawTriangleGDIPlus($gdiplus, $user32, $gdi32, $hdc, $hwnd): void
     $points[2]->x = (int)($width / 4);
     $points[2]->y = (int)($height * 3 / 4);
 
-    // Add lines to path
+    // Add triangle to path and close it
     $gdiplus->GdipAddPathLine2I($path, $points, 3);
     $gdiplus->GdipClosePathFigure($path);
 
-    // Create path gradient brush
+    // Create path gradient brush from the triangle path
     $brush = $gdiplus->new('GpBrush*');
     $gdiplus->GdipCreatePathGradientFromPath($path, FFI::addr($brush));
 
     // Set center color (gray)
     $gdiplus->GdipSetPathGradientCenterColor($brush, 0xff555555);
 
-    // Set surrounding colors (red, green, blue for the three vertices)
+    // Set surrounding colors for each vertex
     $colors = $gdiplus->new('unsigned int[3]');
-    $colors[0] = 0xffff0000;  // Red
-    $colors[1] = 0xff00ff00;  // Green
-    $colors[2] = 0xff0000ff;  // Blue
+    $colors[0] = 0xffff0000;  // Red (top vertex)
+    $colors[1] = 0xff00ff00;  // Green (bottom-right vertex)
+    $colors[2] = 0xff0000ff;  // Blue (bottom-left vertex)
 
     $count = $gdiplus->new('int');
     $count->cdata = 3;
     $gdiplus->GdipSetPathGradientSurroundColorsWithCount($brush, $colors, FFI::addr($count));
 
-    // Fill path with gradient
+    // Fill the triangle with gradient
     $gdiplus->GdipFillPath($graphics, $brush, $path);
 
-    // Cleanup
+    // Cleanup GDI+ resources
     $gdiplus->GdipDeleteBrush($brush);
     $gdiplus->GdipDeletePath($path);
     $gdiplus->GdipDeleteGraphics($graphics);
+
+    // === Transfer to Screen ===
+    // Copy off-screen buffer to screen in one operation (no flicker)
+    $gdi32->BitBlt($hdc, 0, 0, $width, $height, $memDC, 0, 0, SRCCOPY);
+
+    // Cleanup GDI resources
+    $gdi32->SelectObject($memDC, $oldBitmap);
+    $gdi32->DeleteObject($memBitmap);
+    $gdi32->DeleteDC($memDC);
 }
 
-// Initial draw
+// Track last draw time for frame rate control
 $lastDraw = 0;
 
 // Message pump with direct GDI+ rendering
 $msg = $user32->new('MSG');
 
 while (true) {
+    // Exit if window is closed
     if ($user32->IsWindow($hwnd) == 0) {
         break;
     }
 
+    // Process Windows messages
     if ($user32->PeekMessageW(FFI::addr($msg), null, 0, 0, PM_REMOVE) != 0) {
         if ((int)$msg->message === WM_QUIT) {
             break;
@@ -391,7 +455,7 @@ while (true) {
         $user32->TranslateMessage(FFI::addr($msg));
         $user32->DispatchMessageW(FFI::addr($msg));
     } else {
-        // Draw periodically (~60 FPS)
+        // Draw at approximately 60 FPS when idle
         $now = microtime(true);
         if ($now - $lastDraw > 0.016) {
             $hdc = $user32->GetDC($hwnd);
@@ -401,6 +465,7 @@ while (true) {
             }
             $lastDraw = $now;
         }
+        // Small sleep to reduce CPU usage
         $kernel32->Sleep(1);
     }
 }
