@@ -13,6 +13,6 @@ vec2 positions[3] = vec2[](
 void main() {
     vec2 pos = positions[gl_VertexIndex];
     gl_Position = vec4(pos, 0.0, 1.0);
-    // Flip Y coordinate to match OpenGL coordinate system
+    // Output UV in [0, 1] range with Y flipped to match DX12/OpenGL convention
     fragCoord = vec2(pos.x * 0.5 + 0.5, 1.0 - (pos.y * 0.5 + 0.5));
 }

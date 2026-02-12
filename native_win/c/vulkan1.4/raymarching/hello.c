@@ -9,8 +9,8 @@
 
 /*
  * Minimal Vulkan ray marching in C (GLFW surface)
- * Based on the triangle sample, modified for fullscreen ray marching
- * with push constants for iTime and iResolution.
+ * Uses UNORM swap chain format so the shader's manual gamma correction
+ * is not doubled by hardware sRGB conversion.
  */
 
 #define WIDTH 800
@@ -447,13 +447,28 @@ static void createLogicalDevice(App *app) {
 /* Swap chain                                                          */
 /* ------------------------------------------------------------------ */
 
+/*
+ * KEY FIX: Prefer UNORM format instead of SRGB.
+ * The shader already performs manual gamma correction (pow 0.4545).
+ * Using SRGB format would apply hardware gamma on top -> washed-out colors.
+ * UNORM passes shader output values through unchanged, matching DX12/OpenGL behavior.
+ */
 static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const SwapChainSupportDetails *details) {
+    /* First try: B8G8R8A8_UNORM */
     for (uint32_t i = 0; i < details->formatCount; i++) {
-        if (details->formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
+        if (details->formats[i].format == VK_FORMAT_B8G8R8A8_UNORM &&
             details->formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             return details->formats[i];
         }
     }
+    /* Second try: R8G8B8A8_UNORM */
+    for (uint32_t i = 0; i < details->formatCount; i++) {
+        if (details->formats[i].format == VK_FORMAT_R8G8B8A8_UNORM &&
+            details->formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            return details->formats[i];
+        }
+    }
+    /* Fallback */
     return details->formats[0];
 }
 
@@ -671,7 +686,6 @@ static void createGraphicsPipeline(App *app) {
     stages[1].module = fragModule;
     stages[1].pName = "main";
 
-    /* No vertex input (fullscreen triangle is generated in vertex shader) */
     VkPipelineVertexInputStateCreateInfo vertexInput;
     memset(&vertexInput, 0, sizeof(vertexInput));
     vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -696,7 +710,7 @@ static void createGraphicsPipeline(App *app) {
     memset(&rasterizer, 0, sizeof(rasterizer));
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.cullMode = VK_CULL_MODE_NONE;       /* No culling for fullscreen triangle */
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
     rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
     rasterizer.lineWidth = 1.0f;
 
@@ -716,7 +730,6 @@ static void createGraphicsPipeline(App *app) {
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
-    /* Push constant range for fragment shader */
     VkPushConstantRange pushConstantRange;
     memset(&pushConstantRange, 0, sizeof(pushConstantRange));
     pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -793,7 +806,7 @@ static void createCommandPool(App *app) {
     VkCommandPoolCreateInfo info;
     memset(&info, 0, sizeof(info));
     info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; /* Allow re-recording */
+    info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     info.queueFamilyIndex = indices.graphicsFamily;
     if (vkCreateCommandPool(app->device, &info, NULL, &app->commandPool) != VK_SUCCESS) {
         fprintf(stderr, "failed to create command pool!\n");
@@ -814,7 +827,6 @@ static void createCommandBuffers(App *app) {
     }
 }
 
-/* Record a command buffer for a given image index with current push constants */
 static void recordCommandBuffer(App *app, VkCommandBuffer cmd, uint32_t imageIndex, const PushConstants *pc) {
     VkCommandBufferBeginInfo begin;
     memset(&begin, 0, sizeof(begin));
@@ -834,11 +846,8 @@ static void recordCommandBuffer(App *app, VkCommandBuffer cmd, uint32_t imageInd
 
     vkCmdBeginRenderPass(cmd, &rp, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, app->graphicsPipeline);
-
-    /* Push time and resolution to the fragment shader */
     vkCmdPushConstants(cmd, app->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), pc);
-
-    vkCmdDraw(cmd, 3, 1, 0, 0);  /* Fullscreen triangle */
+    vkCmdDraw(cmd, 3, 1, 0, 0);
     vkCmdEndRenderPass(cmd);
     vkEndCommandBuffer(cmd);
 }
@@ -917,14 +926,12 @@ static void drawFrame(App *app) {
 
     vkResetFences(app->device, 1, &app->inFlightFences[app->currentFrame]);
 
-    /* Prepare push constants with current time and resolution */
     PushConstants pc;
     pc.iTime = (float)glfwGetTime();
     pc.padding = 0.0f;
     pc.iResolutionX = (float)app->swapChainExtent.width;
     pc.iResolutionY = (float)app->swapChainExtent.height;
 
-    /* Re-record command buffer for this frame */
     vkResetCommandBuffer(app->commandBuffers[app->currentFrame], 0);
     recordCommandBuffer(app, app->commandBuffers[app->currentFrame], imageIndex, &pc);
 
