@@ -41,12 +41,23 @@ float GetDist(vec3 p) {
     // Animated sphere
     float sphere = sdSphere(p - vec3(sin(pc.iTime) * 1.5, 0.5 + sin(pc.iTime * 2.0) * 0.3, 0.0), 0.5);
     
-    // Rotating torus
+    // Rotating torus - match HLSL rotation method
     float angle = pc.iTime * 0.5;
     vec3 torusPos = p - vec3(0.0, 0.5, 0.0);
-    torusPos.xz = mat2(cos(angle), -sin(angle), sin(angle), cos(angle)) * torusPos.xz;
-    torusPos.xy = mat2(cos(angle * 0.7), -sin(angle * 0.7), sin(angle * 0.7), cos(angle * 0.7)) * torusPos.xy;
-    float torus = sdTorus(torusPos, vec2(0.6, 0.2));
+    float cosA = cos(angle);
+    float sinA = sin(angle);
+    vec2 rotatedXZ = vec2(cosA * torusPos.x - sinA * torusPos.z, sinA * torusPos.x + cosA * torusPos.z);
+    torusPos.x = rotatedXZ.x;
+    torusPos.z = rotatedXZ.y;
+    
+    float angle2 = angle * 0.7;
+    float cosA2 = cos(angle2);
+    float sinA2 = sin(angle2);
+    vec2 rotatedXY = vec2(cosA2 * torusPos.x - sinA2 * torusPos.y, sinA2 * torusPos.x + cosA2 * torusPos.y);
+    torusPos.x = rotatedXY.x;
+    torusPos.y = rotatedXY.y;
+    
+    float torus = sdTorus(torusPos, vec2(0.8, 0.2));  // radius 0.8 (was 0.6)
     
     // Ground plane
     float plane = p.y + 0.5;
@@ -82,17 +93,18 @@ vec3 GetNormal(vec3 p) {
     return normalize(n);
 }
 
-// Soft shadow
+// Soft shadow - 64 iterations (was 32)
 float GetShadow(vec3 ro, vec3 rd, float mint, float maxt, float k) {
     float res = 1.0;
     float t = mint;
-    for (int i = 0; i < 32; i++) {
+    for (int i = 0; i < 64; i++) {
+        if (t >= maxt) break;
         float h = GetDist(ro + rd * t);
+        if (h < 0.001) return 0.0;
         res = min(res, k * h / t);
-        if (res < 0.001 || t > maxt) break;
-        t += clamp(h, 0.01, 0.2);
+        t += h;
     }
-    return clamp(res, 0.0, 1.0);
+    return res;
 }
 
 // Ambient occlusion
@@ -108,37 +120,17 @@ float GetAO(vec3 p, vec3 n) {
     return clamp(1.0 - 3.0 * occ, 0.0, 1.0);
 }
 
-// Get material color based on position - matching OpenGL version (blue color)
-vec3 GetMaterial(vec3 p) {
-    // Ground - checkerboard pattern
-    if (p.y < -0.49) {
-        float check = mod(floor(p.x) + floor(p.z), 2.0);
-        return mix(vec3(0.2, 0.2, 0.25), vec3(0.5, 0.5, 0.55), check);
-    }
-    
-    // Objects - blue color like OpenGL version
-    return vec3(0.4, 0.6, 0.8);
-}
-
 void main() {
-    // Normalized coordinates
-    vec2 uv = fragCoord;
-    uv = uv * 2.0 - 1.0;
+    // UV: match HLSL range [-0.5, 0.5] (was [-1, 1])
+    vec2 uv = fragCoord - 0.5;
     uv.x *= pc.iResolution.x / pc.iResolution.y;
     
-    // Camera setup - fixed position (no rotation)
-    float camDist = 2.5;
-    float camHeight = 0.8;
+    // Camera setup - match HLSL exactly
+    vec3 ro = vec3(0.0, 1.5, -4.0);
+    vec3 rd = normalize(vec3(uv.x, uv.y, 1.0));
     
-    vec3 ro = vec3(0.0, camHeight, camDist);  // Fixed camera position
-    vec3 target = vec3(0.0, 0.2, 0.0);
-    
-    // Camera matrix
-    vec3 forward = normalize(target - ro);
-    vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
-    vec3 up = cross(forward, right);
-    
-    vec3 rd = normalize(forward + uv.x * right + uv.y * up);
+    // Light position - match HLSL (z = -2.0, was +2.0)
+    vec3 lightPos = vec3(3.0, 5.0, -2.0);
     
     // Raymarching
     float d = RayMarch(ro, rd);
@@ -148,14 +140,19 @@ void main() {
     if (d < MAX_DIST) {
         vec3 p = ro + rd * d;
         vec3 n = GetNormal(p);
-        vec3 matCol = GetMaterial(p);
-        
-        // Lighting
-        vec3 lightPos = vec3(3.0, 5.0, 2.0);
         vec3 l = normalize(lightPos - p);
         vec3 v = normalize(ro - p);
         vec3 r = reflect(-l, n);
         
+        // Material color - match HLSL (was 0.4, 0.6, 0.8)
+        vec3 matCol = vec3(0.4, 0.6, 0.9);
+        if (p.y < -0.49) {
+            // Checkerboard floor - match HLSL colors
+            float check = mod(floor(p.x) + floor(p.z), 2.0);
+            matCol = mix(vec3(0.2, 0.2, 0.2), vec3(0.8, 0.8, 0.8), check);
+        }
+        
+        // Lighting
         float diff = max(dot(n, l), 0.0);
         float spec = pow(max(dot(r, v), 0.0), 32.0);
         float ao = GetAO(p, n);
@@ -169,7 +166,7 @@ void main() {
         // Fog
         col = mix(col, vec3(0.05, 0.05, 0.1), 1.0 - exp(-0.02 * d * d));
     } else {
-        // Background gradient
+        // Background gradient - match HLSL
         col = mix(vec3(0.1, 0.1, 0.15), vec3(0.02, 0.02, 0.05), fragCoord.y);
     }
     
