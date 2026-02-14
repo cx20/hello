@@ -1590,6 +1590,14 @@ void createLogicalDevice() {
 }
 
 VkSurfaceFormatKHR chooseSwapSurfaceFormat(VkSurfaceFormatKHR* formats, uint count) {
+    // Try UNORM first (linear color space) to avoid double gamma correction
+    for (uint i = 0; i < count; i++) {
+        if (formats[i].format == VK_FORMAT_B8G8R8A8_UNORM &&
+            formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            return formats[i];
+        }
+    }
+    // Fall back to SRGB if UNORM not available
     for (uint i = 0; i < count; i++) {
         if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
             formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
