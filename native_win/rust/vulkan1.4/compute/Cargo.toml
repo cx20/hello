@@ -1,0 +1,11 @@
+[package]
+name = "hello"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+ash = "0.38"
+ash-window = "0.13"
+winit = "0.30"
+raw-window-handle = "0.6"
+shaderc = "0.8"
