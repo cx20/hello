@@ -472,6 +472,9 @@ type vkCreateWin32SurfaceKHRFunc = delegate of nativeint * VkWin32SurfaceCreateI
 [<DllImport("kernel32.dll", CharSet = CharSet.Auto)>]
 extern IntPtr GetModuleHandle(string lpModuleName)
 
+[<DllImport("kernel32.dll", CharSet = CharSet.Unicode)>]
+extern void OutputDebugString(string lpOutputString)
+
 [<DllImport("vulkan-1.dll")>] extern int    vkCreateInstance(VkInstanceCreateInfo& pCreateInfo, nativeint pAllocator, nativeint& pInstance)
 [<DllImport("vulkan-1.dll", CharSet = CharSet.Ansi)>] extern nativeint vkGetInstanceProcAddr(nativeint instance, [<MarshalAs(UnmanagedType.LPStr)>] string pName)
 [<DllImport("vulkan-1.dll")>] extern void   vkDestroyInstance(nativeint instance, nativeint pAllocator)
@@ -561,7 +564,9 @@ type RayMarchForm() as this =
     let mutable imageAvailableSemaphores = [||]
     let mutable renderFinishedSemaphores = [||]
     let mutable inFlightFences   = [||]
+    let mutable imagesInFlight   : nativeint[] = [||]
     let mutable frameIndex       = 0
+    let mutable drawLogCounter    = 0
     let mutable isDisposed       = false
     let MAX_FRAMES_IN_FLIGHT     = 2
     
@@ -573,12 +578,18 @@ type RayMarchForm() as this =
         this.Text      <- "F# Vulkan 1.4 - Ray Marching"
         this.Size      <- Size(800, 600)
         this.BackColor <- Color.Black
+        // Prevent WinForms background erase from causing flicker between frames.
+        this.SetStyle(ControlStyles.AllPaintingInWmPaint ||| ControlStyles.UserPaint ||| ControlStyles.Opaque, true)
+        this.UpdateStyles()
         // Drive continuous rendering at ~60 fps via a Windows Forms timer
         renderTimer.Interval <- 16
         renderTimer.Tick.Add(fun _ -> this.Invalidate())
         renderTimer.Start()
     
-    member private this.Log(msg: string) = printfn "[RayMarchForm] %s" msg
+    member private this.Log(msg: string) =
+        let line = sprintf "[%s][RayMarchForm] %s" (DateTime.Now.ToString("HH:mm:ss.fff")) msg
+        try Console.WriteLine(line) with _ -> ()
+        try OutputDebugString(line) with _ -> ()
     
     member private this.MakeVersion(major: uint32, minor: uint32, patch: uint32) : uint32 =
         (major <<< 22) ||| (minor <<< 12) ||| patch
@@ -810,6 +821,7 @@ type RayMarchForm() as this =
     
     // ---- Render pass ------------------------------------------------------------
     member private this.CreateRenderPass() =
+        this.Log("CreateRenderPass - Start")
         let mutable colorAttachment: VkAttachmentDescription = {
             flags = 0u; format = swapChainImageFormat
             samples = int VkSampleCountFlags.VK_SAMPLE_COUNT_1_BIT
@@ -856,11 +868,13 @@ type RayMarchForm() as this =
             }
             if vkCreateRenderPass(vkDevice, &rpCI, IntPtr.Zero, &vkRenderPass) <> 0 then
                 failwith "Failed to create render pass!"
+            this.Log(sprintf "CreateRenderPass - End (renderPass=0x%X)" (vkRenderPass.ToInt64()))
         finally
             colorRefHandle.Free(); attachHandle.Free(); subpassHandle.Free(); dependencyHandle.Free()
     
     // ---- Swap chain -------------------------------------------------------------
     member private this.CreateSwapChain() =
+        this.Log("CreateSwapChain - Start")
         let mutable caps = Unchecked.defaultof<VkSurfaceCapabilitiesKHR>
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkPhysicalDevice, vkSurface, &caps) |> ignore
         
@@ -901,9 +915,15 @@ type RayMarchForm() as this =
         let imgHandle = GCHandle.Alloc(swapChainImages, GCHandleType.Pinned)
         try vkGetSwapchainImagesKHR(vkDevice, vkSwapChain, &imgCount, imgHandle.AddrOfPinnedObject()) |> ignore
         finally imgHandle.Free()
+
+        // Track which fence is currently using each swapchain image.
+        imagesInFlight <- Array.create swapChainImages.Length IntPtr.Zero
+        this.Log(sprintf "CreateSwapChain - End (images=%d, extent=%dx%d, format=%d)" swapChainImages.Length swapChainExtent.width swapChainExtent.height swapChainImageFormat)
+
     
     // ---- Image views ------------------------------------------------------------
     member private this.CreateSwapChainImageViews() =
+        this.Log("CreateSwapChainImageViews - Start")
         swapChainImageViews <- Array.zeroCreate swapChainImages.Length
         for i in 0 .. swapChainImages.Length - 1 do
             let mutable ci: VkImageViewCreateInfo = {
@@ -925,9 +945,11 @@ type RayMarchForm() as this =
             }
             if vkCreateImageView(vkDevice, &ci, IntPtr.Zero, &swapChainImageViews.[i]) <> 0 then
                 failwith "Failed to create image view!"
+        this.Log(sprintf "CreateSwapChainImageViews - End (count=%d)" swapChainImageViews.Length)
     
     // ---- Framebuffers -----------------------------------------------------------
     member private this.CreateFramebuffers() =
+        this.Log("CreateFramebuffers - Start")
         swapChainFramebuffers <- Array.zeroCreate swapChainImageViews.Length
         for i in 0 .. swapChainImageViews.Length - 1 do
             let attachments = [| swapChainImageViews.[i] |]
@@ -944,9 +966,11 @@ type RayMarchForm() as this =
                 if vkCreateFramebuffer(vkDevice, &fbCI, IntPtr.Zero, &swapChainFramebuffers.[i]) <> 0 then
                     failwith "Failed to create framebuffer!"
             finally handle.Free()
+        this.Log(sprintf "CreateFramebuffers - End (count=%d)" swapChainFramebuffers.Length)
     
     // ---- Command pool / buffer --------------------------------------------------
     member private this.CreateCommandPool() =
+        this.Log("CreateCommandPool - Start")
         let mutable poolCI: VkCommandPoolCreateInfo = {
             sType = int VkStructureType.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO
             pNext = IntPtr.Zero
@@ -955,11 +979,13 @@ type RayMarchForm() as this =
         }
         if vkCreateCommandPool(vkDevice, &poolCI, IntPtr.Zero, &commandPool) <> 0 then
             failwith "Failed to create command pool!"
+        this.Log(sprintf "CreateCommandPool - End (commandPool=0x%X)" (commandPool.ToInt64()))
     
     /// Allocate one command buffer per frame-in-flight.
     /// Each frame slot owns its own command buffer so that frame N+1 can record
     /// new commands while the GPU is still consuming frame N's buffer.
     member private this.CreateCommandBuffers() =
+        this.Log("CreateCommandBuffers - Start")
         commandBuffers <- Array.zeroCreate MAX_FRAMES_IN_FLIGHT
         for i in 0 .. MAX_FRAMES_IN_FLIGHT - 1 do
             let mutable allocInfo: VkCommandBufferAllocateInfo = {
@@ -973,9 +999,11 @@ type RayMarchForm() as this =
             if vkAllocateCommandBuffers(vkDevice, &allocInfo, &cb) <> 0 then
                 failwith (sprintf "Failed to allocate command buffer [%d]!" i)
             commandBuffers.[i] <- cb
+            this.Log(sprintf "CreateCommandBuffers - Allocated [%d] = 0x%X" i (cb.ToInt64()))
     
     // ---- Synchronization primitives ---------------------------------------------
     member private this.CreateSyncObjects() =
+        this.Log("CreateSyncObjects - Start")
         imageAvailableSemaphores <- Array.zeroCreate MAX_FRAMES_IN_FLIGHT
         renderFinishedSemaphores <- Array.zeroCreate MAX_FRAMES_IN_FLIGHT
         inFlightFences           <- Array.zeroCreate MAX_FRAMES_IN_FLIGHT
@@ -992,9 +1020,12 @@ type RayMarchForm() as this =
             vkCreateSemaphore(vkDevice, &semCI,   IntPtr.Zero, &imageAvailableSemaphores.[i]) |> ignore
             vkCreateSemaphore(vkDevice, &semCI,   IntPtr.Zero, &renderFinishedSemaphores.[i]) |> ignore
             vkCreateFence    (vkDevice, &fenceCI, IntPtr.Zero, &inFlightFences.[i])           |> ignore
+            this.Log(sprintf "CreateSyncObjects - Slot[%d] semA=0x%X semB=0x%X fence=0x%X" i (imageAvailableSemaphores.[i].ToInt64()) (renderFinishedSemaphores.[i].ToInt64()) (inFlightFences.[i].ToInt64()))
+        this.Log(sprintf "CreateSyncObjects - End (frames=%d)" MAX_FRAMES_IN_FLIGHT)
     
     // ---- Logical device ---------------------------------------------------------
     member private this.CreateLogicalDevice() =
+        this.Log("CreateLogicalDevice - Start")
         let queueFamilyIndex = this.FindQueueFamily()
         let queuePriority    = 1.0f
         let priorityHandle   = GCHandle.Alloc(queuePriority, GCHandleType.Pinned)
@@ -1024,12 +1055,14 @@ type RayMarchForm() as this =
             vkGetDeviceQueue(vkDevice, queueFamilyIndex, 0u, &queue)
             graphicsQueue <- queue
             presentQueue  <- queue
+            this.Log(sprintf "CreateLogicalDevice - End (queueFamily=%d, device=0x%X)" queueFamilyIndex (vkDevice.ToInt64()))
         finally
             queueCIHandle.Free(); priorityHandle.Free()
             this.FreeStringArray(extensionsPtr, extensions.Length)
     
     // ---- Physical device --------------------------------------------------------
     member private this.PickPhysicalDevice() =
+        this.Log("PickPhysicalDevice - Start")
         let mutable deviceCount = 0u
         vkEnumeratePhysicalDevices(vkInstance, &deviceCount, IntPtr.Zero) |> ignore
         if deviceCount = 0u then failwith "No Vulkan-capable GPUs found!"
@@ -1038,10 +1071,12 @@ type RayMarchForm() as this =
         try
             vkEnumeratePhysicalDevices(vkInstance, &deviceCount, handle.AddrOfPinnedObject()) |> ignore
             vkPhysicalDevice <- devices.[0]
+            this.Log(sprintf "PickPhysicalDevice - End (count=%d, selected=0x%X)" deviceCount (vkPhysicalDevice.ToInt64()))
         finally handle.Free()
     
     // ---- Surface ----------------------------------------------------------------
     member private this.CreateSurface() =
+        this.Log("CreateSurface - Start")
         let mutable ci: VkWin32SurfaceCreateInfoKHR = {
             sType = uint32 VkStructureType.VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR
             pNext = IntPtr.Zero; flags = 0u
@@ -1054,9 +1089,11 @@ type RayMarchForm() as this =
         if fn.Invoke(vkInstance, &ci, IntPtr.Zero, &surface) <> 0 then
             failwith "Failed to create Win32 surface!"
         vkSurface <- surface
+        this.Log(sprintf "CreateSurface - End (surface=0x%X)" (vkSurface.ToInt64()))
     
     // ---- Instance ---------------------------------------------------------------
     member private this.CreateInstance() =
+        this.Log("CreateInstance - Start")
         let appInfo: VkApplicationInfo = {
             sType = uint32 VkStructureType.VK_STRUCTURE_TYPE_APPLICATION_INFO
             pNext = IntPtr.Zero
@@ -1084,6 +1121,7 @@ type RayMarchForm() as this =
             if vkCreateInstance(&ci, IntPtr.Zero, &instance) <> 0 then
                 failwith "Failed to create Vulkan instance!"
             vkInstance <- instance
+            this.Log(sprintf "CreateInstance - End (instance=0x%X)" (vkInstance.ToInt64()))
         finally
             Marshal.DestroyStructure(appInfoPtr, typeof<VkApplicationInfo>)
             Marshal.FreeHGlobal(appInfoPtr)
@@ -1092,6 +1130,7 @@ type RayMarchForm() as this =
     
     // ---- Full initialization sequence -------------------------------------------
     member private this.InitVulkan() =
+        this.Log("InitVulkan - Start")
         try
             this.CreateInstance()
             this.CreateSurface()
@@ -1110,132 +1149,165 @@ type RayMarchForm() as this =
     
     // ---- Per-frame rendering ----------------------------------------------------
     member private this.DrawFrame() =
+        drawLogCounter <- drawLogCounter + 1
+        let verboseFrame = drawLogCounter <= 10 || drawLogCounter % 120 = 0
         try
             if commandBuffers.Length = 0 then ()
             else
                 let currentFrame  = frameIndex % MAX_FRAMES_IN_FLIGHT
-                // Select the command buffer that belongs to this frame slot.
-                // Because we waited on inFlightFences.[currentFrame] above,
-                // the GPU has finished reading this buffer and we can safely overwrite it.
                 let commandBuffer = commandBuffers.[currentFrame]
-                
-                // Compute elapsed time for the animation
+                if verboseFrame then
+                    this.Log(sprintf "DrawFrame - Begin frameIndex=%d currentFrame=%d commandBuffer=0x%X" frameIndex currentFrame (commandBuffer.ToInt64()))
+
                 let elapsedSeconds = float32 (DateTime.UtcNow - startTime).TotalSeconds
-                
+
                 // Wait for the previous use of this frame slot to finish
                 let fenceArray  = [| inFlightFences.[currentFrame] |]
                 let fenceHandle = GCHandle.Alloc(fenceArray, GCHandleType.Pinned)
+                let mutable waitOk = false
                 try
-                    vkWaitForFences(vkDevice, 1u, fenceHandle.AddrOfPinnedObject(), 1u, UInt64.MaxValue) |> ignore
-                    vkResetFences  (vkDevice, 1u, fenceHandle.AddrOfPinnedObject()) |> ignore
-                finally fenceHandle.Free()
-                
-                let mutable imageIndex = 0u
-                let acquireResult =
-                    vkAcquireNextImageKHR(vkDevice, vkSwapChain, UInt64.MaxValue,
-                                          imageAvailableSemaphores.[currentFrame],
-                                          IntPtr.Zero, &imageIndex)
-                
-                if acquireResult <> int VkResult.VK_SUCCESS && acquireResult <> int VkResult.VK_SUBOPTIMAL_KHR then
-                    this.Log(sprintf "vkAcquireNextImageKHR failed: %d" acquireResult)
-                else
-                    // Record command buffer
-                    let mutable beginInfo: VkCommandBufferBeginInfo = {
-                        sType = int VkStructureType.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-                        pNext = IntPtr.Zero
-                        flags = uint32 (int VkCommandBufferUsageFlags.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT)
-                        pInheritanceInfo = IntPtr.Zero
-                    }
-                    if vkBeginCommandBuffer(commandBuffer, &beginInfo) <> 0 then
-                        this.Log("vkBeginCommandBuffer failed")
+                    if verboseFrame then this.Log(sprintf "DrawFrame - WaitForFences(slot=%d) start" currentFrame)
+                    let waitResult = vkWaitForFences(vkDevice, 1u, fenceHandle.AddrOfPinnedObject(), 1u, UInt64.MaxValue)
+                    if verboseFrame then this.Log(sprintf "DrawFrame - WaitForFences(slot=%d) result=%d" currentFrame waitResult)
+                    if waitResult = int VkResult.VK_SUCCESS then
+                        waitOk <- true
                     else
-                        let clearValues: VkClearValue[] = Array.zeroCreate 1
-                        clearValues.[0].color <- { float32_0 = 0.0f; float32_1 = 0.0f; float32_2 = 0.0f; float32_3 = 1.0f }
-                        let clearHandle = GCHandle.Alloc(clearValues, GCHandleType.Pinned)
-                        try
-                            let mutable rpBegin: VkRenderPassBeginInfo = {
-                                sType = int VkStructureType.VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO
-                                pNext = IntPtr.Zero
-                                renderPass  = vkRenderPass
-                                framebuffer = swapChainFramebuffers.[int imageIndex]
-                                renderArea  = { offset = { x = 0; y = 0 }; extent = swapChainExtent }
-                                clearValueCount = 1u; pClearValues = clearHandle.AddrOfPinnedObject()
-                            }
-                            
-                            vkCmdBeginRenderPass(commandBuffer, &rpBegin, int VkSubpassContents.VK_SUBPASS_CONTENTS_INLINE)
-                            vkCmdBindPipeline   (commandBuffer, int VkPipelineBindPoint.VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline)
-                            
-                            // Build push constants with current time and window resolution
-                            let mutable pc: RayMarchPushConstants = {
-                                iTime        = elapsedSeconds
-                                padding      = 0.0f
-                                iResolutionX = float32 swapChainExtent.width
-                                iResolutionY = float32 swapChainExtent.height
-                            }
-                            // Pin the struct and upload it to the command buffer
-                            let pcHandle = GCHandle.Alloc(pc, GCHandleType.Pinned)
+                        this.Log(sprintf "DrawFrame - WaitForFences timeout/error: %d" waitResult)
+                finally
+                    fenceHandle.Free()
+
+                if waitOk then
+                    let mutable imageIndex = 0u
+                    if verboseFrame then this.Log(sprintf "DrawFrame - Acquire start slot=%d" currentFrame)
+                    let acquireResult =
+                        vkAcquireNextImageKHR(vkDevice, vkSwapChain, UInt64.MaxValue,
+                                              imageAvailableSemaphores.[currentFrame],
+                                              IntPtr.Zero, &imageIndex)
+                    if verboseFrame then this.Log(sprintf "DrawFrame - Acquire result=%d imageIndex=%d" acquireResult imageIndex)
+
+                    if acquireResult <> int VkResult.VK_SUCCESS && acquireResult <> int VkResult.VK_SUBOPTIMAL_KHR then
+                        this.Log(sprintf "vkAcquireNextImageKHR failed: %d" acquireResult)
+                    else
+                        // Ensure the acquired swapchain image is not still in-flight from an older frame.
+                        let imageSlot = int imageIndex
+                        if imageSlot < imagesInFlight.Length && imagesInFlight.[imageSlot] <> IntPtr.Zero then
+                            let imageFenceArray  = [| imagesInFlight.[imageSlot] |]
+                            let imageFenceHandle = GCHandle.Alloc(imageFenceArray, GCHandleType.Pinned)
                             try
-                                vkCmdPushConstants(
-                                    commandBuffer,
-                                    pipelineLayout,
-                                    uint32 VkShaderStageFlags.VK_SHADER_STAGE_ALL_GRAPHICS,
-                                    0u,                                                          // offset
-                                    uint32 (Marshal.SizeOf(typeof<RayMarchPushConstants>)),      // 16 bytes
-                                    pcHandle.AddrOfPinnedObject())
-                            finally pcHandle.Free()
-                            
-                            // Draw full-screen triangle (3 vertices, no vertex buffer needed)
-                            vkCmdDraw(commandBuffer, 3u, 1u, 0u, 0u)
-                            vkCmdEndRenderPass(commandBuffer)
-                            
-                            if vkEndCommandBuffer(commandBuffer) <> 0 then
-                                this.Log("vkEndCommandBuffer failed")
-                            else
-                                // Submit
-                                let waitSems     = [| imageAvailableSemaphores.[currentFrame] |]
-                                let waitSemsH    = GCHandle.Alloc(waitSems,     GCHandleType.Pinned)
-                                let signalSems   = [| renderFinishedSemaphores.[currentFrame] |]
-                                let signalSemsH  = GCHandle.Alloc(signalSems,   GCHandleType.Pinned)
-                                let cmdBufs      = [| commandBuffer |]
-                                let cmdBufsH     = GCHandle.Alloc(cmdBufs,      GCHandleType.Pinned)
-                                let waitStages   = [| int VkPipelineStageFlags.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |]
-                                let waitStagesH  = GCHandle.Alloc(waitStages,   GCHandleType.Pinned)
+                                if verboseFrame then this.Log(sprintf "DrawFrame - Wait image fence start image=%d" imageSlot)
+                                let imageWaitResult = vkWaitForFences(vkDevice, 1u, imageFenceHandle.AddrOfPinnedObject(), 1u, UInt64.MaxValue)
+                                if verboseFrame then this.Log(sprintf "DrawFrame - Wait image fence result=%d image=%d" imageWaitResult imageSlot)
+                            finally
+                                imageFenceHandle.Free()
+
+                        if imageSlot < imagesInFlight.Length then
+                            imagesInFlight.[imageSlot] <- inFlightFences.[currentFrame]
+
+                        let mutable beginInfo: VkCommandBufferBeginInfo = {
+                            sType = int VkStructureType.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+                            pNext = IntPtr.Zero
+                            flags = uint32 (int VkCommandBufferUsageFlags.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT)
+                            pInheritanceInfo = IntPtr.Zero
+                        }
+                        if vkBeginCommandBuffer(commandBuffer, &beginInfo) <> 0 then
+                            this.Log("vkBeginCommandBuffer failed")
+                        else
+                            let clearValues: VkClearValue[] = Array.zeroCreate 1
+                            clearValues.[0].color <- { float32_0 = 0.0f; float32_1 = 0.0f; float32_2 = 0.0f; float32_3 = 1.0f }
+                            let clearHandle = GCHandle.Alloc(clearValues, GCHandleType.Pinned)
+                            try
+                                let mutable rpBegin: VkRenderPassBeginInfo = {
+                                    sType = int VkStructureType.VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO
+                                    pNext = IntPtr.Zero
+                                    renderPass  = vkRenderPass
+                                    framebuffer = swapChainFramebuffers.[int imageIndex]
+                                    renderArea  = { offset = { x = 0; y = 0 }; extent = swapChainExtent }
+                                    clearValueCount = 1u; pClearValues = clearHandle.AddrOfPinnedObject()
+                                }
+
+                                vkCmdBeginRenderPass(commandBuffer, &rpBegin, int VkSubpassContents.VK_SUBPASS_CONTENTS_INLINE)
+                                vkCmdBindPipeline(commandBuffer, int VkPipelineBindPoint.VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline)
+
+                                let mutable pc: RayMarchPushConstants = {
+                                    iTime        = elapsedSeconds
+                                    padding      = 0.0f
+                                    iResolutionX = float32 swapChainExtent.width
+                                    iResolutionY = float32 swapChainExtent.height
+                                }
+                                let pcHandle = GCHandle.Alloc(pc, GCHandleType.Pinned)
                                 try
-                                    let mutable submitInfo: VkSubmitInfo = {
-                                        sType = int VkStructureType.VK_STRUCTURE_TYPE_SUBMIT_INFO
-                                        pNext = IntPtr.Zero
-                                        waitSemaphoreCount   = 1u; pWaitSemaphores   = waitSemsH.AddrOfPinnedObject()
-                                        pWaitDstStageMask    = waitStagesH.AddrOfPinnedObject()
-                                        commandBufferCount   = 1u; pCommandBuffers    = cmdBufsH.AddrOfPinnedObject()
-                                        signalSemaphoreCount = 1u; pSignalSemaphores  = signalSemsH.AddrOfPinnedObject()
-                                    }
-                                    if vkQueueSubmit(graphicsQueue, 1u, &submitInfo, inFlightFences.[currentFrame]) <> 0 then
-                                        this.Log("vkQueueSubmit failed")
-                                    else
-                                        // Present
-                                        let swapchains     = [| vkSwapChain |]
-                                        let swapchainsH    = GCHandle.Alloc(swapchains,  GCHandleType.Pinned)
-                                        let imageIndices   = [| imageIndex |]
-                                        let imageIndicesH  = GCHandle.Alloc(imageIndices, GCHandleType.Pinned)
-                                        let presentWaitS   = [| renderFinishedSemaphores.[currentFrame] |]
-                                        let presentWaitSH  = GCHandle.Alloc(presentWaitS, GCHandleType.Pinned)
-                                        try
-                                            let mutable presentInfo: VkPresentInfoKHR = {
-                                                sType = int VkStructureType.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR
-                                                pNext = IntPtr.Zero
-                                                waitSemaphoreCount = 1u; pWaitSemaphores = presentWaitSH.AddrOfPinnedObject()
-                                                swapchainCount = 1u; pSwapchains   = swapchainsH.AddrOfPinnedObject()
-                                                pImageIndices = imageIndicesH.AddrOfPinnedObject()
-                                                pResults = IntPtr.Zero
-                                            }
-                                            vkQueuePresentKHR(presentQueue, &presentInfo) |> ignore
-                                        finally
-                                            presentWaitSH.Free(); imageIndicesH.Free(); swapchainsH.Free()
+                                    vkCmdPushConstants(
+                                        commandBuffer,
+                                        pipelineLayout,
+                                        uint32 VkShaderStageFlags.VK_SHADER_STAGE_ALL_GRAPHICS,
+                                        0u,
+                                        uint32 (Marshal.SizeOf(typeof<RayMarchPushConstants>)),
+                                        pcHandle.AddrOfPinnedObject())
                                 finally
-                                    waitSemsH.Free(); signalSemsH.Free(); cmdBufsH.Free(); waitStagesH.Free()
-                        finally clearHandle.Free()
-                
+                                    pcHandle.Free()
+
+                                vkCmdDraw(commandBuffer, 3u, 1u, 0u, 0u)
+                                vkCmdEndRenderPass(commandBuffer)
+
+                                if vkEndCommandBuffer(commandBuffer) <> 0 then
+                                    this.Log("vkEndCommandBuffer failed")
+                                else
+                                    let waitSems     = [| imageAvailableSemaphores.[currentFrame] |]
+                                    let waitSemsH    = GCHandle.Alloc(waitSems, GCHandleType.Pinned)
+                                    let signalSems   = [| renderFinishedSemaphores.[currentFrame] |]
+                                    let signalSemsH  = GCHandle.Alloc(signalSems, GCHandleType.Pinned)
+                                    let cmdBufs      = [| commandBuffer |]
+                                    let cmdBufsH     = GCHandle.Alloc(cmdBufs, GCHandleType.Pinned)
+                                    let waitStages   = [| int VkPipelineStageFlags.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |]
+                                    let waitStagesH  = GCHandle.Alloc(waitStages, GCHandleType.Pinned)
+                                    try
+                                        let mutable submitInfo: VkSubmitInfo = {
+                                            sType = int VkStructureType.VK_STRUCTURE_TYPE_SUBMIT_INFO
+                                            pNext = IntPtr.Zero
+                                            waitSemaphoreCount   = 1u; pWaitSemaphores   = waitSemsH.AddrOfPinnedObject()
+                                            pWaitDstStageMask    = waitStagesH.AddrOfPinnedObject()
+                                            commandBufferCount   = 1u; pCommandBuffers   = cmdBufsH.AddrOfPinnedObject()
+                                            signalSemaphoreCount = 1u; pSignalSemaphores = signalSemsH.AddrOfPinnedObject()
+                                        }
+                                        let submitFenceArray  = [| inFlightFences.[currentFrame] |]
+                                        let submitFenceHandle = GCHandle.Alloc(submitFenceArray, GCHandleType.Pinned)
+                                        try
+                                            // Reset the fence just before submit so image-in-flight waits see the prior signal.
+                                            vkResetFences(vkDevice, 1u, submitFenceHandle.AddrOfPinnedObject()) |> ignore
+                                            if vkQueueSubmit(graphicsQueue, 1u, &submitInfo, inFlightFences.[currentFrame]) <> 0 then
+                                                this.Log("vkQueueSubmit failed")
+                                            else
+                                                if verboseFrame then this.Log(sprintf "DrawFrame - QueueSubmit ok frameSlot=%d imageIndex=%d" currentFrame imageIndex)
+                                                let swapchains    = [| vkSwapChain |]
+                                                let swapchainsH   = GCHandle.Alloc(swapchains, GCHandleType.Pinned)
+                                                let imageIndices  = [| imageIndex |]
+                                                let imageIndicesH = GCHandle.Alloc(imageIndices, GCHandleType.Pinned)
+                                                let presentWaitS  = [| renderFinishedSemaphores.[currentFrame] |]
+                                                let presentWaitSH = GCHandle.Alloc(presentWaitS, GCHandleType.Pinned)
+                                                try
+                                                    let mutable presentInfo: VkPresentInfoKHR = {
+                                                        sType = int VkStructureType.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR
+                                                        pNext = IntPtr.Zero
+                                                        waitSemaphoreCount = 1u; pWaitSemaphores = presentWaitSH.AddrOfPinnedObject()
+                                                        swapchainCount = 1u; pSwapchains = swapchainsH.AddrOfPinnedObject()
+                                                        pImageIndices = imageIndicesH.AddrOfPinnedObject()
+                                                        pResults = IntPtr.Zero
+                                                    }
+                                                    let presentResult = vkQueuePresentKHR(presentQueue, &presentInfo)
+                                                    if verboseFrame then this.Log(sprintf "DrawFrame - Present result=%d imageIndex=%d" presentResult imageIndex)
+                                                    if presentResult <> int VkResult.VK_SUCCESS && presentResult <> int VkResult.VK_SUBOPTIMAL_KHR then
+                                                        this.Log(sprintf "vkQueuePresentKHR failed: %d" presentResult)
+                                                finally
+                                                    presentWaitSH.Free(); imageIndicesH.Free(); swapchainsH.Free()
+                                        finally
+                                            submitFenceHandle.Free()
+                                    finally
+                                        waitSemsH.Free(); signalSemsH.Free(); cmdBufsH.Free(); waitStagesH.Free()
+                            finally
+                                clearHandle.Free()
+
                 frameIndex <- frameIndex + 1
+                if verboseFrame then this.Log(sprintf "DrawFrame - End frameIndex=%d" frameIndex)
         with ex -> this.Log(sprintf "DrawFrame Error: %s" ex.Message)
     
     // ---- Cleanup ----------------------------------------------------------------
@@ -1263,12 +1335,17 @@ type RayMarchForm() as this =
     
     // ---- Form overrides ---------------------------------------------------------
     override this.OnHandleCreated(e) =
+        this.Log(sprintf "OnHandleCreated - handle=0x%X" (this.Handle.ToInt64()))
         base.OnHandleCreated(e)
         this.InitVulkan()
     
     override this.OnPaint(e) =
-        base.OnPaint(e)
+        if drawLogCounter <= 20 || drawLogCounter % 240 = 0 then this.Log("OnPaint")
         this.DrawFrame()
+
+    override this.OnPaintBackground(_e) =
+        if drawLogCounter % 240 = 0 then this.Log("OnPaintBackground - skipped")
+        ()
     
     override this.Dispose(disposing) =
         if disposing then this.Cleanup()
@@ -1285,3 +1362,10 @@ let main _ =
     use form = new RayMarchForm()
     Application.Run(form)
     0
+
+
+
+
+
+
+
