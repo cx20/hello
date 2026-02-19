@@ -1,0 +1,1 @@
+cl /EHsc /std:c++17 hello.cpp /link d3d11.lib dxgi.lib d3dcompiler.lib dcomp.lib user32.lib
