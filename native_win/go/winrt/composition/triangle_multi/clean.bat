@@ -1,0 +1,2 @@
+del *.spv
+del *.exe
