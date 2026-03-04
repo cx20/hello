@@ -652,7 +652,7 @@ static void RenderGL() {
         dbg("[GL] runtime FBO not complete: 0x%04X\n", (unsigned)fboStatus);
     }
     glViewport(0, 0, PANEL_W, PANEL_H);
-    glClearColor(0.20f, 0.00f, 0.00f, 1.0f);
+    glClearColor(0.05f, 0.05f, 0.15f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     p_glUseProgram(g_glProgram);
