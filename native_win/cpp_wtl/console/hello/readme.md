@@ -8,7 +8,7 @@ Result:
 |Command Prompt                   [_][~][X]|
 +------------------------------------------+
 |C:\hello\cpp\console\hello> hello         |
-|Hello, C++ (ATL) World!                   |
+|Hello, C++ (WTL) World!                   |
 |                                          |
 |                                          |
 |                                          |
