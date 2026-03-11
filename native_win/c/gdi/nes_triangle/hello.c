@@ -4,7 +4,7 @@
  * Features:
  *   - MOS 6502 CPU (all official instructions)
  *   - PPU with background + sprite rendering
- *   - Mapper 0 (NROM) only
+ *   - Mapper 0 (NROM) and Mapper 66 (GxROM)
  *   - GDI rendering (CreateDIBSection + StretchBlt)
  *   - Player 1 keyboard input
  *
@@ -70,6 +70,10 @@
 #define MIRROR_SINGLE_HI   3
 #define MIRROR_FOUR_SCREEN 4
 
+/* Supported mappers */
+#define MAPPER_NROM        0
+#define MAPPER_GXROM       66
+
 /* ================================================================
  * Type definitions
  * ================================================================ */
@@ -125,6 +129,7 @@ typedef struct Cartridge {
     uint32_t prg_size, chr_size;
     uint8_t  prg_banks, chr_banks;
     uint8_t  mapper, mirror;
+    uint8_t  prg_bank_select, chr_bank_select;
     uint8_t  chr_ram[0x2000];
     uint8_t  has_chr_ram;
 } Cartridge;
@@ -156,7 +161,7 @@ static void    bus_cpu_write(Bus *bus, uint16_t addr, uint8_t val);
 static void    ppu_step(PPU *ppu, Bus *bus);
 
 /* ================================================================
- * Cartridge - iNES ROM loader, Mapper 0
+ * Cartridge - iNES ROM loader, Mapper 0 / 66
  * ================================================================ */
 typedef struct {
     uint8_t magic[4];
@@ -178,8 +183,8 @@ static int cartridge_load(Cartridge *cart, const char *filename) {
     }
 
     cart->mapper = (hdr.flags7 & 0xF0) | (hdr.flags6 >> 4);
-    if (cart->mapper != 0) {
-        fprintf(stderr, "Error: Only Mapper 0 supported (got %d)\n", cart->mapper);
+    if (cart->mapper != MAPPER_NROM && cart->mapper != MAPPER_GXROM) {
+        fprintf(stderr, "Error: Only Mapper 0 and 66 supported (got %d)\n", cart->mapper);
         fclose(fp); return 0;
     }
 
@@ -213,6 +218,35 @@ static int cartridge_load(Cartridge *cart, const char *filename) {
     return 1;
 }
 
+static uint32_t cartridge_prg_addr(const Cartridge *cart, uint16_t addr) {
+    switch (cart->mapper) {
+    case MAPPER_GXROM: {
+        uint32_t bank_count = cart->prg_size / 0x8000;
+        uint32_t bank = bank_count ? (cart->prg_bank_select % bank_count) : 0;
+        return bank * 0x8000 + (uint32_t)(addr - 0x8000);
+    }
+    case MAPPER_NROM:
+    default: {
+        uint32_t mapped = addr - 0x8000;
+        if (cart->prg_banks == 1) mapped &= 0x3FFF;
+        return mapped;
+    }
+    }
+}
+
+static uint32_t cartridge_chr_addr(const Cartridge *cart, uint16_t addr) {
+    switch (cart->mapper) {
+    case MAPPER_GXROM: {
+        uint32_t bank_count = cart->chr_size / 0x2000;
+        uint32_t bank = bank_count ? (cart->chr_bank_select % bank_count) : 0;
+        return bank * 0x2000 + (uint32_t)addr;
+    }
+    case MAPPER_NROM:
+    default:
+        return addr;
+    }
+}
+
 static void cartridge_free(Cartridge *cart) {
     if (cart->prg_rom) free(cart->prg_rom);
     if (cart->chr_rom && !cart->has_chr_ram) free(cart->chr_rom);
@@ -220,23 +254,29 @@ static void cartridge_free(Cartridge *cart) {
 
 static uint8_t cartridge_cpu_read(Cartridge *cart, uint16_t addr) {
     if (addr >= 0x8000) {
-        uint32_t m = addr - 0x8000;
-        if (cart->prg_banks == 1) m &= 0x3FFF;
+        uint32_t m = cartridge_prg_addr(cart, addr);
         return cart->prg_rom[m];
     }
     return 0;
 }
 
 static void cartridge_cpu_write(Cartridge *c, uint16_t a, uint8_t v) {
-    (void)c; (void)a; (void)v;
+    if (c->mapper == MAPPER_GXROM && a >= 0x8000) {
+        /* GNROM boards have bus conflicts, so the ROM data can mask the write. */
+        uint8_t latch = v & cartridge_cpu_read(c, a);
+        c->chr_bank_select = latch & 0x03;
+        c->prg_bank_select = (latch >> 4) & 0x03;
+    }
 }
 
 static uint8_t cartridge_ppu_read(Cartridge *cart, uint16_t addr) {
-    return (addr < 0x2000) ? cart->chr_rom[addr] : 0;
+    return (addr < 0x2000) ? cart->chr_rom[cartridge_chr_addr(cart, addr)] : 0;
 }
 
 static void cartridge_ppu_write(Cartridge *cart, uint16_t addr, uint8_t val) {
-    if (addr < 0x2000 && cart->has_chr_ram) cart->chr_ram[addr] = val;
+    if (addr < 0x2000 && cart->has_chr_ram) {
+        cart->chr_ram[cartridge_chr_addr(cart, addr)] = val;
+    }
 }
 
 /* ================================================================
