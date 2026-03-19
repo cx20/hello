@@ -1,0 +1,3 @@
+del *.exe
+del *.dll
+
