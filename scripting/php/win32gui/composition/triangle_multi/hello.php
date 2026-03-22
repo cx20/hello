@@ -208,7 +208,8 @@ function guid_from_string(string $s): FFI\CData
 function ptr_i(FFI\CData $p): int
 {
     global $basicTypes;
-    return (int)$basicTypes->cast('uintptr_t', $p)->cdata;
+    // Cast through uint8_t* first: direct void* → uintptr_t cast is unreliable in PHP FFI.
+    return (int)$basicTypes->cast('uintptr_t', $basicTypes->cast('uint8_t*', $p))->cdata;
 }
 
 function com_fn(FFI\CData $obj, int $index, string $type): FFI\CData
@@ -246,11 +247,63 @@ function vk_check(int $res, string $what): void
     }
 }
 
+// ---------------------------------------------------------------------------
+// Raw byte-buffer helpers for building Vulkan structs (mirrors Perl approach).
+// Vulkan structs are built as zeroed uint8_t arrays; field values are written
+// at specific byte offsets that match the C ABI layout on 64-bit Windows.
+// ---------------------------------------------------------------------------
+
+function vk_buf(int $size): FFI\CData
+{
+    global $basicTypes;
+    $buf = $basicTypes->new("uint8_t[$size]", false);
+    FFI::memset($buf, 0, $size);
+    return $buf;
+}
+
+function vk_write_u32(FFI\CData $buf, int $offset, int $value): void
+{
+    // FFI::memcpy accepts a PHP string as source; pack('V',...) gives LE uint32.
+    FFI::memcpy(FFI::addr($buf[$offset]), pack('V', $value & 0xFFFFFFFF), 4);
+}
+
+function vk_write_u64(FFI\CData $buf, int $offset, int $value): void
+{
+    // pack('P',...) = unsigned 64-bit, machine byte order (LE on x86 Windows).
+    // PHP negative ints are stored as two's complement, so -1 → 0xFFFF...FFFF. ✓
+    FFI::memcpy(FFI::addr($buf[$offset]), pack('P', $value), 8);
+}
+
+function vk_write_f32(FFI\CData $buf, int $offset, float $value): void
+{
+    FFI::memcpy(FFI::addr($buf[$offset]), pack('f', $value), 4);
+}
+
+function vk_read_u32(FFI\CData $buf, int $offset): int
+{
+    // Read four bytes directly from the uint8_t[] array.
+    return ((int)$buf[$offset])
+         | ((int)$buf[$offset + 1] << 8)
+         | ((int)$buf[$offset + 2] << 16)
+         | ((int)$buf[$offset + 3] << 24);
+}
+
+function vk_read_u64(FFI\CData $buf, int $offset): int
+{
+    return vk_read_u32($buf, $offset) | (vk_read_u32($buf, $offset + 4) << 32);
+}
+
+// VkPhysicalDeviceMemoryProperties layout (64-bit Windows):
+//   offset 0:   memoryTypeCount (uint32)
+//   offset 4:   memoryTypes[32] — each 8 bytes: propertyFlags(4) + heapIndex(4)
+//   offset 260: memoryHeapCount (uint32)
+//   offset 264: memoryHeaps[16] — each 16 bytes: size(8) + flags(4) + pad(4)
+//   total: 520 bytes
 function find_vk_memory_type(FFI\CData $memProps, int $typeBits, int $requiredFlags): int
 {
-    $typeCount = (int)$memProps->memoryTypeCount;
+    $typeCount = vk_read_u32($memProps, 0);
     for ($i = 0; $i < $typeCount; $i++) {
-        $flags = (int)$memProps->memoryTypes[$i]->propertyFlags;
+        $flags = vk_read_u32($memProps, 4 + $i * 8);
         if (($typeBits & (1 << $i)) !== 0 && (($flags & $requiredFlags) === $requiredFlags)) {
             return $i;
         }
@@ -422,7 +475,7 @@ $opengl32 = FFI::cdef('
     void glClearColor(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
     void glClear(GLbitfield mask);
     void glViewport(GLint x, GLint y, GLsizei width, GLsizei height);
-    const unsigned char* glGetString(unsigned int name);
+    const char* glGetString(unsigned int name);
     void glFlush(void);
 ', 'opengl32.dll');
 
@@ -822,6 +875,57 @@ $createRTV = function (FFI\CData $tex) use ($device): FFI\CData {
     return $ppRTV[0];
 };
 
+// D3D11 context vtable indices used below:
+//   5  = CreateTexture2D
+//  14  = Map
+//  15  = Unmap
+//  47  = CopyResource
+
+$createStagingTexture = function (int $width, int $height) use ($device, $types, $kernel32): FFI\CData {
+    $desc = $types->new('D3D11_TEXTURE2D_DESC');
+    FFI::memset(FFI::addr($desc), 0, FFI::sizeof($desc));
+    $desc->Width = $width;
+    $desc->Height = $height;
+    $desc->MipLevels = 1;
+    $desc->ArraySize = 1;
+    $desc->Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    $desc->SampleDesc->Count = 1;
+    $desc->SampleDesc->Quality = 0;
+    $desc->Usage = D3D11_USAGE_STAGING;
+    $desc->BindFlags = 0;
+    $desc->CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    $desc->MiscFlags = 0;
+    $ppTex = ffi_new('void*[1]', false);
+    $fn = com_fn($device, 5, 'CreateTexture2DFunc');
+    $hr = $fn($device, FFI::addr($desc), null, FFI::addr($ppTex[0]));
+    if ($hr < 0) {
+        throw new RuntimeException(sprintf('CreateTexture2D(staging) failed: 0x%08X', $hr & 0xFFFFFFFF));
+    }
+    log_msg('Staging texture created', $kernel32);
+    return $ppTex[0];
+};
+
+$ctxMap = function (FFI\CData $resource) use ($ctx, $types): FFI\CData {
+    $mapped = $types->new('D3D11_MAPPED_SUBRESOURCE');
+    FFI::memset(FFI::addr($mapped), 0, FFI::sizeof($mapped));
+    $fn = com_fn($ctx, 14, 'ContextMapFunc');
+    $hr = $fn($ctx, $resource, 0, D3D11_MAP_WRITE, 0, FFI::addr($mapped));
+    if ($hr < 0) {
+        throw new RuntimeException(sprintf('D3D11 Map failed: 0x%08X', $hr & 0xFFFFFFFF));
+    }
+    return $mapped;
+};
+
+$ctxUnmap = function (FFI\CData $resource) use ($ctx): void {
+    $fn = com_fn($ctx, 15, 'ContextUnmapFunc');
+    $fn($ctx, $resource, 0);
+};
+
+$ctxCopyResource = function (FFI\CData $dst, FFI\CData $src) use ($ctx): void {
+    $fn = com_fn($ctx, 47, 'ContextCopyResourceFunc');
+    $fn($ctx, $dst, $src);
+};
+
 $createPanelVisual = function (FFI\CData $sc, float $offsetX) use ($dcompDevice, $rootVisual): FFI\CData {
     $createVisual = com_fn($dcompDevice, 7, 'DCompCreateVisualFunc');
     $ppVis = ffi_new('void*[1]', false);
@@ -1034,16 +1138,16 @@ try {
     }
 
     $hrcOld = $opengl32->wglCreateContext($hdc);
-    if ($hrcOld === null) {
+    if (FFI::isNull($hrcOld)) {
         throw new RuntimeException('wglCreateContext failed');
     }
     if (!$opengl32->wglMakeCurrent($hdc, $hrcOld)) {
         throw new RuntimeException('wglMakeCurrent failed');
     }
 
-    $getGL = function (string $name, string $type) use ($opengl32, $types, $basicTypes): FFI\CData {
+    $getGL = function (string $name, string $type) use ($opengl32, $types): FFI\CData {
         $addr = $opengl32->wglGetProcAddress($name);
-        if ($addr === null) {
+        if (FFI::isNull($addr)) {
             throw new RuntimeException("wglGetProcAddress failed: $name");
         }
         return $types->cast($type, $addr);
@@ -1060,7 +1164,7 @@ try {
     $attribs[6] = 0;
 
     $hrc = $wglCreateContextAttribsARB($hdc, null, FFI::addr($attribs[0]));
-    if ($hrc === null) {
+    if (FFI::isNull($hrc)) {
         throw new RuntimeException('wglCreateContextAttribsARB failed');
     }
     if (!$opengl32->wglMakeCurrent($hdc, $hrc)) {
@@ -1068,13 +1172,14 @@ try {
     }
     $opengl32->wglDeleteContext($hrcOld);
 
+    // glGetString returns const char* — PHP FFI converts this to a PHP string directly.
     $ver = $opengl32->glGetString(GL_VERSION);
     $slv = $opengl32->glGetString(GL_SHADING_LANGUAGE_VERSION);
     if ($ver !== null) {
-        log_msg('OpenGL VERSION=' . FFI::string($ver), $kernel32);
+        log_msg('OpenGL VERSION=' . $ver, $kernel32);
     }
     if ($slv !== null) {
-        log_msg('GLSL VERSION=' . FFI::string($slv), $kernel32);
+        log_msg('GLSL VERSION=' . $slv, $kernel32);
     }
 
     $gl = [
@@ -1111,7 +1216,7 @@ try {
     ];
 
     $interopDev = $gl['wglDXOpenDeviceNV']($device);
-    if ($interopDev === null) {
+    if (FFI::isNull($interopDev)) {
         throw new RuntimeException('wglDXOpenDeviceNV failed');
     }
 
@@ -1123,7 +1228,7 @@ try {
     $gl['glBindRenderbuffer'](GL_RENDERBUFFER, $rbo[0]);
 
     $interopObj = $gl['wglDXRegisterObjectNV']($interopDev, $glPanel['bb'], $rbo[0], GL_RENDERBUFFER, WGL_ACCESS_READ_WRITE_NV);
-    if ($interopObj === null) {
+    if (FFI::isNull($interopObj)) {
         throw new RuntimeException('wglDXRegisterObjectNV failed');
     }
 
@@ -1230,16 +1335,658 @@ if (!$glNative) {
     $initD3D11TrianglePipeline($glPanel);
 }
 
-$vkNative = false;
+// ---------------------------------------------------------------------------
+// Vulkan native path: shaderc SPIR-V compilation + Vulkan offscreen render
+// The rendered image is read back via a host-visible buffer and copied into a
+// D3D11 staging texture, then CopyResource'd into the swapchain backbuffer.
+// ---------------------------------------------------------------------------
+
+$vulkan     = null;   // initialised inside try block; kept here for outer scope
+$vkNative   = false;
+$renderVulkan = null; // likewise
 try {
-    // Vulkan path is initialized using shaderc + offscreen rendering and D3D11 copy.
-    // For PHP, this path mirrors the Perl/Ruby flow while keeping the same panel contracts.
-    $vulkan = FFI::cdef(file_get_contents(__DIR__ . '/vulkan_cdefs.h') ?: '', 'vulkan-1.dll');
-    throw new RuntimeException('Vulkan PHP cdefs helper file is missing (vulkan_cdefs.h)');
+    log_msg('Init Vulkan panel start', $kernel32);
+
+    // Resolve shaderc_shared.dll: try script dir, then VULKAN_SDK/Bin, then PATH.
+    $shadercPath = SCRIPT_DIR . '/shaderc_shared.dll';
+    if (!file_exists($shadercPath)) {
+        $vkSdkEnv = getenv('VULKAN_SDK');
+        if ($vkSdkEnv !== false) {
+            $candidate = $vkSdkEnv . '/Bin/shaderc_shared.dll';
+            if (file_exists($candidate)) {
+                $shadercPath = $candidate;
+            }
+        }
+    }
+    if (!file_exists($shadercPath)) {
+        $shadercPath = 'shaderc_shared.dll';
+    }
+    log_msg("Loading shaderc from: $shadercPath", $kernel32);
+
+    $shaderc = FFI::cdef('
+        void* shaderc_compiler_initialize(void);
+        void  shaderc_compiler_release(void* compiler);
+        void* shaderc_compile_options_initialize(void);
+        void  shaderc_compile_options_release(void* options);
+        void  shaderc_compile_options_set_optimization_level(void* options, int level);
+        void* shaderc_compile_into_spv(
+            void* compiler,
+            const char* source_text, size_t source_text_size,
+            int shader_kind,
+            const char* input_file_name, const char* entry_point_name,
+            void* additional_options);
+        void         shaderc_result_release(void* result);
+        size_t       shaderc_result_get_length(void* result);
+        void*        shaderc_result_get_bytes(void* result);
+        int          shaderc_result_get_compilation_status(void* result);
+        const char*  shaderc_result_get_error_message(void* result);
+    ', $shadercPath);
+
+    // Helper: compile GLSL source to SPIR-V bytes via shaderc.
+    $compileSpv = function (string $src, int $kind, string $filename) use ($shaderc, $kernel32): string {
+        $compiler = $shaderc->shaderc_compiler_initialize();
+        if (FFI::isNull($compiler)) {
+            throw new RuntimeException('shaderc_compiler_initialize failed');
+        }
+        $opts = $shaderc->shaderc_compile_options_initialize();
+        if (FFI::isNull($opts)) {
+            $shaderc->shaderc_compiler_release($compiler);
+            throw new RuntimeException('shaderc_compile_options_initialize failed');
+        }
+        $shaderc->shaderc_compile_options_set_optimization_level($opts, 2);
+
+        $result = $shaderc->shaderc_compile_into_spv(
+            $compiler, $src, strlen($src), $kind, $filename, 'main', $opts
+        );
+        if (FFI::isNull($result)) {
+            $shaderc->shaderc_compile_options_release($opts);
+            $shaderc->shaderc_compiler_release($compiler);
+            throw new RuntimeException('shaderc_compile_into_spv returned NULL');
+        }
+
+        $status = (int)$shaderc->shaderc_result_get_compilation_status($result);
+        if ($status !== SHADERC_STATUS_SUCCESS) {
+            // shaderc_result_get_error_message returns const char* — PHP FFI gives a PHP string.
+            $errMsg = $shaderc->shaderc_result_get_error_message($result) ?? '(no message)';
+            $shaderc->shaderc_result_release($result);
+            $shaderc->shaderc_compile_options_release($opts);
+            $shaderc->shaderc_compiler_release($compiler);
+            throw new RuntimeException("shaderc failed ($filename): $errMsg");
+        }
+
+        $len = (int)$shaderc->shaderc_result_get_length($result);
+        $bytesPtr = $shaderc->shaderc_result_get_bytes($result);
+        $spv = FFI::string($bytesPtr, $len);
+
+        $shaderc->shaderc_result_release($result);
+        $shaderc->shaderc_compile_options_release($opts);
+        $shaderc->shaderc_compiler_release($compiler);
+        return $spv;
+    };
+
+    // Inline GLSL shaders.  The vertex shader uses gl_VertexIndex to produce
+    // positions without any vertex buffer (same pattern as the D3D11 shader).
+    $vertGlsl = "#version 450\n" .
+        "layout(location = 0) out vec3 fragColor;\n" .
+        "void main() {\n" .
+        "    vec2 pos[3] = vec2[](vec2(0.0, -0.5), vec2(0.5, 0.5), vec2(-0.5, 0.5));\n" .
+        "    vec3 col[3] = vec3[](vec3(1.0,0.0,0.0), vec3(0.0,1.0,0.0), vec3(0.0,0.0,1.0));\n" .
+        "    gl_Position = vec4(pos[gl_VertexIndex], 0.0, 1.0);\n" .
+        "    fragColor = col[gl_VertexIndex];\n" .
+        "}\n";
+    $fragGlsl = "#version 450\n" .
+        "layout(location = 0) in vec3 fragColor;\n" .
+        "layout(location = 0) out vec4 outColor;\n" .
+        "void main() { outColor = vec4(fragColor, 1.0); }\n";
+
+    $vertSpv = $compileSpv($vertGlsl, SHADERC_VERTEX_SHADER, 'vert.glsl');
+    $fragSpv = $compileSpv($fragGlsl, SHADERC_FRAGMENT_SHADER, 'frag.glsl');
+    log_msg('SPIR-V compilation succeeded', $kernel32);
+
+    // Load vulkan-1.dll.  All struct parameters are passed as void* (raw byte
+    // buffers built with vk_buf/vk_write_*).  Handle outputs use void*[1].
+    log_msg('Loading vulkan-1.dll...', $kernel32);
+    $vulkan = FFI::cdef('
+        typedef int VkResult;
+        VkResult vkCreateInstance(void* pCreateInfo, void* pAllocator, void** pInstance);
+        VkResult vkEnumeratePhysicalDevices(void* instance, void* pCount, void* pDevices);
+        void     vkGetPhysicalDeviceQueueFamilyProperties(void* physDev, void* pCount, void* pProps);
+        VkResult vkCreateDevice(void* physDev, void* pCreateInfo, void* pAllocator, void** pDevice);
+        void     vkGetDeviceQueue(void* device, unsigned int qfIndex, unsigned int queueIndex, void** pQueue);
+        void     vkGetPhysicalDeviceMemoryProperties(void* physDev, void* pMemProps);
+        VkResult vkCreateImage(void* device, void* pCreateInfo, void* pAllocator, void** pImage);
+        void     vkGetImageMemoryRequirements(void* device, void* image, void* pMemReq);
+        VkResult vkAllocateMemory(void* device, void* pAllocInfo, void* pAllocator, void** pMemory);
+        VkResult vkBindImageMemory(void* device, void* image, void* memory, unsigned long long offset);
+        VkResult vkCreateImageView(void* device, void* pCreateInfo, void* pAllocator, void** pView);
+        VkResult vkCreateBuffer(void* device, void* pCreateInfo, void* pAllocator, void** pBuffer);
+        void     vkGetBufferMemoryRequirements(void* device, void* buffer, void* pMemReq);
+        VkResult vkBindBufferMemory(void* device, void* buffer, void* memory, unsigned long long offset);
+        VkResult vkCreateRenderPass(void* device, void* pCreateInfo, void* pAllocator, void** pRenderPass);
+        VkResult vkCreateFramebuffer(void* device, void* pCreateInfo, void* pAllocator, void** pFramebuffer);
+        VkResult vkCreateShaderModule(void* device, void* pCreateInfo, void* pAllocator, void** pShaderModule);
+        void     vkDestroyShaderModule(void* device, void* shaderModule, void* pAllocator);
+        VkResult vkCreatePipelineLayout(void* device, void* pCreateInfo, void* pAllocator, void** pPipelineLayout);
+        VkResult vkCreateGraphicsPipelines(void* device, void* pipelineCache, unsigned int count, void* pCreateInfos, void* pAllocator, void** pPipelines);
+        VkResult vkCreateCommandPool(void* device, void* pCreateInfo, void* pAllocator, void** pCommandPool);
+        VkResult vkAllocateCommandBuffers(void* device, void* pAllocateInfo, void* pCommandBuffers);
+        VkResult vkCreateFence(void* device, void* pCreateInfo, void* pAllocator, void** pFence);
+        VkResult vkWaitForFences(void* device, unsigned int count, void* pFences, unsigned int waitAll, unsigned long long timeout);
+        VkResult vkResetFences(void* device, unsigned int count, void* pFences);
+        VkResult vkResetCommandBuffer(void* commandBuffer, unsigned int flags);
+        VkResult vkBeginCommandBuffer(void* commandBuffer, void* pBeginInfo);
+        VkResult vkEndCommandBuffer(void* commandBuffer);
+        void     vkCmdBeginRenderPass(void* commandBuffer, void* pRenderPassBegin, unsigned int contents);
+        void     vkCmdEndRenderPass(void* commandBuffer);
+        void     vkCmdBindPipeline(void* commandBuffer, unsigned int bindPoint, void* pipeline);
+        void     vkCmdDraw(void* commandBuffer, unsigned int vertexCount, unsigned int instanceCount, unsigned int firstVertex, unsigned int firstInstance);
+        void     vkCmdCopyImageToBuffer(void* commandBuffer, void* srcImage, unsigned int srcLayout, void* dstBuffer, unsigned int regionCount, void* pRegions);
+        VkResult vkQueueSubmit(void* queue, unsigned int submitCount, void* pSubmits, void* fence);
+        VkResult vkMapMemory(void* device, void* memory, unsigned long long offset, unsigned long long size, unsigned int flags, void** ppData);
+        void     vkUnmapMemory(void* device, void* memory);
+        VkResult vkDeviceWaitIdle(void* device);
+    ', 'vulkan-1.dll');
+    log_msg('vulkan-1.dll loaded', $kernel32);
+
+    // Helper: allocate a void*[1] output slot, call fn, return the handle.
+    // Used for all vkCreate* functions.
+    $ppOut = ffi_new('void*[1]', false);  // reused scratch below
+
+    // --- Create VkInstance ---
+    $appName   = cstr('php_dcomp');
+    $engName   = cstr('none');
+    $appInfo   = vk_buf(48);
+    vk_write_u32($appInfo, 0, VK_STRUCTURE_TYPE_APPLICATION_INFO);
+    vk_write_u64($appInfo, 16, ptr_i(FFI::addr($appName[0])));
+    vk_write_u32($appInfo, 24, 1);
+    vk_write_u64($appInfo, 32, ptr_i(FFI::addr($engName[0])));
+    vk_write_u32($appInfo, 40, 1);
+    vk_write_u32($appInfo, 44, 1 << 22);   // VK_API_VERSION_1_0
+
+    $instCI = vk_buf(64);
+    vk_write_u32($instCI, 0, VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO);
+    vk_write_u64($instCI, 24, ptr_i(FFI::addr($appInfo[0])));
+
+    log_msg('Calling vkCreateInstance...', $kernel32);
+    $ppInst = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateInstance(FFI::addr($instCI[0]), null, FFI::addr($ppInst[0])), 'vkCreateInstance');
+    $vkInstance = $ppInst[0];
+    log_msg('vkCreateInstance OK', $kernel32);
+
+    // --- Enumerate physical devices ---
+    log_msg('Calling vkEnumeratePhysicalDevices...', $kernel32);
+    $pCount = ffi_new('unsigned int[1]', false);
+    $pCount[0] = 0;
+    vk_check((int)$vulkan->vkEnumeratePhysicalDevices($vkInstance, FFI::addr($pCount[0]), null), 'vkEnumeratePhysicalDevices(count)');
+    $devCount = (int)$pCount[0];
+    log_msg("Physical device count: $devCount", $kernel32);
+    if ($devCount === 0) {
+        throw new RuntimeException('No Vulkan physical devices found');
+    }
+    $pDevList = ffi_new("void*[$devCount]", false);
+    vk_check((int)$vulkan->vkEnumeratePhysicalDevices($vkInstance, FFI::addr($pCount[0]), FFI::addr($pDevList[0])), 'vkEnumeratePhysicalDevices(list)');
+
+    // Find first physical device with a graphics queue family.
+    $vkPhysDev = null;
+    $vkQfIndex = -1;
+    for ($di = 0; $di < $devCount; $di++) {
+        $pd = $pDevList[$di];
+        $qCount = ffi_new('unsigned int[1]', false);
+        $qCount[0] = 0;
+        $vulkan->vkGetPhysicalDeviceQueueFamilyProperties($pd, FFI::addr($qCount[0]), null);
+        $qc = (int)$qCount[0];
+        if ($qc === 0) {
+            continue;
+        }
+        // VkQueueFamilyProperties = 24 bytes each: queueFlags(4) + queueCount(4) + ...
+        $qProps = vk_buf($qc * 24);
+        $vulkan->vkGetPhysicalDeviceQueueFamilyProperties($pd, FFI::addr($qCount[0]), FFI::addr($qProps[0]));
+        for ($qi = 0; $qi < $qc; $qi++) {
+            if ((vk_read_u32($qProps, $qi * 24) & VK_QUEUE_GRAPHICS_BIT) !== 0) {
+                $vkPhysDev = $pd;
+                $vkQfIndex = $qi;
+                break 2;
+            }
+        }
+    }
+    if ($vkPhysDev === null) {
+        throw new RuntimeException('No Vulkan graphics queue family found');
+    }
+
+    // --- Create logical device ---
+    $prio = ffi_new('float[1]', false);
+    $prio[0] = 1.0;
+    $qCI = vk_buf(40);
+    vk_write_u32($qCI, 0, VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO);
+    vk_write_u32($qCI, 20, $vkQfIndex);
+    vk_write_u32($qCI, 24, 1);
+    vk_write_u64($qCI, 32, ptr_i(FFI::addr($prio[0])));
+
+    $devCI = vk_buf(72);
+    vk_write_u32($devCI, 0, VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO);
+    vk_write_u32($devCI, 20, 1);
+    vk_write_u64($devCI, 24, ptr_i(FFI::addr($qCI[0])));
+
+    log_msg('Calling vkCreateDevice...', $kernel32);
+    $ppDev = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateDevice($vkPhysDev, FFI::addr($devCI[0]), null, FFI::addr($ppDev[0])), 'vkCreateDevice');
+    $vkDevice = $ppDev[0];
+    log_msg('vkCreateDevice OK', $kernel32);
+
+    $ppQueue = ffi_new('void*[1]', false);
+    $vulkan->vkGetDeviceQueue($vkDevice, $vkQfIndex, 0, FFI::addr($ppQueue[0]));
+    $vkQueue = $ppQueue[0];
+
+    // --- Query memory properties ---
+    // VkPhysicalDeviceMemoryProperties is 520 bytes (see find_vk_memory_type comments).
+    log_msg('Calling vkGetPhysicalDeviceMemoryProperties...', $kernel32);
+    $memProps = vk_buf(520);
+    $vulkan->vkGetPhysicalDeviceMemoryProperties($vkPhysDev, FFI::addr($memProps[0]));
+    log_msg('Memory properties OK', $kernel32);
+
+    // --- Create offscreen image (VK_FORMAT_B8G8R8A8_UNORM to match D3D11) ---
+    log_msg('Allocating imgCI buffer...', $kernel32);
+    $imgCI = vk_buf(88);
+    log_msg('imgCI allocated', $kernel32);
+    vk_write_u32($imgCI, 0, VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO);
+    vk_write_u32($imgCI, 20, VK_IMAGE_TYPE_2D);
+    vk_write_u32($imgCI, 24, VK_FORMAT_B8G8R8A8_UNORM);
+    vk_write_u32($imgCI, 28, PANEL_W);
+    vk_write_u32($imgCI, 32, PANEL_H);
+    vk_write_u32($imgCI, 36, 1);    // depth
+    vk_write_u32($imgCI, 40, 1);    // mipLevels
+    vk_write_u32($imgCI, 44, 1);    // arrayLayers
+    vk_write_u32($imgCI, 48, VK_SAMPLE_COUNT_1_BIT);
+    vk_write_u32($imgCI, 52, VK_IMAGE_TILING_OPTIMAL);
+    vk_write_u32($imgCI, 56, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+    vk_write_u32($imgCI, 60, VK_SHARING_MODE_EXCLUSIVE);
+    vk_write_u32($imgCI, 80, VK_IMAGE_LAYOUT_UNDEFINED);
+
+    log_msg('Calling vkCreateImage...', $kernel32);
+    $ppImg = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateImage($vkDevice, FFI::addr($imgCI[0]), null, FFI::addr($ppImg[0])), 'vkCreateImage');
+    $vkOffImage = $ppImg[0];
+    log_msg('vkCreateImage OK', $kernel32);
+
+    // Bind device-local memory to the offscreen image.
+    $imgMemReq = vk_buf(24);
+    $vulkan->vkGetImageMemoryRequirements($vkDevice, $vkOffImage, FFI::addr($imgMemReq[0]));
+    $imgMemSize  = vk_read_u64($imgMemReq, 0);
+    $imgTypeBits = vk_read_u32($imgMemReq, 16);
+    log_msg("imgMemSize=$imgMemSize imgTypeBits=$imgTypeBits", $kernel32);
+
+    $imgMemAI = vk_buf(32);
+    vk_write_u32($imgMemAI, 0, VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO);
+    vk_write_u64($imgMemAI, 16, $imgMemSize);
+    vk_write_u32($imgMemAI, 24, find_vk_memory_type($memProps, $imgTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+
+    log_msg('Calling vkAllocateMemory(image)...', $kernel32);
+    $ppImgMem = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkAllocateMemory($vkDevice, FFI::addr($imgMemAI[0]), null, FFI::addr($ppImgMem[0])), 'vkAllocateMemory(image)');
+    $vkOffMemory = $ppImgMem[0];
+    log_msg('Calling vkBindImageMemory...', $kernel32);
+    vk_check((int)$vulkan->vkBindImageMemory($vkDevice, $vkOffImage, $vkOffMemory, 0), 'vkBindImageMemory');
+    log_msg('vkBindImageMemory OK', $kernel32);
+
+    // Image view for use as colour attachment.
+    log_msg('Calling vkCreateImageView...', $kernel32);
+    $ivCI = vk_buf(80);
+    vk_write_u32($ivCI, 0, VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO);
+    vk_write_u64($ivCI, 24, ptr_i($vkOffImage));
+    vk_write_u32($ivCI, 32, VK_IMAGE_VIEW_TYPE_2D);
+    vk_write_u32($ivCI, 36, VK_FORMAT_B8G8R8A8_UNORM);
+    vk_write_u32($ivCI, 56, VK_IMAGE_ASPECT_COLOR_BIT);
+    vk_write_u32($ivCI, 64, 1);    // levelCount
+    vk_write_u32($ivCI, 72, 1);    // layerCount
+
+    $ppView = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateImageView($vkDevice, FFI::addr($ivCI[0]), null, FFI::addr($ppView[0])), 'vkCreateImageView');
+    $vkOffView = $ppView[0];
+    log_msg('vkCreateImageView OK', $kernel32);
+
+    // --- Host-visible readback buffer ---
+    log_msg('Calling vkCreateBuffer...', $kernel32);
+    $vkBufSize = PANEL_W * PANEL_H * 4;
+    $bufCI = vk_buf(56);
+    vk_write_u32($bufCI, 0, VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
+    vk_write_u64($bufCI, 24, $vkBufSize);
+    vk_write_u32($bufCI, 32, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    vk_write_u32($bufCI, 36, VK_SHARING_MODE_EXCLUSIVE);
+
+    $ppRdBuf = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateBuffer($vkDevice, FFI::addr($bufCI[0]), null, FFI::addr($ppRdBuf[0])), 'vkCreateBuffer');
+    $vkReadbackBuffer = $ppRdBuf[0];
+    log_msg('vkCreateBuffer OK', $kernel32);
+
+    $bufMemReq = vk_buf(24);
+    $vulkan->vkGetBufferMemoryRequirements($vkDevice, $vkReadbackBuffer, FFI::addr($bufMemReq[0]));
+    $bufMemSize  = vk_read_u64($bufMemReq, 0);
+    $bufTypeBits = vk_read_u32($bufMemReq, 16);
+
+    $bufMemAI = vk_buf(32);
+    vk_write_u32($bufMemAI, 0, VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO);
+    vk_write_u64($bufMemAI, 16, $bufMemSize);
+    vk_write_u32($bufMemAI, 24, find_vk_memory_type(
+        $memProps, $bufTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+    ));
+
+    $ppRdMem = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkAllocateMemory($vkDevice, FFI::addr($bufMemAI[0]), null, FFI::addr($ppRdMem[0])), 'vkAllocateMemory(buffer)');
+    $vkReadbackMemory = $ppRdMem[0];
+    vk_check((int)$vulkan->vkBindBufferMemory($vkDevice, $vkReadbackBuffer, $vkReadbackMemory, 0), 'vkBindBufferMemory');
+
+    // --- Render pass ---
+    // attachment: LOAD_OP_CLEAR, STORE_OP_STORE, finalLayout = TRANSFER_SRC_OPTIMAL
+    $att = vk_buf(36);
+    vk_write_u32($att, 4,  VK_FORMAT_B8G8R8A8_UNORM);
+    vk_write_u32($att, 8,  VK_SAMPLE_COUNT_1_BIT);
+    vk_write_u32($att, 12, VK_ATTACHMENT_LOAD_OP_CLEAR);
+    vk_write_u32($att, 16, VK_ATTACHMENT_STORE_OP_STORE);
+    vk_write_u32($att, 20, VK_ATTACHMENT_LOAD_OP_DONT_CARE);
+    vk_write_u32($att, 24, VK_ATTACHMENT_STORE_OP_DONT_CARE);
+    vk_write_u32($att, 28, VK_IMAGE_LAYOUT_UNDEFINED);
+    vk_write_u32($att, 32, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+    $attRef = vk_buf(8);
+    vk_write_u32($attRef, 4, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    $sub = vk_buf(72);
+    vk_write_u32($sub, 4, VK_PIPELINE_BIND_POINT_GRAPHICS);
+    vk_write_u32($sub, 24, 1);
+    vk_write_u64($sub, 32, ptr_i(FFI::addr($attRef[0])));
+
+    $rpCI = vk_buf(64);
+    vk_write_u32($rpCI, 0, VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO);
+    vk_write_u32($rpCI, 20, 1);
+    vk_write_u64($rpCI, 24, ptr_i(FFI::addr($att[0])));
+    vk_write_u32($rpCI, 32, 1);
+    vk_write_u64($rpCI, 40, ptr_i(FFI::addr($sub[0])));
+
+    $ppRP = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateRenderPass($vkDevice, FFI::addr($rpCI[0]), null, FFI::addr($ppRP[0])), 'vkCreateRenderPass');
+    $vkRenderPass = $ppRP[0];
+
+    // --- Framebuffer ---
+    $fbAtts = ffi_new('void*[1]', false);
+    $fbAtts[0] = $vkOffView;
+    $fbCI = vk_buf(64);
+    vk_write_u32($fbCI, 0, VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO);
+    vk_write_u64($fbCI, 24, ptr_i($vkRenderPass));
+    vk_write_u32($fbCI, 32, 1);
+    vk_write_u64($fbCI, 40, ptr_i(FFI::addr($fbAtts[0])));
+    vk_write_u32($fbCI, 48, PANEL_W);
+    vk_write_u32($fbCI, 52, PANEL_H);
+    vk_write_u32($fbCI, 56, 1);
+
+    $ppFB = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateFramebuffer($vkDevice, FFI::addr($fbCI[0]), null, FFI::addr($ppFB[0])), 'vkCreateFramebuffer');
+    $vkFramebuffer = $ppFB[0];
+
+    // --- Shader modules ---
+    $vertWords = cstr($vertSpv);   // reuse cstr for raw binary; byte-exact copy
+    $fragWords = cstr($fragSpv);
+
+    $vsmCI = vk_buf(40);
+    vk_write_u32($vsmCI, 0, VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO);
+    vk_write_u64($vsmCI, 24, strlen($vertSpv));
+    vk_write_u64($vsmCI, 32, ptr_i(FFI::addr($vertWords[0])));
+    $ppVsMod = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateShaderModule($vkDevice, FFI::addr($vsmCI[0]), null, FFI::addr($ppVsMod[0])), 'vkCreateShaderModule(vs)');
+    $vsMod = $ppVsMod[0];
+
+    $fsmCI = vk_buf(40);
+    vk_write_u32($fsmCI, 0, VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO);
+    vk_write_u64($fsmCI, 24, strlen($fragSpv));
+    vk_write_u64($fsmCI, 32, ptr_i(FFI::addr($fragWords[0])));
+    $ppFsMod = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateShaderModule($vkDevice, FFI::addr($fsmCI[0]), null, FFI::addr($ppFsMod[0])), 'vkCreateShaderModule(fs)');
+    $fsMod = $ppFsMod[0];
+
+    // --- Pipeline ---
+    $mainName = cstr('main');
+    // Two VkPipelineShaderStageCreateInfo (48 bytes each) packed together.
+    $stages = vk_buf(96);
+    vk_write_u32($stages, 0,  VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+    vk_write_u32($stages, 20, 1);   // VK_SHADER_STAGE_VERTEX_BIT
+    vk_write_u64($stages, 24, ptr_i($vsMod));
+    vk_write_u64($stages, 32, ptr_i(FFI::addr($mainName[0])));
+    vk_write_u32($stages, 48, VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+    vk_write_u32($stages, 68, 0x10); // VK_SHADER_STAGE_FRAGMENT_BIT
+    vk_write_u64($stages, 72, ptr_i($fsMod));
+    vk_write_u64($stages, 80, ptr_i(FFI::addr($mainName[0])));
+
+    $vi = vk_buf(48);
+    vk_write_u32($vi, 0, VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
+    $ia = vk_buf(32);
+    vk_write_u32($ia, 0, VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO);
+    vk_write_u32($ia, 20, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+
+    $vp = vk_buf(24);
+    vk_write_f32($vp, 0,  0.0);
+    vk_write_f32($vp, 4,  0.0);
+    vk_write_f32($vp, 8,  (float)PANEL_W);
+    vk_write_f32($vp, 12, (float)PANEL_H);
+    vk_write_f32($vp, 16, 0.0);
+    vk_write_f32($vp, 20, 1.0);
+    $sc2d = vk_buf(16);
+    vk_write_u32($sc2d, 8,  PANEL_W);
+    vk_write_u32($sc2d, 12, PANEL_H);
+
+    $vpState = vk_buf(48);
+    vk_write_u32($vpState, 0, VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
+    vk_write_u32($vpState, 20, 1);
+    vk_write_u64($vpState, 24, ptr_i(FFI::addr($vp[0])));
+    vk_write_u32($vpState, 32, 1);
+    vk_write_u64($vpState, 40, ptr_i(FFI::addr($sc2d[0])));
+
+    $rs = vk_buf(64);
+    vk_write_u32($rs, 0, VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
+    vk_write_u32($rs, 28, VK_POLYGON_MODE_FILL);
+    vk_write_u32($rs, 32, VK_CULL_MODE_NONE);
+    vk_write_u32($rs, 36, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+    vk_write_f32($rs, 56, 1.0);
+
+    $ms = vk_buf(48);
+    vk_write_u32($ms, 0, VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
+    vk_write_u32($ms, 20, VK_SAMPLE_COUNT_1_BIT);
+
+    $cbAtt = vk_buf(32);
+    vk_write_u32($cbAtt, 28, VK_COLOR_COMPONENT_RGBA_BITS);
+    $cbState = vk_buf(56);
+    vk_write_u32($cbState, 0, VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
+    vk_write_u32($cbState, 28, 1);
+    vk_write_u64($cbState, 32, ptr_i(FFI::addr($cbAtt[0])));
+
+    $plCI = vk_buf(48);
+    vk_write_u32($plCI, 0, VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
+    $ppLayout = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreatePipelineLayout($vkDevice, FFI::addr($plCI[0]), null, FFI::addr($ppLayout[0])), 'vkCreatePipelineLayout');
+    $vkPipelineLayout = $ppLayout[0];
+
+    $gpCI = vk_buf(144);
+    vk_write_u32($gpCI, 0, VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
+    vk_write_u32($gpCI, 20, 2);   // stageCount
+    vk_write_u64($gpCI, 24, ptr_i(FFI::addr($stages[0])));
+    vk_write_u64($gpCI, 32, ptr_i(FFI::addr($vi[0])));
+    vk_write_u64($gpCI, 40, ptr_i(FFI::addr($ia[0])));
+    vk_write_u64($gpCI, 56, ptr_i(FFI::addr($vpState[0])));
+    vk_write_u64($gpCI, 64, ptr_i(FFI::addr($rs[0])));
+    vk_write_u64($gpCI, 72, ptr_i(FFI::addr($ms[0])));
+    vk_write_u64($gpCI, 88, ptr_i(FFI::addr($cbState[0])));
+    vk_write_u64($gpCI, 104, ptr_i($vkPipelineLayout));
+    vk_write_u64($gpCI, 112, ptr_i($vkRenderPass));
+
+    $ppPipeline = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateGraphicsPipelines($vkDevice, null, 1, FFI::addr($gpCI[0]), null, FFI::addr($ppPipeline[0])), 'vkCreateGraphicsPipelines');
+    $vkPipeline = $ppPipeline[0];
+    $vulkan->vkDestroyShaderModule($vkDevice, $vsMod, null);
+    $vulkan->vkDestroyShaderModule($vkDevice, $fsMod, null);
+
+    // --- Command pool + buffer ---
+    $cpCI = vk_buf(24);
+    vk_write_u32($cpCI, 0, VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
+    vk_write_u32($cpCI, 16, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    vk_write_u32($cpCI, 20, $vkQfIndex);
+    $ppCmdPool = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateCommandPool($vkDevice, FFI::addr($cpCI[0]), null, FFI::addr($ppCmdPool[0])), 'vkCreateCommandPool');
+    $vkCmdPool = $ppCmdPool[0];
+
+    $cbAI = vk_buf(32);
+    vk_write_u32($cbAI, 0, VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO);
+    vk_write_u64($cbAI, 16, ptr_i($vkCmdPool));
+    vk_write_u32($cbAI, 24, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    vk_write_u32($cbAI, 28, 1);
+    $ppCmdBuf = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkAllocateCommandBuffers($vkDevice, FFI::addr($cbAI[0]), FFI::addr($ppCmdBuf[0])), 'vkAllocateCommandBuffers');
+    $vkCmdBuf = $ppCmdBuf[0];
+
+    // --- Fence (created signalled so first WaitForFences succeeds immediately) ---
+    $fenceCI = vk_buf(24);
+    vk_write_u32($fenceCI, 0, VK_STRUCTURE_TYPE_FENCE_CREATE_INFO);
+    vk_write_u32($fenceCI, 16, VK_FENCE_CREATE_SIGNALED_BIT);
+    $ppFence = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkCreateFence($vkDevice, FFI::addr($fenceCI[0]), null, FFI::addr($ppFence[0])), 'vkCreateFence');
+    $vkFence = $ppFence[0];
+
+    // --- D3D11 staging texture for CPU→GPU copy ---
+    $vkStagingTex = $createStagingTexture(PANEL_W, PANEL_H);
+
+    // Store all Vulkan state in the panel array for use in the render closure.
+    $vkPanel['vk_instance']        = $vkInstance;
+    $vkPanel['vk_device']          = $vkDevice;
+    $vkPanel['vk_queue']           = $vkQueue;
+    $vkPanel['vk_cmd_buf']         = $vkCmdBuf;
+    $vkPanel['vk_fence']           = $vkFence;
+    $vkPanel['vk_render_pass']     = $vkRenderPass;
+    $vkPanel['vk_framebuffer']     = $vkFramebuffer;
+    $vkPanel['vk_pipeline']        = $vkPipeline;
+    $vkPanel['vk_off_image']       = $vkOffImage;
+    $vkPanel['vk_readback_buf']    = $vkReadbackBuffer;
+    $vkPanel['vk_readback_mem']    = $vkReadbackMemory;
+    $vkPanel['vk_buf_size']        = $vkBufSize;
+    $vkPanel['vk_staging_tex']     = $vkStagingTex;
+    $vkNative = true;
+
+    log_msg('Init Vulkan panel done', $kernel32);
 } catch (Throwable $e) {
     log_msg('Vulkan native path disabled: ' . $e->getMessage(), $kernel32);
     $initD3D11TrianglePipeline($vkPanel);
 }
+
+// Render closure for the Vulkan panel.  Called each frame when $vkNative is true.
+$renderVulkan = function (array &$panel) use ($vulkan, $swapchainPresent, $ctxMap, $ctxUnmap, $ctxCopyResource, $basicTypes, $kernel32): bool {
+    $device  = $panel['vk_device'];
+    $queue   = $panel['vk_queue'];
+    $cmdBuf  = $panel['vk_cmd_buf'];
+    $fence   = $panel['vk_fence'];
+
+    // Wait for the previous frame's fence and reset it.
+    $pFences = ffi_new('void*[1]', false);
+    $pFences[0] = $fence;
+    vk_check((int)$vulkan->vkWaitForFences($device, 1, FFI::addr($pFences[0]), 1, -1), 'vkWaitForFences');
+    vk_check((int)$vulkan->vkResetFences($device, 1, FFI::addr($pFences[0])), 'vkResetFences');
+    vk_check((int)$vulkan->vkResetCommandBuffer($cmdBuf, 0), 'vkResetCommandBuffer');
+
+    // Begin command buffer recording.
+    $cbBI = vk_buf(32);
+    vk_write_u32($cbBI, 0, VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
+    vk_check((int)$vulkan->vkBeginCommandBuffer($cmdBuf, FFI::addr($cbBI[0])), 'vkBeginCommandBuffer');
+
+    // Clear colour (dark red background to distinguish Vulkan panel).
+    $clearVal = ffi_new('float[4]', false);
+    $clearVal[0] = 0.15; $clearVal[1] = 0.05; $clearVal[2] = 0.05; $clearVal[3] = 1.0;
+    $rpBI = vk_buf(64);
+    vk_write_u32($rpBI, 0, VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO);
+    vk_write_u64($rpBI, 16, ptr_i($panel['vk_render_pass']));
+    vk_write_u64($rpBI, 24, ptr_i($panel['vk_framebuffer']));
+    vk_write_u32($rpBI, 40, PANEL_W);
+    vk_write_u32($rpBI, 44, PANEL_H);
+    vk_write_u32($rpBI, 48, 1);   // clearValueCount
+    vk_write_u64($rpBI, 56, ptr_i(FFI::addr($clearVal[0])));
+
+    $vulkan->vkCmdBeginRenderPass($cmdBuf, FFI::addr($rpBI[0]), 0);
+    $vulkan->vkCmdBindPipeline($cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, $panel['vk_pipeline']);
+    $vulkan->vkCmdDraw($cmdBuf, 3, 1, 0, 0);
+    $vulkan->vkCmdEndRenderPass($cmdBuf);
+
+    // Copy rendered image to host-visible readback buffer.
+    // VkBufferImageCopy layout (56 bytes):
+    //   offset 0:  bufferOffset (u64)
+    //   offset 8:  bufferRowLength (u32)
+    //   offset 12: bufferImageHeight (u32)
+    //   offset 16: imageSubresource.aspectMask (u32)
+    //   offset 20: imageSubresource.mipLevel (u32)
+    //   offset 24: imageSubresource.baseArrayLayer (u32)
+    //   offset 28: imageSubresource.layerCount (u32)
+    //   offset 32: imageOffset.x/y/z (3×u32)
+    //   offset 44: imageExtent.width (u32)
+    //   offset 48: imageExtent.height (u32)
+    //   offset 52: imageExtent.depth (u32)
+    $region = vk_buf(56);
+    vk_write_u32($region, 16, VK_IMAGE_ASPECT_COLOR_BIT);
+    vk_write_u32($region, 28, 1);   // layerCount
+    vk_write_u32($region, 44, PANEL_W);
+    vk_write_u32($region, 48, PANEL_H);
+    vk_write_u32($region, 52, 1);   // depth
+    $vulkan->vkCmdCopyImageToBuffer(
+        $cmdBuf, $panel['vk_off_image'], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        $panel['vk_readback_buf'], 1, FFI::addr($region[0])
+    );
+
+    vk_check((int)$vulkan->vkEndCommandBuffer($cmdBuf), 'vkEndCommandBuffer');
+
+    // Submit and wait.
+    $pCmdBufs = ffi_new('void*[1]', false);
+    $pCmdBufs[0] = $cmdBuf;
+    $submitInfo = vk_buf(72);
+    vk_write_u32($submitInfo, 0, VK_STRUCTURE_TYPE_SUBMIT_INFO);
+    vk_write_u32($submitInfo, 40, 1);
+    vk_write_u64($submitInfo, 48, ptr_i(FFI::addr($pCmdBufs[0])));
+    vk_check((int)$vulkan->vkQueueSubmit($queue, 1, FFI::addr($submitInfo[0]), $fence), 'vkQueueSubmit');
+    vk_check((int)$vulkan->vkWaitForFences($device, 1, FFI::addr($pFences[0]), 1, -1), 'vkWaitForFences(post)');
+
+    // Map Vulkan readback buffer.
+    $ppVkData = ffi_new('void*[1]', false);
+    vk_check((int)$vulkan->vkMapMemory($device, $panel['vk_readback_mem'], 0, $panel['vk_buf_size'], 0, FFI::addr($ppVkData[0])), 'vkMapMemory');
+
+    // Map D3D11 staging texture.
+    $mapped = $ctxMap($panel['vk_staging_tex']);
+
+    // Copy pixel data row by row (handles non-power-of-two row pitch).
+    $vkPitch  = PANEL_W * 4;
+    $rowPitch = (int)$mapped->RowPitch;
+    $srcPtr   = $basicTypes->cast('char*', $ppVkData[0]);
+    $dstPtr   = $basicTypes->cast('char*', $mapped->pData);
+    if ($rowPitch === $vkPitch) {
+        FFI::memcpy(FFI::addr($dstPtr[0]), FFI::addr($srcPtr[0]), $vkPitch * PANEL_H);
+    } else {
+        for ($y = 0; $y < PANEL_H; $y++) {
+            FFI::memcpy(
+                FFI::addr($dstPtr[$y * $rowPitch]),
+                FFI::addr($srcPtr[$y * $vkPitch]),
+                $vkPitch
+            );
+        }
+    }
+
+    $ctxUnmap($panel['vk_staging_tex']);
+    $vulkan->vkUnmapMemory($device, $panel['vk_readback_mem']);
+
+    // Copy staging texture to swapchain backbuffer.
+    $ctxCopyResource($panel['bb'], $panel['vk_staging_tex']);
+
+    $hr = $swapchainPresent($panel['sc']);
+    if ($hr < 0) {
+        log_msg(sprintf('Vulkan panel Present failed: 0x%08X', $hr & 0xFFFFFFFF), $kernel32);
+        return false;
+    }
+    if (!isset($panel['first_present_logged'])) {
+        log_msg($panel['name'] . ' first present succeeded', $kernel32);
+        $panel['first_present_logged'] = true;
+    }
+    return true;
+};
 
 $commit = com_fn($dcompDevice, 3, 'DCompCommitFunc');
 $commit($dcompDevice);
@@ -1317,9 +2064,11 @@ while (true) {
 
     $renderTrianglePanel($dxPanel, [0.06, 0.22, 0.08]);
 
-    if ($vkNative) {
-        // Native Vulkan rendering would run here when fully enabled.
-        $renderTrianglePanel($vkPanel, [0.24, 0.08, 0.08]);
+    if ($vkNative && $renderVulkan !== null) {
+        $ok = $renderVulkan($vkPanel);
+        if (!$ok) {
+            $renderTrianglePanel($vkPanel, [0.24, 0.08, 0.08]);
+        }
     } else {
         $renderTrianglePanel($vkPanel, [0.24, 0.08, 0.08]);
     }
@@ -1347,6 +2096,13 @@ if ($glNative) {
     $opengl32->wglMakeCurrent(null, null);
     $opengl32->wglDeleteContext($glPanel['gl_hrc']);
     $user32->ReleaseDC($hwnd, $glPanel['gl_hdc']);
+}
+
+if ($vkNative && isset($vkPanel['vk_device'])) {
+    $vulkan->vkDeviceWaitIdle($vkPanel['vk_device']);
+    if (isset($vkPanel['vk_staging_tex'])) {
+        com_release($vkPanel['vk_staging_tex']);
+    }
 }
 
 foreach ([$glPanel, $dxPanel, $vkPanel] as $p) {
