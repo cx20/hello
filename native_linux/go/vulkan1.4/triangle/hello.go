@@ -239,6 +239,7 @@ func (a *App) initVulkan() {
 		panic(fmt.Sprintf("vk.Init: %v", err))
 	}
 	a.createInstance()
+	vk.InitInstance(a.instance)
 	a.createSurface()
 	a.pickPhysicalDevice()
 	a.createLogicalDevice()
