@@ -98,6 +98,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |Library  |C                                                                                    |Swift                                                                                  |
 |:-------:|:-----------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------:|
 |Console  |[Link](https://github.com/cx20/hello/tree/master/native_mac/c/console/hello)         |[Link](https://github.com/cx20/hello/tree/master/native_mac/swift/console/hello)      |
+|Metal    |                                                                                     |[Link](https://github.com/cx20/hello/tree/master/native_mac/swift/metal/triangle)     |
 
 ## .NET Languages
 
