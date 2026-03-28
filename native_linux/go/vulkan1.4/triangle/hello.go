@@ -576,15 +576,23 @@ func (a *App) createGraphicsPipeline() {
 		},
 	}
 
-	dynamicStates := []vk.DynamicState{
-		vk.DynamicStateViewport,
-		vk.DynamicStateScissor,
-	}
-
 	pipelineLayoutRet := vk.CreatePipelineLayout(a.device, &vk.PipelineLayoutCreateInfo{
 		SType: vk.StructureTypePipelineLayoutCreateInfo,
 	}, nil, &a.pipelineLayout)
 	orPanic(pipelineLayoutRet, "vkCreatePipelineLayout")
+
+	viewport := vk.Viewport{
+		X:        0,
+		Y:        0,
+		Width:    float32(a.swapExtent.Width),
+		Height:   float32(a.swapExtent.Height),
+		MinDepth: 0,
+		MaxDepth: 1,
+	}
+	scissor := vk.Rect2D{
+		Offset: vk.Offset2D{X: 0, Y: 0},
+		Extent: a.swapExtent,
+	}
 
 	vertexInputState := &vk.PipelineVertexInputStateCreateInfo{
 		SType: vk.StructureTypePipelineVertexInputStateCreateInfo,
@@ -596,34 +604,31 @@ func (a *App) createGraphicsPipeline() {
 	viewportState := &vk.PipelineViewportStateCreateInfo{
 		SType:         vk.StructureTypePipelineViewportStateCreateInfo,
 		ViewportCount: 1,
+		PViewports:    []vk.Viewport{viewport},
 		ScissorCount:  1,
+		PScissors:     []vk.Rect2D{scissor},
 	}
 	rasterizationState := &vk.PipelineRasterizationStateCreateInfo{
 		SType:       vk.StructureTypePipelineRasterizationStateCreateInfo,
 		PolygonMode: vk.PolygonModeFill,
-		CullMode:    vk.CullModeFlags(vk.CullModeBackBit),
+		CullMode:    vk.CullModeFlags(vk.CullModeNone),
 		FrontFace:   vk.FrontFaceClockwise,
 		LineWidth:   1.0,
 	}
 	multisampleState := &vk.PipelineMultisampleStateCreateInfo{
 		SType:                vk.StructureTypePipelineMultisampleStateCreateInfo,
 		RasterizationSamples: vk.SampleCount1Bit,
+		MinSampleShading:     1.0,
+	}
+	colorBlendAttachment := vk.PipelineColorBlendAttachmentState{
+		ColorWriteMask: vk.ColorComponentFlags(
+			vk.ColorComponentRBit | vk.ColorComponentGBit |
+				vk.ColorComponentBBit | vk.ColorComponentABit),
 	}
 	colorBlendState := &vk.PipelineColorBlendStateCreateInfo{
 		SType:           vk.StructureTypePipelineColorBlendStateCreateInfo,
 		AttachmentCount: 1,
-		PAttachments: []vk.PipelineColorBlendAttachmentState{
-			{
-				ColorWriteMask: vk.ColorComponentFlags(
-					vk.ColorComponentRBit | vk.ColorComponentGBit |
-						vk.ColorComponentBBit | vk.ColorComponentABit),
-			},
-		},
-	}
-	dynamicState := &vk.PipelineDynamicStateCreateInfo{
-		SType:             vk.StructureTypePipelineDynamicStateCreateInfo,
-		DynamicStateCount: uint32(len(dynamicStates)),
-		PDynamicStates:    dynamicStates,
+		PAttachments:    []vk.PipelineColorBlendAttachmentState{colorBlendAttachment},
 	}
 
 	var pinner runtime.Pinner
@@ -633,7 +638,6 @@ func (a *App) createGraphicsPipeline() {
 	pinner.Pin(rasterizationState)
 	pinner.Pin(multisampleState)
 	pinner.Pin(colorBlendState)
-	pinner.Pin(dynamicState)
 	defer pinner.Unpin()
 
 	pipelines := make([]vk.Pipeline, 1)
@@ -649,7 +653,6 @@ func (a *App) createGraphicsPipeline() {
 			PRasterizationState: rasterizationState,
 			PMultisampleState:   multisampleState,
 			PColorBlendState:    colorBlendState,
-			PDynamicState:       dynamicState,
 			Layout:              a.pipelineLayout,
 			RenderPass:          a.renderPass,
 			Subpass:             0,
@@ -805,21 +808,6 @@ func (a *App) recordCommandBuffer(cb vk.CommandBuffer, imageIndex uint32) {
 	}, vk.SubpassContentsInline)
 
 	vk.CmdBindPipeline(cb, vk.PipelineBindPointGraphics, a.pipeline)
-
-	vk.CmdSetViewport(cb, 0, 1, []vk.Viewport{
-		{
-			X:        0,
-			Y:        0,
-			Width:    float32(a.swapExtent.Width),
-			Height:   float32(a.swapExtent.Height),
-			MinDepth: 0,
-			MaxDepth: 1,
-		},
-	})
-
-	vk.CmdSetScissor(cb, 0, 1, []vk.Rect2D{
-		{Offset: vk.Offset2D{X: 0, Y: 0}, Extent: a.swapExtent},
-	})
 
 	vk.CmdDraw(cb, 3, 1, 0, 0)
 	vk.CmdEndRenderPass(cb)
