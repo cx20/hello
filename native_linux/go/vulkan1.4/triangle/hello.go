@@ -8,7 +8,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"os"
 	"runtime"
+	"syscall"
 	"unsafe"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -16,6 +18,12 @@ import (
 )
 
 func init() {
+	// vulkan-go stores Go-managed strings inside C structs (nested Go pointer
+	// pattern). Disable CGo pointer checking by re-exec'ing with cgocheck=0.
+	if os.Getenv("_HELLO_REEXEC") == "" {
+		env := append(os.Environ(), "GODEBUG=cgocheck=0", "_HELLO_REEXEC=1")
+		_ = syscall.Exec("/proc/self/exe", os.Args, env)
+	}
 	runtime.LockOSThread()
 }
 
