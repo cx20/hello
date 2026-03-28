@@ -1,5 +1,5 @@
 //! Minimal Vulkan 1.4 triangle in Rust using ash + winit
-//! Shaders are compiled at runtime using shaderc
+//! Shaders are pre-compiled to SPIR-V at build time using glslangValidator
 
 use ash::ext::debug_utils;
 use ash::khr::{surface, swapchain};
@@ -10,6 +10,7 @@ use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::platform::x11::EventLoopBuilderExtX11;
 use winit::window::{Window, WindowId};
 
 const WIDTH: u32 = 800;
@@ -30,63 +31,9 @@ const VALIDATION_LAYERS: &[&CStr] = unsafe {
     )]
 };
 
-// Embedded shader sources
-const VERTEX_SHADER_SOURCE: &str = r#"
-#version 450
-#extension GL_ARB_separate_shader_objects : enable
-
-layout(location = 0) out vec3 fragColor;
-
-vec2 positions[3] = vec2[](
-    vec2(0.0, -0.5),
-    vec2(0.5, 0.5),
-    vec2(-0.5, 0.5)
-);
-
-vec3 colors[3] = vec3[](
-    vec3(1.0, 0.0, 0.0),
-    vec3(0.0, 1.0, 0.0),
-    vec3(0.0, 0.0, 1.0)
-);
-
-void main() {
-    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
-    fragColor = colors[gl_VertexIndex];
-}
-"#;
-
-const FRAGMENT_SHADER_SOURCE: &str = r#"
-#version 450
-#extension GL_ARB_separate_shader_objects : enable
-
-layout(location = 0) in vec3 fragColor;
-
-layout(location = 0) out vec4 outColor;
-
-void main() {
-    outColor = vec4(fragColor, 1.0);
-}
-"#;
-
-/// Compile GLSL shader source to SPIR-V at runtime
-fn compile_shader(
-    compiler: &shaderc::Compiler,
-    source: &str,
-    kind: shaderc::ShaderKind,
-    name: &str,
-) -> Vec<u32> {
-    let mut options = shaderc::CompileOptions::new().unwrap();
-    options.set_target_env(
-        shaderc::TargetEnv::Vulkan,
-        shaderc::EnvVersion::Vulkan1_3 as u32,
-    );
-
-    let result = compiler
-        .compile_into_spirv(source, kind, name, "main", Some(&options))
-        .expect(&format!("Failed to compile shader: {}", name));
-
-    result.as_binary().to_vec()
-}
+// Embedded SPIR-V shaders (pre-compiled at build time by build.rs via glslangValidator)
+const VERT_SHADER_SPV: &[u8] = include_bytes!("../hello.vert.spv");
+const FRAG_SHADER_SPV: &[u8] = include_bytes!("../hello.frag.spv");
 
 struct QueueFamilyIndices {
     graphics_family: Option<u32>,
@@ -700,21 +647,10 @@ impl VulkanApp {
         render_pass: vk::RenderPass,
         extent: vk::Extent2D,
     ) -> (vk::PipelineLayout, vk::Pipeline) {
-        // Compile shaders at runtime
-        let compiler = shaderc::Compiler::new().expect("Failed to create shader compiler");
-
-        let vert_spirv = compile_shader(
-            &compiler,
-            VERTEX_SHADER_SOURCE,
-            shaderc::ShaderKind::Vertex,
-            "hello.vert",
-        );
-        let frag_spirv = compile_shader(
-            &compiler,
-            FRAGMENT_SHADER_SOURCE,
-            shaderc::ShaderKind::Fragment,
-            "hello.frag",
-        );
+        let vert_spirv = ash::util::read_spv(&mut std::io::Cursor::new(VERT_SHADER_SPV))
+            .expect("Failed to read vertex SPIR-V");
+        let frag_spirv = ash::util::read_spv(&mut std::io::Cursor::new(FRAG_SHADER_SPV))
+            .expect("Failed to read fragment SPIR-V");
 
         let vert_module = Self::create_shader_module(device, &vert_spirv);
         let frag_module = Self::create_shader_module(device, &frag_spirv);
@@ -1152,7 +1088,7 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
-    let event_loop = EventLoop::new().unwrap();
+    let event_loop = EventLoop::builder().with_x11().build().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app = App { vulkan: None };
