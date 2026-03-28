@@ -1,0 +1,8 @@
+[package]
+name = "hello"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+x11 = { version = "2.21", features = ["xlib", "glx"] }
+gl = "0.14"
