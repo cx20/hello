@@ -251,16 +251,21 @@ func (a *App) initVulkan() {
 func (a *App) createInstance() {
 	exts := safeStrSlice(a.window.GetRequiredInstanceExtensions())
 
+	appInfo := &vk.ApplicationInfo{
+		SType:              vk.StructureTypeApplicationInfo,
+		PApplicationName:   safeStr("Hello, World!"),
+		ApplicationVersion: vk.MakeVersion(1, 0, 0),
+		PEngineName:        safeStr("No Engine"),
+		EngineVersion:      vk.MakeVersion(1, 0, 0),
+		ApiVersion:         vk.MakeVersion(1, 4, 0),
+	}
+	var pinner runtime.Pinner
+	pinner.Pin(appInfo)
+	defer pinner.Unpin()
+
 	ret := vk.CreateInstance(&vk.InstanceCreateInfo{
-		SType: vk.StructureTypeInstanceCreateInfo,
-		PApplicationInfo: &vk.ApplicationInfo{
-			SType:              vk.StructureTypeApplicationInfo,
-			PApplicationName:   safeStr("Hello, World!"),
-			ApplicationVersion: vk.MakeVersion(1, 0, 0),
-			PEngineName:        safeStr("No Engine"),
-			EngineVersion:      vk.MakeVersion(1, 0, 0),
-			ApiVersion:         vk.MakeVersion(1, 4, 0),
-		},
+		SType:                   vk.StructureTypeInstanceCreateInfo,
+		PApplicationInfo:        appInfo,
 		EnabledExtensionCount:   uint32(len(exts)),
 		PpEnabledExtensionNames: exts,
 	}, nil, &a.instance)
@@ -571,55 +576,73 @@ func (a *App) createGraphicsPipeline() {
 	}, nil, &a.pipelineLayout)
 	orPanic(pipelineLayoutRet, "vkCreatePipelineLayout")
 
+	vertexInputState := &vk.PipelineVertexInputStateCreateInfo{
+		SType: vk.StructureTypePipelineVertexInputStateCreateInfo,
+	}
+	inputAssemblyState := &vk.PipelineInputAssemblyStateCreateInfo{
+		SType:    vk.StructureTypePipelineInputAssemblyStateCreateInfo,
+		Topology: vk.PrimitiveTopologyTriangleList,
+	}
+	viewportState := &vk.PipelineViewportStateCreateInfo{
+		SType:         vk.StructureTypePipelineViewportStateCreateInfo,
+		ViewportCount: 1,
+		ScissorCount:  1,
+	}
+	rasterizationState := &vk.PipelineRasterizationStateCreateInfo{
+		SType:       vk.StructureTypePipelineRasterizationStateCreateInfo,
+		PolygonMode: vk.PolygonModeFill,
+		CullMode:    vk.CullModeFlags(vk.CullModeBackBit),
+		FrontFace:   vk.FrontFaceClockwise,
+		LineWidth:   1.0,
+	}
+	multisampleState := &vk.PipelineMultisampleStateCreateInfo{
+		SType:                vk.StructureTypePipelineMultisampleStateCreateInfo,
+		RasterizationSamples: vk.SampleCount1Bit,
+	}
+	colorBlendState := &vk.PipelineColorBlendStateCreateInfo{
+		SType:           vk.StructureTypePipelineColorBlendStateCreateInfo,
+		AttachmentCount: 1,
+		PAttachments: []vk.PipelineColorBlendAttachmentState{
+			{
+				ColorWriteMask: vk.ColorComponentFlags(
+					vk.ColorComponentRBit | vk.ColorComponentGBit |
+						vk.ColorComponentBBit | vk.ColorComponentABit),
+			},
+		},
+	}
+	dynamicState := &vk.PipelineDynamicStateCreateInfo{
+		SType:             vk.StructureTypePipelineDynamicStateCreateInfo,
+		DynamicStateCount: uint32(len(dynamicStates)),
+		PDynamicStates:    dynamicStates,
+	}
+
+	var pinner runtime.Pinner
+	pinner.Pin(vertexInputState)
+	pinner.Pin(inputAssemblyState)
+	pinner.Pin(viewportState)
+	pinner.Pin(rasterizationState)
+	pinner.Pin(multisampleState)
+	pinner.Pin(colorBlendState)
+	pinner.Pin(dynamicState)
+	defer pinner.Unpin()
+
 	pipelines := make([]vk.Pipeline, 1)
 	var noCache vk.PipelineCache
 	ret := vk.CreateGraphicsPipelines(a.device, noCache, 1, []vk.GraphicsPipelineCreateInfo{
 		{
-			SType:      vk.StructureTypeGraphicsPipelineCreateInfo,
-			StageCount: uint32(len(shaderStages)),
-			PStages:    shaderStages,
-			PVertexInputState: &vk.PipelineVertexInputStateCreateInfo{
-				SType: vk.StructureTypePipelineVertexInputStateCreateInfo,
-			},
-			PInputAssemblyState: &vk.PipelineInputAssemblyStateCreateInfo{
-				SType:    vk.StructureTypePipelineInputAssemblyStateCreateInfo,
-				Topology: vk.PrimitiveTopologyTriangleList,
-			},
-			PViewportState: &vk.PipelineViewportStateCreateInfo{
-				SType:         vk.StructureTypePipelineViewportStateCreateInfo,
-				ViewportCount: 1,
-				ScissorCount:  1,
-			},
-			PRasterizationState: &vk.PipelineRasterizationStateCreateInfo{
-				SType:       vk.StructureTypePipelineRasterizationStateCreateInfo,
-				PolygonMode: vk.PolygonModeFill,
-				CullMode:    vk.CullModeFlags(vk.CullModeBackBit),
-				FrontFace:   vk.FrontFaceClockwise,
-				LineWidth:   1.0,
-			},
-			PMultisampleState: &vk.PipelineMultisampleStateCreateInfo{
-				SType:                vk.StructureTypePipelineMultisampleStateCreateInfo,
-				RasterizationSamples: vk.SampleCount1Bit,
-			},
-			PColorBlendState: &vk.PipelineColorBlendStateCreateInfo{
-				SType:           vk.StructureTypePipelineColorBlendStateCreateInfo,
-				AttachmentCount: 1,
-				PAttachments: []vk.PipelineColorBlendAttachmentState{
-					{
-						ColorWriteMask: vk.ColorComponentFlags(
-							vk.ColorComponentRBit | vk.ColorComponentGBit |
-								vk.ColorComponentBBit | vk.ColorComponentABit),
-					},
-				},
-			},
-			PDynamicState: &vk.PipelineDynamicStateCreateInfo{
-				SType:             vk.StructureTypePipelineDynamicStateCreateInfo,
-				DynamicStateCount: uint32(len(dynamicStates)),
-				PDynamicStates:    dynamicStates,
-			},
-			Layout:     a.pipelineLayout,
-			RenderPass: a.renderPass,
-			Subpass:    0,
+			SType:               vk.StructureTypeGraphicsPipelineCreateInfo,
+			StageCount:          uint32(len(shaderStages)),
+			PStages:             shaderStages,
+			PVertexInputState:   vertexInputState,
+			PInputAssemblyState: inputAssemblyState,
+			PViewportState:      viewportState,
+			PRasterizationState: rasterizationState,
+			PMultisampleState:   multisampleState,
+			PColorBlendState:    colorBlendState,
+			PDynamicState:       dynamicState,
+			Layout:              a.pipelineLayout,
+			RenderPass:          a.renderPass,
+			Subpass:             0,
 		},
 	}, nil, pipelines)
 	orPanic(ret, "vkCreateGraphicsPipelines")
