@@ -286,12 +286,13 @@ func (a *App) createInstance() {
 // =============================================================================
 
 func (a *App) createSurface() {
-	surfaceAddr, err := a.window.CreateWindowSurface(a.instance, nil)
+	// CreateWindowSurface returns a uintptr that is a pointer to VkSurfaceKHR
+	// (not the handle value itself). Dereference it to get the actual handle.
+	surfacePtr, err := a.window.CreateWindowSurface(a.instance, nil)
 	if err != nil {
 		panic(fmt.Sprintf("CreateWindowSurface: %v", err))
 	}
-	// Convert uintptr to vk.Surface via unsafe pointer reinterpretation.
-	a.surface = *(*vk.Surface)(unsafe.Pointer(&surfaceAddr))
+	a.surface = *(*vk.Surface)(unsafe.Pointer(surfacePtr))
 }
 
 // =============================================================================
