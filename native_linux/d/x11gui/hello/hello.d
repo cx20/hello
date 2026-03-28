@@ -3,25 +3,22 @@ import core.stdc.string : strlen;
 
 extern(C):
 
-alias Display = void;
-alias Window = uint;
-alias GC = void*;
-alias Atom = uint;
-alias Pixmap = uint;
-alias Cursor = uint;
-alias Colormap = uint;
-alias VisualID = uint;
-alias Time = uint;
-alias KeySym = uint;
-alias Status = int;
-alias Bool = int;
+alias Display  = void;
+alias XID      = ulong;   // unsigned long on Linux x86_64
+alias Window   = XID;
+alias Atom     = ulong;
+alias Pixmap   = XID;
+alias Cursor   = XID;
+alias Colormap = XID;
+alias Bool     = int;
+alias Status   = int;
 
 enum None = 0;
 enum PPosition = 4;
 enum PSize = 8;
-enum ButtonPressMask = 4;
-enum KeyPressMask = 1;
-enum ExposureMask = 32768;
+enum ButtonPressMask = 4L;
+enum KeyPressMask = 1L;
+enum ExposureMask = 32768L;
 enum Expose = 12;
 enum ClientMessage = 33;
 enum DestroyNotify = 17;
@@ -39,13 +36,13 @@ struct XSizeHints {
 }
 
 struct XClientMessageEvent {
-    int type;
-    uint serial;
-    Bool send_event;
+    int    type;
+    ulong  serial;
+    Bool   send_event;
     Display* display;
     Window window;
-    Atom message_type;
-    int format;
+    Atom   message_type;
+    int    format;
     union Data {
         byte[20]  b;
         short[10] s;
@@ -55,9 +52,9 @@ struct XClientMessageEvent {
 }
 
 struct XExposeEvent {
-    int type;
-    uint serial;
-    Bool send_event;
+    int    type;
+    ulong  serial;
+    Bool   send_event;
     Display* display;
     Window window;
     int x, y;
@@ -66,9 +63,9 @@ struct XExposeEvent {
 }
 
 struct XDestroyWindowEvent {
-    int type;
-    uint serial;
-    Bool send_event;
+    int    type;
+    ulong  serial;
+    Bool   send_event;
     Display* display;
     Window event;
     Window window;
@@ -76,36 +73,38 @@ struct XDestroyWindowEvent {
 
 union XEvent {
     int type;
-    XExposeEvent xexpose;
+    XExposeEvent        xexpose;
     XClientMessageEvent xclient;
     XDestroyWindowEvent xdestroywindow;
     byte[192] pad;
 }
 
+alias GC = void*;
+
 Display* XOpenDisplay(const(char)* display_name);
-int       XCloseDisplay(Display* display);
-int       XDefaultScreen(Display* display);
-uint      XBlackPixel(Display* display, int screen_number);
-uint      XWhitePixel(Display* display, int screen_number);
-Window    XDefaultRootWindow(Display* display);
-Window    XCreateSimpleWindow(Display* display, Window parent,
-              int x, int y, uint width, uint height,
-              uint border_width, uint border, uint background);
-int       XSetStandardProperties(Display* display, Window w,
-              const(char)* window_name, const(char)* icon_name,
-              Pixmap icon_pixmap, char** argv, int argc, XSizeHints* hints);
-Atom      XInternAtom(Display* display, const(char)* atom_name, Bool only_if_exists);
-Status    XSetWMProtocols(Display* display, Window w, Atom* protocols, int count);
-GC        XCreateGC(Display* display, Window d, uint valuemask, void* values);
-int       XSetBackground(Display* display, GC gc, uint background);
-int       XSetForeground(Display* display, GC gc, uint foreground);
-int       XSelectInput(Display* display, Window w, long event_mask);
-int       XMapRaised(Display* display, Window w);
-int       XNextEvent(Display* display, XEvent* event_return);
-int       XDrawImageString(Display* display, Window d, GC gc,
-              int x, int y, const(char)* string, int length);
-int       XFreeGC(Display* display, GC gc);
-int       XDestroyWindow(Display* display, Window w);
+int      XCloseDisplay(Display* display);
+int      XDefaultScreen(Display* display);
+ulong    XBlackPixel(Display* display, int screen_number);
+ulong    XWhitePixel(Display* display, int screen_number);
+Window   XDefaultRootWindow(Display* display);
+Window   XCreateSimpleWindow(Display* display, Window parent,
+             int x, int y, uint width, uint height,
+             uint border_width, ulong border, ulong background);
+int      XSetStandardProperties(Display* display, Window w,
+             const(char)* window_name, const(char)* icon_name,
+             Pixmap icon_pixmap, char** argv, int argc, XSizeHints* hints);
+Atom     XInternAtom(Display* display, const(char)* atom_name, Bool only_if_exists);
+Status   XSetWMProtocols(Display* display, Window w, Atom* protocols, int count);
+GC       XCreateGC(Display* display, Window d, ulong valuemask, void* values);
+int      XSetBackground(Display* display, GC gc, ulong background);
+int      XSetForeground(Display* display, GC gc, ulong foreground);
+int      XSelectInput(Display* display, Window w, long event_mask);
+int      XMapRaised(Display* display, Window w);
+int      XNextEvent(Display* display, XEvent* event_return);
+int      XDrawImageString(Display* display, Window d, GC gc,
+             int x, int y, const(char)* string, int length);
+int      XFreeGC(Display* display, GC gc);
+int      XDestroyWindow(Display* display, Window w);
 
 extern(D):
 
@@ -117,8 +116,8 @@ int main(char[][] args)
     Display* display = XOpenDisplay("");
     int screen = XDefaultScreen(display);
 
-    uint foreground = XBlackPixel(display, screen);
-    uint background = XWhitePixel(display, screen);
+    ulong foreground = XBlackPixel(display, screen);
+    ulong background = XWhitePixel(display, screen);
 
     XSizeHints hint;
     hint.x      = 0;
