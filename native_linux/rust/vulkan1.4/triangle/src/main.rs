@@ -10,6 +10,7 @@ use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::platform::x11::EventLoopBuilderExtX11;
 use winit::window::{Window, WindowId};
 
 const WIDTH: u32 = 800;
@@ -1087,7 +1088,7 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
-    let event_loop = EventLoop::new().unwrap();
+    let event_loop = EventLoop::builder().with_x11().build().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app = App { vulkan: None };
