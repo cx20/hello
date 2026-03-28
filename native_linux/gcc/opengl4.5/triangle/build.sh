@@ -1,1 +1,1 @@
-cc -o hello  hello.c -lX11 -lGL
+gcc -o hello hello.c -lX11 -lGL
