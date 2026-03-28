@@ -5,7 +5,7 @@ $ gdc -o hello hello.d
 Result:
 ```
 +------------------------------------------+
-|user@HOSTNAME:~/d/console/hello[_][~][X]  |
+|user@HOSTNAME:~/d/console/hello  [_][~][X]|
 +------------------------------------------+
 |$ ./hello                                 |
 |Hello, D World!                           |
