@@ -430,17 +430,27 @@ impl VulkanApp {
         let capabilities = unsafe {
             surface_loader
                 .get_physical_device_surface_capabilities(device, surface)
-                .unwrap()
+                .expect("Failed to get surface capabilities")
         };
         let formats = unsafe {
             surface_loader
                 .get_physical_device_surface_formats(device, surface)
-                .unwrap()
+                .unwrap_or_else(|e| {
+                    if e == vk::Result::ERROR_SURFACE_LOST_KHR {
+                        eprintln!(
+                            "ERROR: Vulkan surface lost (ERROR_SURFACE_LOST_KHR).\n\
+                             This typically occurs when running on a software renderer (e.g. lavapipe)\n\
+                             without hardware GPU support for Vulkan WSI.\n\
+                             Please run on a system with a hardware GPU and proper Vulkan drivers."
+                        );
+                    }
+                    panic!("Failed to get surface formats: {:?}", e);
+                })
         };
         let present_modes = unsafe {
             surface_loader
                 .get_physical_device_surface_present_modes(device, surface)
-                .unwrap()
+                .expect("Failed to get surface present modes")
         };
 
         SwapChainSupportDetails {
