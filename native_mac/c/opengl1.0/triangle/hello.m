@@ -35,8 +35,8 @@
     [super reshape];
 
     [[self openGLContext] makeCurrentContext];
-    NSRect bounds = [self bounds];
-    glViewport(0, 0, (GLsizei)bounds.size.width, (GLsizei)bounds.size.height);
+    NSRect backingBounds = [self convertRectToBacking:[self bounds]];
+    glViewport(0, 0, (GLsizei)backingBounds.size.width, (GLsizei)backingBounds.size.height);
 }
 
 - (void)drawRect:(NSRect)dirtyRect
