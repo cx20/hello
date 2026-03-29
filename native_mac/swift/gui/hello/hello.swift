@@ -33,6 +33,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         label.textColor = .black
 
         window?.contentView?.addSubview(label)
+
+        // Activate the application
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -11,6 +11,12 @@
     return YES;
 }
 
+- (void)applicationDidFinishLaunching:(NSNotification *)aNotification
+{
+    (void)aNotification;
+    [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
+}
+
 @end
 
 int main(int argc, const char *argv[])
