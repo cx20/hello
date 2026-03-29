@@ -1,14 +1,6 @@
 #include <GLUT/glut.h>
-#include <ApplicationServices/ApplicationServices.h>
 
 #include <stdlib.h>
-
-static void BringAppToFront(void)
-{
-    ProcessSerialNumber psn = {0, kCurrentProcess};
-    TransformProcessType(&psn, kProcessTransformToForegroundApplication);
-    SetFrontProcess(&psn);
-}
 
 void Display(void)
 {
@@ -51,8 +43,6 @@ void Keyboard(unsigned char key, int x, int y)
 
 int main(int argc, char** argv)
 {
-    BringAppToFront();
-
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
     glutInitWindowSize(640, 480);

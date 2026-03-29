@@ -1,6 +1,6 @@
 compile:
 ```
-$ cc -o hello hello.c -framework OpenGL -framework GLUT -framework ApplicationServices
+$ cc -o hello hello.c -framework OpenGL -framework GLUT
 ```
 Result:
 ```
