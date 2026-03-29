@@ -1,13 +1,9 @@
-## Build and Run
-
-```bash
-$ cc -o hello hello.m -framework Cocoa -framework OpenGL
-$ ./hello
+compile:
 ```
-
-## Result
-
-```text
+$ cc -o hello hello.c -framework OpenGL -framework GLUT
+```
+Result:
+```
 +------------------------------------------+
 |            Hello, World!        [_][~][X]|
 +------------------------------------------+
