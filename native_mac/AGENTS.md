@@ -7,6 +7,7 @@ This folder contains native macOS "Hello, World!" examples demonstrating multipl
 ```
 native_mac/
 ├── c/            # C language samples
+├── cpp/          # C++ language samples
 └── swift/        # Swift language samples
 ```
 
@@ -34,6 +35,7 @@ Examples:
 
 ## Build Notes
 - C: use `cc` (Apple Clang)
+- C++: use `c++` (Apple Clang++)
 - Swift: use `swiftc`
 
 ## Adding New Samples
