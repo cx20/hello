@@ -17,7 +17,7 @@ $ sh clean.sh
 Result:
 ```txt
 +------------------------------------------+
-|Hello Vulkan (Objective-C++, MoltenVK)   |
+|Hello Vulkan (Objective-C, MoltenVK)     |
 +------------------------------------------+
 |                                          |
 |                   / \                    |

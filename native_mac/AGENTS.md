@@ -18,6 +18,7 @@ Each language directory typically contains:
 - `x11gui/hello/` - X11 window-based examples via XQuartz (optional)
 - `cocoa/hello/` - Cocoa window-based examples (optional)
 - `metal/triangle/` - Metal triangle examples (optional)
+- `vulkan1.4/triangle/` - Vulkan triangle examples via MoltenVK (optional)
 
 ## Directory Pattern
 Use this layout for new samples:
@@ -34,6 +35,8 @@ Examples:
 - `native_mac/objective-cpp/console/hello/`
 - `native_mac/swift/console/hello/`
 - `native_mac/swift/metal/triangle/`
+- `native_mac/objective-c/vulkan1.4/triangle/`
+- `native_mac/objective-cpp/vulkan1.4/triangle/`
 
 ## Conventions
 - Keep samples short and beginner-friendly.
@@ -55,3 +58,9 @@ Examples:
 4. Keep behavior consistent with repository style:
    - text samples print `Hello, World!` style output
    - graphics samples render a simple triangle
+
+## Vulkan (MoltenVK) Notes
+- Preferred sample layout: `build.sh`, `run.sh`, `clean.sh`, source, shaders, `readme.md`.
+- Homebrew dependencies: `molten-vk`, `vulkan-loader`, `vulkan-headers`, `glfw`, `glslang`.
+- `run.sh` should export `VK_ICD_FILENAMES` to MoltenVK ICD JSON.
+- On macOS, direct execution may need `DYLD_FALLBACK_LIBRARY_PATH` including `/usr/local/lib` and `/opt/homebrew/lib`.

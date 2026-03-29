@@ -1,6 +1,6 @@
 compile:
 ```bash
-$ brew install molten-vk vulkan-loader glfw glslang
+$ brew install molten-vk vulkan-loader vulkan-headers glfw glslang
 $ sh build.sh
 ```
 
