@@ -41,6 +41,7 @@ Examples:
 - `native_mac/swift/console/hello/`
 - `native_mac/swift/gui/hello/`
 - `native_mac/swift/metal/triangle/`
+- `native_mac/swift/vulkan1.4/triangle/` - Vulkan via MoltenVK and Swift module maps
 - `native_mac/objective-c/vulkan1.4/triangle/`
 - `native_mac/objective-cpp/vulkan1.4/triangle/`
 - `native_mac/c/vulkan1.4/triangle/` - Vulkan via MoltenVK
@@ -103,5 +104,6 @@ All Cocoa samples should:
 ## Vulkan (MoltenVK) Notes
 - Preferred sample layout: `build.sh`, `run.sh`, `clean.sh`, source, shaders, `readme.md`.
 - Homebrew dependencies: `molten-vk`, `vulkan-loader`, `vulkan-headers`, `glfw`, `glslang`.
+- Swift samples may need local `module.modulemap` files so `swiftc` can import Vulkan and GLFW C headers.
 - `run.sh` should export `VK_ICD_FILENAMES` to MoltenVK ICD JSON.
 - On macOS, direct execution may need `DYLD_FALLBACK_LIBRARY_PATH` including `/usr/local/lib` and `/opt/homebrew/lib`.
