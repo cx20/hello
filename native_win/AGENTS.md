@@ -12,21 +12,23 @@ This folder contains "Hello, World!" examples for native Windows application dev
 - `cpp_atl/`: C++ with Active Template Library (ATL)
 - `cpp_mfc/`: C++ with Microsoft Foundation Classes (MFC)
 - `cpp_wtl/`: C++ with Windows Template Library (WTL)
-- `cpp_import/`: C++ with import directive
+- `cpp_import/`: C++ with `#import` directive (COM type library)
 - `d/`: D language samples
 - `go/`: Go language samples
+- `kotlin/`: Kotlin/Native samples
 - `masm/`: Microsoft Macro Assembler samples
-- `pascal/`: Pascal/Delphi samples
+- `pascal/`: Pascal (Free Pascal) samples
 - `rust/`: Rust language samples
 - `zig/`: Zig language samples
 
 **Sample Categories**:
 - **Console**: Command-line text output (`console/hello/`)
-- **GUI**: Win32 GUI, WinRT (`win32gui/hello/`, `winrt/hello/`)
-- **COM**: Early and late binding COM automation
-- **2D Graphics**: GDI, GDI+, Direct2D
-- **3D Graphics**: DirectX 9/10/11/12, OpenGL (1.0 - 4.6), OpenGL ES, Vulkan, WebGPU
-- **Window Libraries**: GLFW, GLUT, SDL
+- **GUI**: Win32 API (`win32api/`), Win32 GUI (`win32gui/`), WinRT (`winrt/`), WinUI (`winui/`)
+- **COM**: Early binding (`com_earlybind/`) and late binding (`com_latebind/`)
+- **2D Graphics**: GDI (`gdi/`), GDI+ (`gdiplus/`), Direct2D (`direct2d/`)
+- **3D Graphics**: DirectX 9/10/11/12, OpenGL (1.0–4.6), OpenGL ES 2.0/3.0, Vulkan 1.4, WebGPU
+- **Window Libraries**: GLFW (`*_glfw`), GLUT (`*_glut`), SDL (`*_sdl`)
+- **UI Framework**: Dear ImGui with OpenGL+GLFW/SDL (`imgui_opengl*`) — cpp only
 
 ## Directory Structure Pattern
 
@@ -40,7 +42,34 @@ Examples:
 - `native_win/c/win32gui/hello/`
 - `native_win/c/opengl3.3_glfw/triangle/`
 - `native_win/cpp/vulkan1.4/triangle/`
+- `native_win/cpp/imgui_opengl3.3_glfw/triangle/`
+- `native_win/kotlin/vulkan1.4/triangle/`
 - `native_win/rust/directx12/triangle/`
+
+### Coverage by language
+
+| Category          | c | cpp | cpp_atl | cpp_mfc | cpp_wtl | d | go | kotlin | masm | pascal | rust | zig |
+|-------------------|:-:|:---:|:-------:|:-------:|:-------:|:-:|:--:|:------:|:----:|:------:|:----:|:---:|
+| console           | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     | ✅   | ✅     | ✅   | ✅  |
+| win32api          | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     | ✅   | ✅     | ✅   | ✅  |
+| win32gui          | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     | ✅   | ✅     | ✅   |     |
+| winrt             | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     |      | ✅     | ✅   |     |
+| winui             | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     |      | ✅     | ✅   |     |
+| com_earlybind     | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     | ✅   | ✅     | ✅   |     |
+| com_latebind      | ✅| ✅  |         | ✅      | ✅      | ✅| ✅ | ✅     | ✅   | ✅     | ✅   |     |
+| gdi               | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     | ✅   | ✅     | ✅   |     |
+| gdiplus           | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     |      | ✅     | ✅   |     |
+| direct2d          | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     |      | ✅     | ✅   |     |
+| directx9          | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     | ✅   | ✅     | ✅   |     |
+| directx10         | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     |      | ✅     | ✅   |     |
+| directx11         | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     |      | ✅     | ✅   |     |
+| directx12         | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     |      | ✅     | ✅   |     |
+| opengl1.0–2.0     | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     | ✅   | ✅     | ✅   |     |
+| opengl3.3–4.6     | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     |      | ✅     | ✅   |     |
+| opengles2.0/3.0   | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     |      | ✅     | ✅   |     |
+| vulkan1.4         | ✅| ✅  | ✅      | ✅      | ✅      | ✅| ✅ | ✅     |      | ✅     | ✅   |     |
+| wgpu/webgpu       | ✅| ✅  |         |         |         |   |    |        |      |        | ✅   |     |
+| imgui_opengl      |   | ✅  |         |         |         |   |    |        |      |        |      |     |
 
 ## Code Style & Conventions
 
@@ -54,9 +83,9 @@ Examples:
 
 ### File Naming
 
-- Source files: Use standard extensions (`.c`, `.cpp`, `.d`, `.go`, `.asm`, `.pas`, `.rs`, `.zig`)
-- Build scripts: `build.bat` for Windows
-- Shaders: `vertex.hlsl`, `fragment.glsl`, `shader.wgsl`
+- Source files: Use standard extensions (`.c`, `.cpp`, `.d`, `.go`, `.kt`, `.asm`, `.pas`, `.rs`, `.zig`)
+- Build scripts: `build.bat` for Windows (also `clean.bat` where needed)
+- Shaders: `hello.hlsl`, `hello.vert`/`hello.frag` (GLSL), `hello.wgsl` (WebGPU)
 - README: `readme.md` (lowercase)
 
 ### Build Scripts
@@ -66,6 +95,7 @@ Use Visual Studio Developer Command Prompt tools:
 - **MASM**: `ml64.exe` (64-bit), `ml.exe` (32-bit)
 - **D**: `dmd` or `ldc2`
 - **Go**: `go build`
+- **Kotlin/Native**: `kotlinc-native` (requires `KONAN_HOME` set to Kotlin/Native install dir)
 - **Pascal**: `fpc` (Free Pascal Compiler)
 - **Rust**: `cargo build` or `rustc`
 - **Zig**: `zig build` or `zig build-exe`
@@ -82,11 +112,12 @@ cl /EHsc /D "UNICODE" hello.cpp user32.lib gdi32.lib
 - Use MSVC compiler (`cl.exe`)
 - Link against appropriate libraries (`user32.lib`, `gdi32.lib`, `d3d11.lib`, etc.)
 - For ATL/MFC/WTL: Requires Visual Studio installation
+- `cpp/` only: Dear ImGui samples (`imgui_opengl*`) require GLEW, GLFW, and ImGui headers; set `GLEW_HOME`, `GLFW_HOME`, `IMGUI_HOME` env vars
 
 **MASM**:
 - Assembly language for x86/x64
-- Use Windows API directly via system calls
-- Include appropriate `.inc` files for constants
+- Use Windows API directly via `EXTERN` declarations
+- Include appropriate equates for constants
 
 **D**:
 - Use `core.sys.windows` for Windows API bindings
@@ -95,6 +126,12 @@ cl /EHsc /D "UNICODE" hello.cpp user32.lib gdi32.lib
 **Go**:
 - Use `syscall` package or `github.com/lxn/win` for Win32 APIs
 - CGO not typically required for Win32
+
+**Kotlin/Native**:
+- Uses `kotlinc-native` to compile `.kt` files to a native Windows executable
+- Requires Kotlin/Native toolchain (`KONAN_HOME=C:\kotlin-native`)
+- For Vulkan: also requires `VULKAN_SDK` path set
+- Shaders in `.vert`/`.frag` files compiled separately with `glslangValidator`
 
 **Pascal**:
 - Free Pascal or Delphi
@@ -106,7 +143,7 @@ cl /EHsc /D "UNICODE" hello.cpp user32.lib gdi32.lib
 
 **Zig**:
 - Use `@cImport` or manual FFI for Win32 APIs
-- Direct C ABI compatibility
+- Direct C ABI compatibility (currently: console + win32api only)
 
 ## Platform-Specific Notes
 
@@ -115,6 +152,7 @@ cl /EHsc /D "UNICODE" hello.cpp user32.lib gdi32.lib
 Standard "Hello, World!" output to console:
 - C: `printf("Hello, World!\n");`
 - C++: `std::cout << "Hello, World!" << std::endl;`
+- Kotlin: `println("Hello, World!")`
 - Rust: `println!("Hello, World!");`
 - Zig: `std.debug.print("Hello, World!\n", .{});`
 
@@ -131,11 +169,11 @@ Standard "Hello, World!" output to console:
 
 ### COM Applications
 
-**Early Binding**:
+**Early Binding** (`com_earlybind/`):
 - Import type library at compile time
 - Use vtable interfaces directly
 
-**Late Binding**:
+**Late Binding** (`com_latebind/`):
 - Use `IDispatch` and `GetIDsOfNames`/`Invoke`
 - Runtime type resolution
 
@@ -150,47 +188,60 @@ Standard "Hello, World!" output to console:
 - Use `ID2D1RenderTarget::DrawLine` for triangle
 
 **DirectX (9/10/11/12)**:
-- HLSL shaders (`.hlsl` files)
+- HLSL shaders (`.hlsl` files compiled with `fxc` or `dxc`)
 - Device/context initialization
 - Vertex buffer setup
 - Rendering loop (clear, draw, present)
 
 **OpenGL**:
 - GLSL shaders for modern versions (3.3+)
-- Extension loading (GLEW, GLAD)
-- Window libraries: GLFW, GLUT, SDL
+- Extension loading with GLEW (`glew32s.lib`)
+- Window libraries: GLFW (`*_glfw`), GLUT (`*_glut`), SDL (`*_sdl`)
 - VAO/VBO buffer management
 
 **OpenGL ES**:
 - Mobile/embedded subset of OpenGL
-- Use EGL or ANGLE for Windows
+- Use ANGLE for Windows via GLFW
 
 **Vulkan**:
-- SPIR-V shaders (compiled from GLSL)
-- Complex initialization (instance, device, swapchain)
+- SPIR-V shaders (compile `.vert`/`.frag` with `glslangValidator -V`)
+- Complex initialization (instance, device, swapchain, pipeline)
 - Command buffers and synchronization
 - Validation layers for debugging
 
 **WebGPU**:
-- WGSL shaders
-- Use Dawn (Chromium) or wgpu-native (Rust)
-- Cross-platform modern graphics API
+- WGSL shaders (`.wgsl` files)
+- Dawn (Chromium): `cpp/webgpu_dawn/`, `cpp/webgpu_dawn_glfw/`
+- wgpu-native (Rust): `rust/wgpu/`, `c/wgpu_glfw/`, `cpp/wgpu_glfw/`
+
+**Dear ImGui** (cpp only):
+- Requires GLEW, GLFW, ImGui source files
+- Backends: `imgui_impl_opengl3` + `imgui_impl_glfw` (or SDL)
+- Demonstrates minimal ImGui triangle overlay on OpenGL window
 
 ## Building and Testing
 
 ### Prerequisites
 
 - **Windows 10/11**
-- **Visual Studio** (2019 or later) with C++ development tools
+- **Visual Studio** (2019 or later) with "Desktop development with C++"
 - **Windows SDK** (included with Visual Studio)
-- **Graphics SDKs**: DirectX SDK (legacy), Vulkan SDK
-- **Language-specific tools**: DMD/LDC (D), Go, Free Pascal, Rust, Zig
+- **Vulkan SDK** (https://vulkan.lunarg.com/) — set `VULKAN_SDK` env var
+- **GLFW** — set `GLFW_HOME` env var (e.g. `C:\Libraries\glfw-3.3.6.bin.WIN64`)
+- **GLEW** — set `GLEW_HOME` env var (e.g. `C:\Libraries\glew-2.1.0`)
+- **Language-specific tools**:
+  - D: DMD or LDC2
+  - Go: Go toolchain
+  - Kotlin/Native: `KONAN_HOME=C:\kotlin-native`
+  - Pascal: Free Pascal Compiler (`fpc`)
+  - Rust: Rust toolchain (`cargo`)
+  - Zig: Zig compiler
 
 ### Build Process
 
-Each example includes a `build.bat` script:
-```bash
-cd native_win/<language>/<platform>/<sample>
+Each example includes a `build.bat` script. Run from an **x64 Native Tools Command Prompt for VS**:
+```bat
+cd native_win\<language>\<platform>\<sample>
 build.bat
 ```
 
@@ -198,7 +249,7 @@ For manual compilation, check `build.bat` for exact compiler flags and libraries
 
 ### Testing Examples
 
-1. Verify compilation succeeds without errors or warnings
+1. Verify compilation succeeds without errors
 2. Run the executable
 3. For console apps: Check text output
 4. For GUI apps: Verify window displays correctly
@@ -212,22 +263,15 @@ For manual compilation, check `build.bat` for exact compiler flags and libraries
 2. Add console sample: `native_win/<language>/console/hello/`
 3. Include source file, `build.bat`, and `readme.md`
 4. Test compilation and execution
-5. Update main repository README.md
+5. Update main repository `README.md`
 
 ### Adding a New Graphics API
 
 1. Create API directory: `native_win/<language>/<api>/triangle/`
 2. Include source files and shaders
 3. Provide `build.bat` with correct library linking
-4. Document SDK requirements in comments or readme
+4. Document SDK/library path requirements via `SET` statements in `build.bat`
 5. Test rendering output
-
-### Modifying Existing Samples
-
-1. **Preserve simplicity**: Keep samples focused on minimal API usage
-2. **Maintain Win32 compatibility**: Ensure samples run on Windows 10/11
-3. **Update documentation**: Reflect changes in readme
-4. **Test thoroughly**: Verify compilation and runtime behavior
 
 ## Common Patterns
 
@@ -251,9 +295,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 ```
 
-### Graphics Triangle Rendering
+### Graphics Triangle Vertex Data
 
-**Vertex Data** (3 vertices, typically RGB colors):
 ```c
 float vertices[] = {
      0.0f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // Top (Red)
@@ -272,17 +315,19 @@ float vertices[] = {
 
 ### Common Issues
 
-- **Linker errors (LNK2019)**: Missing library in build script (add `.lib` file)
+- **Linker errors (LNK2019)**: Missing `.lib` file in build script
 - **Unicode errors**: Use `TCHAR`, `TEXT()`, and Unicode APIs (`CreateWindowW`)
-- **DLL not found**: Ensure required DLLs are in PATH or same directory
+- **DLL not found**: Ensure required DLLs are in `PATH` or same directory as executable
 - **Shader compilation errors**: Check HLSL/GLSL syntax and version compatibility
-- **Vulkan validation errors**: Enable validation layers and check VkResult codes
+- **Vulkan validation errors**: Enable validation layers and check `VkResult` codes
+- **`kotlinc-native` not found**: Set `KONAN_HOME` and add `%KONAN_HOME%\bin` to `PATH`
+- **GLFW/GLEW headers not found**: Set `GLFW_HOME` / `GLEW_HOME` env vars before running `build.bat`
 
 ### Build Environment Setup
 
 1. Install **Visual Studio** with "Desktop development with C++"
-2. Open **Developer Command Prompt** or **x64 Native Tools Command Prompt**
-3. Ensure SDKs are installed (Vulkan SDK, etc.)
+2. Open **x64 Native Tools Command Prompt for VS**
+3. Ensure SDKs and library paths are set (Vulkan SDK, GLFW, GLEW)
 4. For graphics: Install GPU drivers with development support
 
 ## Additional Resources
@@ -293,3 +338,4 @@ float vertices[] = {
 - DirectX Documentation: https://docs.microsoft.com/windows/win32/directx
 - Vulkan Tutorial: https://vulkan-tutorial.com/
 - WebGPU Specification: https://www.w3.org/TR/webgpu/
+- Kotlin/Native: https://kotlinlang.org/docs/native-overview.html
