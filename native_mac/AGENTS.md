@@ -8,6 +8,8 @@ This folder contains native macOS "Hello, World!" examples demonstrating multipl
 native_mac/
 ├── c/            # C language samples
 ├── cpp/          # C++ language samples
+├── objective-c/  # Objective-C language samples
+├── objective-cpp/# Objective-C++ language samples
 └── swift/        # Swift language samples
 ```
 
@@ -24,6 +26,8 @@ native_mac/<language>/<library_or_category>/<sample_type>/
 
 Examples:
 - `native_mac/c/console/hello/`
+- `native_mac/objective-c/console/hello/`
+- `native_mac/objective-cpp/console/hello/`
 - `native_mac/swift/console/hello/`
 - `native_mac/swift/metal/triangle/`
 
@@ -36,6 +40,8 @@ Examples:
 ## Build Notes
 - C: use `cc` (Apple Clang)
 - C++: use `c++` (Apple Clang++)
+- Objective-C: use `cc` with `.m`
+- Objective-C++: use `c++` with `.mm`
 - Swift: use `swiftc`
 
 ## Adding New Samples
