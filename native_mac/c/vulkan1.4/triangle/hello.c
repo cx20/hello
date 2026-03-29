@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 /*
  * Minimal Vulkan triangle in C (GLFW surface, MoltenVK for macOS)
@@ -105,6 +106,57 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityF
     (void)pUserData;
     fprintf(stderr, "validation layer: %s\n", pCallbackData->pMessage);
     return VK_FALSE;
+}
+
+static bool containsPathEntry(const char *list, const char *entry) {
+    if (!list || !entry || entry[0] == '\0') {
+        return false;
+    }
+    const char *p = list;
+    size_t n = strlen(entry);
+    while (*p) {
+        const char *end = strchr(p, ':');
+        size_t len = end ? (size_t)(end - p) : strlen(p);
+        if (len == n && strncmp(p, entry, n) == 0) {
+            return true;
+        }
+        if (!end) {
+            break;
+        }
+        p = end + 1;
+    }
+    return false;
+}
+
+static void ensureLaunchEnvAndRelaunchIfNeeded(int argc, char **argv) {
+    (void)argc;
+    const char *guard = getenv("HELLO_VK_ENV_READY");
+    if (guard && strcmp(guard, "1") == 0) {
+        return;
+    }
+
+    const char *current = getenv("DYLD_FALLBACK_LIBRARY_PATH");
+    bool hasUsrLocal = containsPathEntry(current, "/usr/local/lib");
+    bool hasHomebrew = containsPathEntry(current, "/opt/homebrew/lib");
+    if (hasUsrLocal || hasHomebrew) {
+        setenv("HELLO_VK_ENV_READY", "1", 1);
+        return;
+    }
+
+    const char *defaults = "/usr/local/lib:/opt/homebrew/lib:/usr/lib";
+    if (current == NULL || current[0] == '\0') {
+        setenv("DYLD_FALLBACK_LIBRARY_PATH", defaults, 1);
+    } else {
+        size_t len = strlen(current) + 1 + strlen(defaults) + 1;
+        char *merged = malloc(len);
+        if (merged) {
+            snprintf(merged, len, "%s:%s", current, defaults);
+            setenv("DYLD_FALLBACK_LIBRARY_PATH", merged, 1);
+            free(merged);
+        }
+    }
+    setenv("HELLO_VK_ENV_READY", "1", 1);
+    execv(argv[0], argv);
 }
 
 static void ensureDyldFallbackLibraryPath(void) {
@@ -1021,7 +1073,8 @@ static void mainLoop(App *app) {
     vkDeviceWaitIdle(app->device);
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    ensureLaunchEnvAndRelaunchIfNeeded(argc, argv);
     App app = {0};
     initWindow(&app);
     initVulkan(&app);
