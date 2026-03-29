@@ -115,7 +115,7 @@ If it is a graphics library, it will display a triangle, otherwise it will displ
 |OpenGL2.0 (GLFW)|[Link](https://github.com/cx20/hello/tree/master/native_mac/c/opengl2.0_glfw/triangle)|                                                                                    |                                                                                     |
 |OpenGL3.3 (GLFW)|[Link](https://github.com/cx20/hello/tree/master/native_mac/c/opengl3.3_glfw/triangle)|                                                                                    |                                                                                     |
 |OpenGL4.1 (GLFW)|[Link](https://github.com/cx20/hello/tree/master/native_mac/c/opengl4.1_glfw/triangle)|                                                                                    |                                                                                     |
-|Metal    |                                                                                     |[Link](https://github.com/cx20/hello/tree/master/native_mac/cpp/metal/triangle)       |[Link](https://github.com/cx20/hello/tree/master/native_mac/swift/metal/triangle)     |
+|Metal    |[Link](https://github.com/cx20/hello/tree/master/native_mac/c/metal/triangle)         |[Link](https://github.com/cx20/hello/tree/master/native_mac/cpp/metal/triangle)       |[Link](https://github.com/cx20/hello/tree/master/native_mac/swift/metal/triangle)     |
 
 ## .NET Languages
 
