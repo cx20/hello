@@ -15,6 +15,7 @@ native_mac/
 
 Each language directory typically contains:
 - `console/hello/` - Command-line "Hello, World!" programs
+- `x11gui/hello/` - X11 window-based examples via XQuartz (optional)
 - `cocoa/hello/` - Cocoa window-based examples (optional)
 - `metal/triangle/` - Metal triangle examples (optional)
 
@@ -26,6 +27,8 @@ native_mac/<language>/<library_or_category>/<sample_type>/
 
 Examples:
 - `native_mac/c/console/hello/`
+- `native_mac/c/x11gui/hello/`
+- `native_mac/cpp/x11gui/hello/`
 - `native_mac/objective-c/console/hello/`
 - `native_mac/objective-c/metal/triangle/`
 - `native_mac/objective-cpp/console/hello/`
