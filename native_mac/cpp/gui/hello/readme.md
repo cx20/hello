@@ -1,6 +1,12 @@
 # Hello, World! in C++ + Cocoa GUI
 
-This sample demonstrates a simple "Hello, World!" GUI application in C++ using Cocoa framework via Objective-C++. It shows how C++ can interact with Cocoa APIs using Objective-C++.
+This sample demonstrates a "Hello, World!" GUI application in C++ using Cocoa framework. It uses a **C++ wrapper class design pattern** to abstract the Objective-C++ bridge layer.
+
+## Architecture
+
+- **hello.cpp**: Pure C++ implementation with `CocoaApp` wrapper class
+- **hello_cocoa_bridge.mm**: Objective-C++ bridge layer that handles Cocoa API calls
+- **Bridge pattern**: C++ code calls bridge functions, isolated from Objective-C complexity
 
 ## Build
 
@@ -8,7 +14,7 @@ This sample demonstrates a simple "Hello, World!" GUI application in C++ using C
 sh build.sh
 ```
 
-This will create `Hello.app` - a macOS application bundle that can be run from Finder.
+This will compile `hello.cpp` and `hello_cocoa_bridge.mm` separately, then link them into `Hello.app`.
 
 ## Run from Terminal
 
@@ -35,14 +41,22 @@ rm -rf Hello.app
 
 ## Description
 
-- Objective-C++ code (`hello.mm`) implements the entire application
-- Uses Cocoa framework (NSApplication, NSWindow, NSTextField)
-- Displays "Hello, World!" text in a window
-- Window can be minimized and closed
-- Application bundle format (Hello.app) with Info.plist
+- **C++ wrapper class** (`CocoaApp`) provides high-level interface
+- **Bridge pattern**: Separates C++ logic from Objective-C++ details
+- Uses Cocoa framework (NSApplication, NSWindow, NSTextField, via bridge)
+- Demonstrates clean C++ design while leveraging macOS-specific APIs
+- C++ features: classes, error handling (try-catch), standard library (std::string)
 - No external dependencies beyond macOS system frameworks
+
+## Design Pattern
+
+The wrapper class pattern allows:
+1. Pure C++ code in `hello.cpp` without Objective-C knowledge
+2. Bridge functions (`cocoa_*`) hiding Cocoa implementation details
+3. Easy extension: new C++ methods map to new bridge functions
+4. Better maintainability and separation of concerns
 
 ## Dependencies
 
 - Cocoa framework (macOS system framework)
-- Apple Clang C++ compiler (c++)
+- Apple Clang C++ compiler (c++ with -std=c++17)

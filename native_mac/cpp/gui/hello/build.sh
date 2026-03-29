@@ -5,8 +5,17 @@ BUNDLE_DIR="${APP_NAME}.app"
 CONTENTS_DIR="${BUNDLE_DIR}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
 
-# Compile Objective-C++
-c++ -std=c++17 -o hello hello.mm -framework Cocoa
+# Compile Objective-C++ bridge (needs Cocoa framework headers)
+c++ -std=c++17 -c hello_cocoa_bridge.mm -o hello_cocoa_bridge.o
+
+# Compile C++ main
+c++ -std=c++17 -c hello.cpp -o hello.o
+
+# Link
+c++ -std=c++17 -o hello hello.o hello_cocoa_bridge.o -framework Cocoa
+
+# Clean intermediate object files
+rm -f hello.o hello_cocoa_bridge.o
 
 # Create app bundle structure
 mkdir -p "${MACOS_DIR}"
