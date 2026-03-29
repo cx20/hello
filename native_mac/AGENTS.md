@@ -76,12 +76,20 @@ Examples:
 - **Advantage**: Pure C entry point with clean separation of concerns
 - **Use case**: C programs that need native GUI without full Objective-C rewrite
 
-### C++ + Cocoa Integration
-- **Approach**: Objective-C++ (`.mm` files) provides seamless C++ and Cocoa interop
-- **File**: Single `hello.mm` file combining Objective-C and C++
-- **Compilation**: `c++ -std=c++17 hello.mm -framework Cocoa`
-- **Advantage**: Full C++ feature support with Cocoa APIs
-- **Use case**: Modern C++ projects requiring native macOS GUI
+### C++ + Cocoa Integration (Wrapper Class Pattern)
+- **Approach**: C++ wrapper class with Objective-C++ bridge layer for clean separation
+- **Files**: `hello.cpp` (C++ class + main) + `hello_cocoa_bridge.mm` (Objective-C++ bridge)
+- **Compilation**: Separate compilation of C++ and Objective-C++, then link together
+- **Key pattern**: 
+  - C++ `CocoaApp` class provides high-level interface
+  - Bridge functions (`cocoa_*`) hide Objective-C implementation details
+  - C++ code contains no Objective-C or Cocoa API calls directly
+- **Advantages**: 
+  - Pure C++ business logic separated from framework complexity
+  - Easier to test and extend
+  - Better for large C++ projects
+  - Clear boundary between C++ and Objective-C domains
+- **Use case**: Modern C++ projects requiring native macOS GUI with clean architecture
 
 ### Cocoa GUI Sample Template
 All Cocoa samples should:
