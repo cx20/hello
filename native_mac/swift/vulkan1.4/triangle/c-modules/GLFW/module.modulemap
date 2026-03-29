@@ -1,0 +1,5 @@
+module GLFW [system] {
+  header "../include/GLFWVulkan.h"
+  link "glfw"
+  export *
+}
