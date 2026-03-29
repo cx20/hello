@@ -1,8 +1,6 @@
 compile:
 ```
-$ brew install freeglut
-$ ./build.sh
-$ ./hello
+$ cc -o hello hello.c -framework OpenGL -framework GLUT -framework ApplicationServices
 ```
 Result:
 ```

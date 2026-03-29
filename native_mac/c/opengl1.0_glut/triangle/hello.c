@@ -1,6 +1,14 @@
-#include <GL/freeglut.h>
+#include <GLUT/glut.h>
+#include <ApplicationServices/ApplicationServices.h>
 
 #include <stdlib.h>
+
+static void BringAppToFront(void)
+{
+    ProcessSerialNumber psn = {0, kCurrentProcess};
+    TransformProcessType(&psn, kProcessTransformToForegroundApplication);
+    SetFrontProcess(&psn);
+}
 
 void Display(void)
 {
@@ -43,8 +51,9 @@ void Keyboard(unsigned char key, int x, int y)
 
 int main(int argc, char** argv)
 {
+    BringAppToFront();
+
     glutInit(&argc, argv);
-    glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
     glutInitWindowSize(640, 480);
     glutCreateWindow("Hello, OpenGL 1.0 World!");
@@ -53,7 +62,7 @@ int main(int argc, char** argv)
 
     glutDisplayFunc(Display);
     glutReshapeFunc(Reshape);
-    glutCloseFunc(OnClose);
+    glutWMCloseFunc(OnClose);
     glutKeyboardFunc(Keyboard);
     glutTimerFunc(16, Timer, 0);
     glutMainLoop();
