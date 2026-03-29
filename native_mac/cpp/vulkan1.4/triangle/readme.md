@@ -9,6 +9,11 @@ run:
 $ sh run.sh
 ```
 
+clean:
+```bash
+$ sh clean.sh
+```
+
 Result:
 ```txt
 +------------------------------------------+
