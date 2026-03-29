@@ -27,6 +27,7 @@ native_mac/<language>/<library_or_category>/<sample_type>/
 Examples:
 - `native_mac/c/console/hello/`
 - `native_mac/objective-c/console/hello/`
+- `native_mac/objective-c/metal/triangle/`
 - `native_mac/objective-cpp/console/hello/`
 - `native_mac/swift/console/hello/`
 - `native_mac/swift/metal/triangle/`
