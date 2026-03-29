@@ -1,0 +1,1 @@
+c++ -DGL_SILENCE_DEPRECATION -o hello hello.mm -framework Cocoa -framework OpenGL
