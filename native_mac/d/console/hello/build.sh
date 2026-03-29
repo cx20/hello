@@ -1,0 +1,1 @@
+dmd -ofhello hello.d

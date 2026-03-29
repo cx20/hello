@@ -8,8 +8,11 @@ This folder contains native macOS "Hello, World!" examples demonstrating multipl
 native_mac/
 ├── c/            # C language samples
 ├── cpp/          # C++ language samples
+├── d/            # D language samples
+├── go/           # Go language samples
 ├── objective-c/  # Objective-C language samples
 ├── objective-cpp/# Objective-C++ language samples
+├── rust/         # Rust language samples
 └── swift/        # Swift language samples
 ```
 
@@ -46,6 +49,9 @@ Examples:
 - `native_mac/objective-cpp/vulkan1.4/triangle/`
 - `native_mac/c/vulkan1.4/triangle/` - Vulkan via MoltenVK
 - `native_mac/cpp/vulkan1.4/triangle/` - Vulkan via MoltenVK
+- `native_mac/d/console/hello/`
+- `native_mac/go/console/hello/`
+- `native_mac/rust/console/hello/`
 
 ## Conventions
 - Keep samples short and beginner-friendly.
