@@ -1,6 +1,14 @@
 #include <GLUT/glut.h>
+#include <ApplicationServices/ApplicationServices.h>
 
 #include <stdlib.h>
+
+static void BringAppToFront(void)
+{
+    ProcessSerialNumber psn = {0, kCurrentProcess};
+    TransformProcessType(&psn, kProcessTransformToForegroundApplication);
+    SetFrontProcess(&psn);
+}
 
 static const GLfloat COLORS[] = {
     1.0f, 0.0f, 0.0f,
@@ -47,8 +55,20 @@ void OnClose(void)
     exit(0);
 }
 
+void Keyboard(unsigned char key, int x, int y)
+{
+    (void)x;
+    (void)y;
+
+    if (key == 27 || key == 'q' || key == 'Q') {
+        exit(0);
+    }
+}
+
 int main(int argc, char** argv)
 {
+    BringAppToFront();
+
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
     glutInitWindowSize(640, 480);
@@ -59,6 +79,7 @@ int main(int argc, char** argv)
     glutDisplayFunc(Display);
     glutReshapeFunc(Reshape);
     glutWMCloseFunc(OnClose);
+    glutKeyboardFunc(Keyboard);
     glutTimerFunc(16, Timer, 0);
     glutMainLoop();
 
