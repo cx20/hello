@@ -4,7 +4,7 @@ $ sh build.sh
 ```
 run:
 ```
-$ ./hello
+$ sh run.sh
 ```
 Result:
 ```
@@ -19,5 +19,6 @@ Result:
 
 Notes:
 - Requires XQuartz on macOS
-- Start XQuartz before running the program
-- If needed, set `DISPLAY` and `X11_PREFIX`
+- `run.sh` starts XQuartz automatically if needed
+- `run.sh` defaults `DISPLAY` to `:0` when unset
+- If needed, set `X11_PREFIX` before running `build.sh`
