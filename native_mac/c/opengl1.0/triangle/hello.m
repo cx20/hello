@@ -25,19 +25,25 @@
 - (void)prepareOpenGL
 {
     [super prepareOpenGL];
+
+    [[self openGLContext] makeCurrentContext];
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 - (void)reshape
 {
     [super reshape];
-    NSRect bounds = [self bounds];
-    glViewport(0, 0, (GLsizei)bounds.size.width, (GLsizei)bounds.size.height);
+
+    [[self openGLContext] makeCurrentContext];
+    NSRect backingBounds = [self convertRectToBacking:[self bounds]];
+    glViewport(0, 0, (GLsizei)backingBounds.size.width, (GLsizei)backingBounds.size.height);
 }
 
 - (void)drawRect:(NSRect)dirtyRect
 {
     (void)dirtyRect;
+
+    [[self openGLContext] makeCurrentContext];
 
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -108,6 +114,8 @@ int main(int argc, const char* argv[])
         NSApplication* app = [NSApplication sharedApplication];
         AppDelegate* delegate = [[AppDelegate alloc] init];
         [app setDelegate:delegate];
+        [app setActivationPolicy:NSApplicationActivationPolicyRegular];
+        [app activateIgnoringOtherApps:YES];
         [app run];
     }
 

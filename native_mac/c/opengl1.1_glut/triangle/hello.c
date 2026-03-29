@@ -47,6 +47,16 @@ void OnClose(void)
     exit(0);
 }
 
+void Keyboard(unsigned char key, int x, int y)
+{
+    (void)x;
+    (void)y;
+
+    if (key == 27 || key == 'q' || key == 'Q') {
+        exit(0);
+    }
+}
+
 int main(int argc, char** argv)
 {
     glutInit(&argc, argv);
@@ -59,6 +69,7 @@ int main(int argc, char** argv)
     glutDisplayFunc(Display);
     glutReshapeFunc(Reshape);
     glutWMCloseFunc(OnClose);
+    glutKeyboardFunc(Keyboard);
     glutTimerFunc(16, Timer, 0);
     glutMainLoop();
 
