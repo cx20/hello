@@ -16,7 +16,7 @@ native_mac/
 Each language directory typically contains:
 - `console/hello/` - Command-line "Hello, World!" programs
 - `x11gui/hello/` - X11 window-based examples via XQuartz (optional)
-- `cocoa/hello/` - Cocoa window-based examples (optional)
+- `gui/hello/` - Cocoa (AppKit) window-based examples (optional)
 - `metal/triangle/` - Metal triangle examples (optional)
 - `vulkan1.4/triangle/` - Vulkan triangle examples via MoltenVK (optional)
 
