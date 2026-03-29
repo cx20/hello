@@ -5,6 +5,7 @@ cd "$SCRIPT_DIR"
 MOLTENVK_PREFIX="$(brew --prefix molten-vk 2>/dev/null || echo /usr/local/Cellar/molten-vk/1.4.1)"
 
 export VK_ICD_FILENAMES="${MOLTENVK_PREFIX}/etc/vulkan/icd.d/MoltenVK_icd.json"
+export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/opt/homebrew/lib:/usr/lib:${DYLD_FALLBACK_LIBRARY_PATH}"
 
 if [ ! -x ./hello ]; then
     echo "./hello was not found. Run 'sh build.sh' first."

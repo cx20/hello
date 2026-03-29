@@ -107,6 +107,28 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityF
     return VK_FALSE;
 }
 
+static void ensureDyldFallbackLibraryPath(void) {
+    const char *current = getenv("DYLD_FALLBACK_LIBRARY_PATH");
+    if (current != NULL && strstr(current, "/usr/local/lib") != NULL && strstr(current, "/opt/homebrew/lib") != NULL) {
+        return;
+    }
+
+    const char *defaults = "/usr/local/lib:/opt/homebrew/lib:/usr/lib";
+    if (current == NULL || current[0] == '\0') {
+        setenv("DYLD_FALLBACK_LIBRARY_PATH", defaults, 1);
+        return;
+    }
+
+    size_t len = strlen(current) + 1 + strlen(defaults) + 1;
+    char *merged = malloc(len);
+    if (!merged) {
+        return;
+    }
+    snprintf(merged, len, "%s:%s", current, defaults);
+    setenv("DYLD_FALLBACK_LIBRARY_PATH", merged, 1);
+    free(merged);
+}
+
 static bool isInstanceExtensionAvailable(const char *name) {
     uint32_t extensionCount = 0;
     vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
@@ -135,6 +157,8 @@ static void framebufferResizeCallback(GLFWwindow *window, int width, int height)
 }
 
 static void initWindow(App *app) {
+    /* Ensure glfw can dlopen libvulkan on macOS Homebrew paths. */
+    ensureDyldFallbackLibraryPath();
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     app->window = glfwCreateWindow(WIDTH, HEIGHT, "Hello Vulkan (C, MoltenVK)", NULL, NULL);

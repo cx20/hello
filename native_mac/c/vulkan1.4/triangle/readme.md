@@ -30,4 +30,5 @@ Result:
 Notes:
 - This sample uses Vulkan on macOS via MoltenVK.
 - `run.sh` sets `VK_ICD_FILENAMES` to the MoltenVK ICD JSON.
-- If you see `GLFW Vulkan surface extensions are unavailable`, your GLFW build may not include Vulkan surface support.
+- `hello` and `run.sh` both set Vulkan loader search paths for Homebrew (`/usr/local/lib`, `/opt/homebrew/lib`).
+- If you still see `GLFW Vulkan surface extensions are unavailable`, ensure `vulkan-loader` and `glfw` are installed and up to date.
