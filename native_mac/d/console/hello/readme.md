@@ -2,6 +2,10 @@ compile:
 ```
 $ dmd -ofhello hello.d
 ```
+clean:
+```
+$ sh clean.sh
+```
 Result:
 ```
 +------------------------------------------+
