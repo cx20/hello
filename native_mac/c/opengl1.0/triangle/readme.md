@@ -7,4 +7,11 @@ $ ./hello
 
 ## Result
 
-<img src="result.png" />
+```text
+	     /\
+	    /  \
+	   /    \
+	  /      \
+	 /        \
+	/__________\
+```
