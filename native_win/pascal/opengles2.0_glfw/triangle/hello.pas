@@ -62,7 +62,7 @@ type
 
     TglfwInit               = function: Integer; cdecl;
     TglfwTerminate          = procedure; cdecl;
-    TglfwWindowHint         = procedure(hint, value: Integer); cdecl;
+    TglfwWindowHint         = procedure(hint, value: LongInt); cdecl;
     TglfwCreateWindow       = function(width, height: Integer; title: PAnsiChar; monitor, share: Pointer): Pointer; cdecl;
     TglfwDestroyWindow      = procedure(window: Pointer); cdecl;
     TglfwMakeContextCurrent = procedure(window: Pointer); cdecl;
@@ -134,10 +134,10 @@ const
     GL_FRAGMENT_SHADER   = $8B30;
     GL_VERTEX_SHADER     = $8B31;
 
-    GLFW_CLIENT_API            = $00022001;
-    GLFW_OPENGL_ES_API         = $00030002;
-    GLFW_CONTEXT_VERSION_MAJOR = $00022002;
-    GLFW_CONTEXT_VERSION_MINOR = $00022003;
+    GLFW_CLIENT_API            : LongInt = $00022001;
+    GLFW_OPENGL_ES_API         : LongInt = $00030002;
+    GLFW_CONTEXT_VERSION_MAJOR : LongInt = $00022002;
+    GLFW_CONTEXT_VERSION_MINOR : LongInt = $00022003;
 
 procedure InitOpenGLFunc();
 begin
