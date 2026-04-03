@@ -5,7 +5,7 @@ C:\> dub build --arch=x86_64
 
 run:
 ```
-C:\> SET PATH=C:\Libraries\glfw-3.3.8.bin.WIN64\lib-vc2022;%PATH%
+C:\> SET PATH=C:\Libraries\glfw-3.4.bin.WIN64\lib-vc2022;%PATH%
 C:\> hello.exe
 ```
 Result:

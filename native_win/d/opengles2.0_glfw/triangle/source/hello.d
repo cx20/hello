@@ -1,4 +1,7 @@
 import core.sys.windows.windef;
+import core.sys.windows.winbase : OutputDebugStringA;
+import core.stdc.stdio : snprintf;
+import std.string : toStringz;
 import bindbc.glfw;
 
 // OpenGL ES 2.0 type aliases
@@ -82,6 +85,20 @@ immutable string fragmentSource =
     "  gl_FragColor = vColor;                     \n" ~
     "}                                            \n";
 
+void debugLog(const(char)* msg)
+{
+    OutputDebugStringA(msg);
+}
+
+void debugLogInt(const(char)* label, int value)
+{
+    char[256] buf = void;
+    const int n = snprintf(buf.ptr, buf.length, "[opengles2.0_glfw/d] %s=%d\n", label, value);
+    if (n > 0) {
+        OutputDebugStringA(buf.ptr);
+    }
+}
+
 void loadGLESFunctions()
 {
     glClearColor              = cast(pglClearColor)              glfwGetProcAddress("glClearColor");
@@ -126,13 +143,13 @@ void initShader()
 
     // Create and compile the vertex shader
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    const GLchar* vs = cast(const GLchar*)vertexSource.ptr;
+    const(GLchar)* vs = cast(const(GLchar)*)vertexSource.ptr;
     glShaderSource(vertexShader, 1, &vs, null);
     glCompileShader(vertexShader);
 
     // Create and compile the fragment shader
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    const GLchar* fs = cast(const GLchar*)fragmentSource.ptr;
+    const(GLchar)* fs = cast(const(GLchar)*)fragmentSource.ptr;
     glShaderSource(fragmentShader, 1, &fs, null);
     glCompileShader(fragmentShader);
 
@@ -165,10 +182,25 @@ void drawTriangle()
 extern(Windows)
 int WinMain(HINSTANCE /* hInstance */, HINSTANCE /* hPrevInstance */, LPSTR /* lpCmdLine */, int /* nCmdShow */)
 {
-    const GLFWSupport ret = loadGLFW();
+    GLFWSupport ret = loadGLFW();
+    debugLogInt("loadGLFW", cast(int)ret);
     if (ret != glfwSupport) {
-        return 1;
+        debugLog("[opengles2.0_glfw/d] loadGLFW default failed, trying explicit DLL path\n");
+
+        ret = loadGLFW(toStringz("C:\\Libraries\\glfw-3.4.bin.WIN64\\lib-vc2022\\glfw3.dll"));
+        debugLogInt("loadGLFW(C:/Libraries/glfw-3.4.../glfw3.dll)", cast(int)ret);
+
+        if (ret != glfwSupport) {
+            ret = loadGLFW(toStringz("C:\\Libraries\\glfw-3.3.8.bin.WIN64\\lib-vc2022\\glfw3.dll"));
+            debugLogInt("loadGLFW(C:/Libraries/glfw-3.3.8.../glfw3.dll)", cast(int)ret);
+        }
+
+        if (ret != glfwSupport) {
+            debugLog("[opengles2.0_glfw/d] loadGLFW failed\n");
+            return 1;
+        }
     }
+    debugLog("[opengles2.0_glfw/d] loadGLFW ok\n");
 
     if (!glfwInit()) {
         return 1;
