@@ -85,11 +85,16 @@ var
     glLib:      THandle;
     glfwLib:    THandle;
     glfwWindow: Pointer;
+    frameCount: Integer;
 const
     WindowName = 'Hello, World!';
 
 begin
     glfwLib := LoadLibrary(PChar('glfw3.dll'));
+    if glfwLib = 0 then
+        OutputDebugString('[hello] LoadLibrary(glfw3.dll): FAILED')
+    else
+        OutputDebugString('[hello] LoadLibrary(glfw3.dll): OK');
     Pointer(glfwInit              ) := GetProcAddress(glfwLib, 'glfwInit');
     Pointer(glfwTerminate         ) := GetProcAddress(glfwLib, 'glfwTerminate');
     Pointer(glfwWindowHint        ) := GetProcAddress(glfwLib, 'glfwWindowHint');
@@ -102,6 +107,10 @@ begin
     Pointer(glfwGetProcAddress    ) := GetProcAddress(glfwLib, 'glfwGetProcAddress');
 
     glLib := LoadLibrary(PChar('opengl32.dll'));
+    if glLib = 0 then
+        OutputDebugString('[hello] LoadLibrary(opengl32.dll): FAILED')
+    else
+        OutputDebugString('[hello] LoadLibrary(opengl32.dll): OK');
     Pointer(glClear            ) := GetProcAddress(glLib, 'glClear');
     Pointer(glClearColor       ) := GetProcAddress(glLib, 'glClearColor');
     Pointer(glVertexPointer    ) := GetProcAddress(glLib, 'glVertexPointer');
@@ -110,16 +119,28 @@ begin
     Pointer(glEnableClientState) := GetProcAddress(glLib, 'glEnableClientState');
 
     glfwInit();
+    OutputDebugString('[hello] glfwInit done');
     glfwWindow := glfwCreateWindow(640, 480, WindowName, nil, nil);
+    if glfwWindow = nil then
+        OutputDebugString('[hello] glfwCreateWindow: FAILED')
+    else
+        OutputDebugString('[hello] glfwCreateWindow: OK');
     glfwMakeContextCurrent(glfwWindow);
+    OutputDebugString('[hello] glfwMakeContextCurrent done');
 
+    frameCount := 0;
+    OutputDebugString('[hello] Enter render loop');
     while glfwWindowShouldClose(glfwWindow) = 0 do begin
         glClearColor(0.0, 0.0, 0.0, 0.0);
         glClear(GL_COLOR_BUFFER_BIT);
         DrawTriangle();
         glfwSwapBuffers(glfwWindow);
         glfwPollEvents();
+        if frameCount = 0 then
+            OutputDebugString('[hello] First frame rendered');
+        Inc(frameCount);
     end;
+    OutputDebugString('[hello] Exit render loop');
 
     glfwDestroyWindow(glfwWindow);
     glfwTerminate();
