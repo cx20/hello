@@ -12,8 +12,8 @@ type
     GLbitfield = Cardinal;      PGLbitfield = ^GLbitfield;
     GLbyte     = ShortInt;      PGLbyte     = ^GLbyte;
     GLshort    = SmallInt;      PGLshort    = ^GLshort;
-    GLint      = Integer;       PGLint      = ^GLint;
-    GLsizei    = Integer;       PGLsizei    = ^GLsizei;
+    GLint      = LongInt;       PGLint      = ^GLint;
+    GLsizei    = LongInt;       PGLsizei    = ^GLsizei;
     GLubyte    = Byte;          PGLubyte    = ^GLubyte;
     GLushort   = Word;          PGLushort   = ^GLushort;
     GLuint     = Cardinal;      PGLuint     = ^GLuint;
@@ -39,20 +39,20 @@ type
     TGLdouble   = GLdouble;
     TGLclampd   = GLclampd;
 
-    GLHandle    = Integer;
+    GLHandle    = LongInt;
     PGLchar     = PAnsiChar;
     PPGLchar    = ^PGLChar;
 
     TglGenBuffers              = procedure(n: TGLsizei; buffers: PGLuint); stdcall;
     TglBindBuffer              = procedure(target: TGLenum; buffer: TGLuint); stdcall;
     TglBufferData              = procedure(target: TGLenum; size: TGLsizei; const data: PGLvoid; usage: TGLenum); stdcall;
-    TglCreateShader            = function(shaderType: cardinal): integer; stdcall;
-    TglShaderSource            = procedure(shaderObj: integer; count: integer; _string: PPAnsiChar; lengths: PInteger); stdcall;
-    TglCompileShader           = procedure(shaderObj: integer); stdcall;
-    TglCreateProgram           = function: integer; stdcall;
-    TglAttachShader            = procedure(programObj, shaderObj: integer); stdcall;
-    TglLinkProgram             = procedure(programObj: integer); stdcall;
-    TglUseProgram              = procedure(programObj: integer); stdcall;
+    TglCreateShader            = function(shaderType: cardinal): LongInt; stdcall;
+    TglShaderSource            = procedure(shaderObj: LongInt; count: LongInt; _string: PPAnsiChar; lengths: PLongInt); stdcall;
+    TglCompileShader           = procedure(shaderObj: LongInt); stdcall;
+    TglCreateProgram           = function: LongInt; stdcall;
+    TglAttachShader            = procedure(programObj, shaderObj: LongInt); stdcall;
+    TglLinkProgram             = procedure(programObj: LongInt); stdcall;
+    TglUseProgram              = procedure(programObj: LongInt); stdcall;
     TglGetAttribLocation       = function(programObj: GLhandle; char: PGLChar): GLint; stdcall;
     TglEnableVertexAttribArray = procedure(index: GLuint); stdcall;
     TglVertexAttribPointer     = procedure(index: GLuint; size: GLint; _type: GLenum; normalized: GLboolean; stride: GLsizei; const _pointer: PGLvoid); stdcall;
@@ -61,13 +61,13 @@ type
     TglGetShaderiv             = procedure(shader: GLuint; pname: GLenum; params: PLongInt); stdcall;
     TglGetProgramiv            = procedure(program_: GLuint; pname: GLenum; params: PLongInt); stdcall;
 
-    TglfwInit               = function: Integer; cdecl;
+    TglfwInit               = function: LongInt; cdecl;
     TglfwTerminate          = procedure; cdecl;
     TglfwWindowHint         = procedure(hint, value: LongInt); cdecl;
-    TglfwCreateWindow       = function(width, height: Integer; title: PAnsiChar; monitor, share: Pointer): Pointer; cdecl;
+    TglfwCreateWindow       = function(width, height: LongInt; title: PAnsiChar; monitor, share: Pointer): Pointer; cdecl;
     TglfwDestroyWindow      = procedure(window: Pointer); cdecl;
     TglfwMakeContextCurrent = procedure(window: Pointer); cdecl;
-    TglfwWindowShouldClose  = function(window: Pointer): Integer; cdecl;
+    TglfwWindowShouldClose  = function(window: Pointer): LongInt; cdecl;
     TglfwSwapBuffers        = procedure(window: Pointer); cdecl;
     TglfwPollEvents         = procedure; cdecl;
     TglfwGetProcAddress     = function(procname: PAnsiChar): Pointer; cdecl;
@@ -255,7 +255,7 @@ var
     glLib:      THandle;
     glfwLib:    THandle;
     glfwWindow: Pointer;
-    frameCount: Integer;
+    frameCount: LongInt;
 const
     WindowName = 'Hello, World!';
 
