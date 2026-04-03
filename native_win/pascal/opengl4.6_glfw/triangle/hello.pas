@@ -58,6 +58,8 @@ type
     TglVertexAttribPointer     = procedure(index: GLuint; size: GLint; _type: GLenum; normalized: GLboolean; stride: GLsizei; const _pointer: PGLvoid); stdcall;
     TglGenVertexArrays         = procedure(n: GLsizei; arrays: PGLuint); stdcall;
     TglBindVertexArray         = procedure(array_: GLuint); stdcall;
+    TglGetShaderiv             = procedure(shader: GLuint; pname: GLenum; params: PLongInt); stdcall;
+    TglGetProgramiv            = procedure(program_: GLuint; pname: GLenum; params: PLongInt); stdcall;
 
     TglfwInit               = function: Integer; cdecl;
     TglfwTerminate          = procedure; cdecl;
@@ -90,6 +92,8 @@ var
     glVertexAttribPointer     : TglVertexAttribPointer;
     glGenVertexArrays         : TglGenVertexArrays;
     glBindVertexArray         : TglBindVertexArray;
+    glGetShaderiv             : TglGetShaderiv;
+    glGetProgramiv            : TglGetProgramiv;
 
     glfwInit               : TglfwInit;
     glfwTerminate          : TglfwTerminate;
@@ -137,6 +141,8 @@ const
     GL_STATIC_DRAW             = $88E4;
     GL_FRAGMENT_SHADER         = $8B30;
     GL_VERTEX_SHADER           = $8B31;
+    GL_COMPILE_STATUS          = $8B81;
+    GL_LINK_STATUS             = $8B82;
 
     GLFW_CONTEXT_VERSION_MAJOR : LongInt = $00022002;
     GLFW_CONTEXT_VERSION_MINOR : LongInt = $00022003;
@@ -162,6 +168,8 @@ begin
     glVertexAttribPointer     := TglVertexAttribPointer    (glfwGetProcAddress('glVertexAttribPointer'));
     glGenVertexArrays         := TglGenVertexArrays        (glfwGetProcAddress('glGenVertexArrays'));
     glBindVertexArray         := TglBindVertexArray        (glfwGetProcAddress('glBindVertexArray'));
+    glGetShaderiv             := TglGetShaderiv            (glfwGetProcAddress('glGetShaderiv'));
+    glGetProgramiv            := TglGetProgramiv           (glfwGetProcAddress('glGetProgramiv'));
 end;
 
 procedure InitShader();
@@ -171,6 +179,8 @@ var
     vertexShader:   GLuint;
     fragmentShader: GLuint;
     shaderProgram:  GLuint;
+    shaderStatus:   LongInt;
+    programStatus:  LongInt;
 begin
     glGenVertexArrays(1, @vao);
     glBindVertexArray(vao);
@@ -194,15 +204,33 @@ begin
     vertexShader := glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, @vertexSource, nil);
     glCompileShader(vertexShader);
+    shaderStatus := 0;
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, @shaderStatus);
+    if shaderStatus = 0 then
+        OutputDebugString('[hello] Vertex shader compile: FAILED')
+    else
+        OutputDebugString('[hello] Vertex shader compile: OK');
 
     fragmentShader := glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, @fragmentSource, nil);
     glCompileShader(fragmentShader);
+    shaderStatus := 0;
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, @shaderStatus);
+    if shaderStatus = 0 then
+        OutputDebugString('[hello] Fragment shader compile: FAILED')
+    else
+        OutputDebugString('[hello] Fragment shader compile: OK');
 
     shaderProgram := glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
+    programStatus := 0;
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, @programStatus);
+    if programStatus = 0 then
+        OutputDebugString('[hello] Shader program link: FAILED')
+    else
+        OutputDebugString('[hello] Shader program link: OK');
     glUseProgram(shaderProgram);
 
     posAttrib := glGetAttribLocation(shaderProgram, 'position');
@@ -313,6 +341,8 @@ begin
     glVertexAttribPointer     := nil;
     glGenVertexArrays         := nil;
     glBindVertexArray         := nil;
+    glGetShaderiv             := nil;
+    glGetProgramiv            := nil;
 
     glfwInit               := nil;
     glfwTerminate          := nil;
