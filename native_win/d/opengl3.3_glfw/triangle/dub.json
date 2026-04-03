@@ -1,0 +1,17 @@
+{
+	"name": "hello",
+	"description": "hello",
+	"targetType": "executable",
+	"authors": [ "cx20" ],
+	"libs": [ "ole32", "user32", "opengl32", "gdi32" ],
+	"mainSourceFile": "source/hello.d",
+	"dependencies": {
+		"bindbc-glfw": "~>1.1.0",
+		"bindbc-opengl": "~>1.1.0"
+	},
+	"versions": [
+		"GLFW_33",
+		"GL_33",
+		"GL_AllowDeprecated"
+	]
+}
