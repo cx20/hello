@@ -92,9 +92,15 @@ const
 begin
     glfwLib := LoadLibrary(PChar('glfw3.dll'));
     if glfwLib = 0 then
-        OutputDebugString('[hello] LoadLibrary(glfw3.dll): FAILED')
-    else
-        OutputDebugString('[hello] LoadLibrary(glfw3.dll): OK');
+        glfwLib := LoadLibrary(PChar('C:\Libraries\glfw-3.4\lib-vc2022\glfw3.dll'));
+    if glfwLib = 0 then
+        glfwLib := LoadLibrary(PChar('C:\Libraries\glfw-3.3.8.bin.WIN64\lib-vc2022\glfw3.dll'));
+    if glfwLib = 0 then begin
+        OutputDebugString('[hello] LoadLibrary(glfw3.dll): FAILED');
+        WinMain := 1;
+        Exit;
+    end;
+    OutputDebugString('[hello] LoadLibrary(glfw3.dll): OK');
     Pointer(glfwInit              ) := GetProcAddress(glfwLib, 'glfwInit');
     Pointer(glfwTerminate         ) := GetProcAddress(glfwLib, 'glfwTerminate');
     Pointer(glfwWindowHint        ) := GetProcAddress(glfwLib, 'glfwWindowHint');
