@@ -1,1 +1,1 @@
-gdc -o hello hello.d -lGL -lglfw
+﻿gdc -o hello hello.d -lGL -lglfw
