@@ -3,6 +3,7 @@ extern crate glfw;
 
 use glfw::Context;
 
+#[link(name = "GL")]
 extern "C" {
     fn glBegin(mode: u32);
     fn glEnd();

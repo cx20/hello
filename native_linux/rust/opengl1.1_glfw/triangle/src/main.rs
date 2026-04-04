@@ -5,6 +5,7 @@ use gl::types::*;
 use glfw::Context;
 use core::ffi::c_void;
 
+#[link(name = "GL")]
 extern "C" {
     fn glEnableClientState(cap: u32);
     fn glVertexPointer(size: i32, type_: u32, stride: i32, ptr: *const c_void);
