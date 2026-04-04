@@ -3,6 +3,7 @@ extern crate glfw;
 
 use gl::types::*;
 use glfw::Context;
+use std::ffi::CString;
 use std::mem;
 use std::ptr;
 
@@ -52,6 +53,11 @@ fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
         let program = gl::CreateProgram();
         gl::AttachShader(program, vs);
         gl::AttachShader(program, fs);
+        // Bind attribute locations before linking so indices are guaranteed
+        let c_pos = CString::new("position").unwrap();
+        let c_col = CString::new("color").unwrap();
+        gl::BindAttribLocation(program, 0, c_pos.as_ptr());
+        gl::BindAttribLocation(program, 1, c_col.as_ptr());
         gl::LinkProgram(program);
         program
     }
