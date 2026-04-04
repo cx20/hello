@@ -17,7 +17,6 @@ const GLchar* vertexSource =
     "  gl_Position = vec4(position, 1.0);         \n"
     "}                                            \n";
 const GLchar* fragmentSource =
-    "precision mediump float;                     \n"
     "varying   vec4 vColor;                       \n"
     "void main()                                  \n"
     "{                                            \n"
@@ -110,6 +109,7 @@ void InitBuffer()
 
 void DrawTriangle()
 {
+    glClear(GL_COLOR_BUFFER_BIT);
     glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
     glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
