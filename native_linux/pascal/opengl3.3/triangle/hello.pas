@@ -314,7 +314,7 @@ begin
     glShaderSource(fragmentShader, 1, @fragmentSource, nil);
     glCompileShader(fragmentShader);
 
-    shaderProgram := glCreateProgram;
+    shaderProgram := glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
