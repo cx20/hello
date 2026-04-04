@@ -12,11 +12,30 @@ OpenGL 2.0 triangle using VBO and GLSL shaders with GLFW window management.
 ## Build
 
 ```sh
-cargo build --release
+$ cargo build --release
 ```
 
 ## Run
 
 ```sh
-./target/release/hello
+$ ./target/release/hello
+```
+
+## Result
+
+```
++------------------------------------------+
+|Hello, World!                    [_][~][X]|
++------------------------------------------+
+|                                          |
+|                   / \                    |
+|                 /     \                  |
+|               /         \                |
+|             /             \              |
+|           /                 \            |
+|         /                     \          |
+|       /                         \        |
+|     /                             \      |
+|    - - - - - - - - - - - - - - - - -     |
++------------------------------------------+
 ```

@@ -12,11 +12,30 @@ OpenGL 4.5 core profile triangle using VAO/VBO and GLSL 450 shaders with GLFW wi
 ## Build
 
 ```sh
-cargo build --release
+$ cargo build --release
 ```
 
 ## Run
 
 ```sh
-./target/release/hello
+$ ./target/release/hello
+```
+
+## Result
+
+```
++------------------------------------------+
+|Hello, World!                    [_][~][X]|
++------------------------------------------+
+|                                          |
+|                   / \                    |
+|                 /     \                  |
+|               /         \                |
+|             /             \              |
+|           /                 \            |
+|         /                     \          |
+|       /                         \        |
+|     /                             \      |
+|    - - - - - - - - - - - - - - - - -     |
++------------------------------------------+
 ```

@@ -12,11 +12,30 @@ OpenGL 1.0 triangle using immediate mode (glBegin/glEnd) with GLFW window manage
 ## Build
 
 ```sh
-cargo build --release
+$ cargo build --release
 ```
 
 ## Run
 
 ```sh
-./target/release/hello
+$ ./target/release/hello
+```
+
+## Result
+
+```
++------------------------------------------+
+|Hello, World!                    [_][~][X]|
++------------------------------------------+
+|                                          |
+|                   / \                    |
+|                 /     \                  |
+|               /         \                |
+|             /             \              |
+|           /                 \            |
+|         /                     \          |
+|       /                         \        |
+|     /                             \      |
+|    - - - - - - - - - - - - - - - - -     |
++------------------------------------------+
 ```
