@@ -1,5 +1,7 @@
 program hello;
 
+uses Math;
+
 const
     libGL   = 'libGL.so.1';
     libGLFW = 'libglfw.so.3';
@@ -58,6 +60,7 @@ begin
 end;
 
 begin
+    SetExceptionMask(GetExceptionMask + [exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
     glfwInit;
     glfwWindow := glfwCreateWindow(640, 480, 'Hello, Pascal World!', nil, nil);
     glfwMakeContextCurrent(glfwWindow);

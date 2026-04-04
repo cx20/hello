@@ -3,7 +3,7 @@ program hello;
 {$macro on}
 {$define nl:=+ LineEnding +}
 
-uses ctypes;
+uses ctypes, Math;
 
 const
     libX11  = 'libX11.so.6';
@@ -338,6 +338,7 @@ begin
 end;
 
 begin
+    SetExceptionMask(GetExceptionMask + [exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
     display  := XOpenDisplay('');
     screenId := XDefaultScreen(display);
 

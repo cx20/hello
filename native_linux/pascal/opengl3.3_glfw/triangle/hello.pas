@@ -3,6 +3,8 @@ program hello;
 {$macro on}
 {$define nl:=+ LineEnding +}
 
+uses Math;
+
 const
     libGL   = 'libGL.so.1';
     libGLFW = 'libglfw.so.3';
@@ -216,6 +218,7 @@ begin
 end;
 
 begin
+    SetExceptionMask(GetExceptionMask + [exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
     glfwInit;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
