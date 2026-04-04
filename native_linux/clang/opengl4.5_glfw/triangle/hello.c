@@ -1,4 +1,4 @@
-#include <GL/glew.h>
+#define GL_GLEXT_PROTOTYPES
 #include <GLFW/glfw3.h>
 
 GLFWwindow* window = NULL;
@@ -62,8 +62,6 @@ void InitOpenGL()
 
     window = glfwCreateWindow(640, 480, "Hello, World!", NULL, NULL);
     glfwMakeContextCurrent(window);
-
-    glewInit();
 }
 
 void InitShader()

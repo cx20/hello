@@ -1,6 +1,6 @@
 compile:
 ```
-$ gcc -o hello hello.c -lGL -lGLEW -lglfw
+$ gcc -o hello hello.c -lGL -lglfw
 ```
 run:
 ```

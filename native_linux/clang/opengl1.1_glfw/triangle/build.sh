@@ -1,1 +1,1 @@
-clang -o hello hello.c -lGL -lGLEW -lglfw
+clang -o hello hello.c -lGL -lglfw

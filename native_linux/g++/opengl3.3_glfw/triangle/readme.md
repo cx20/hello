@@ -1,6 +1,6 @@
 compile:
 ```
-$ g++ -o hello hello.cpp -lGL -lGLEW -lglfw
+$ g++ -o hello hello.cpp -lGL -lglfw
 ```
 run:
 ```
