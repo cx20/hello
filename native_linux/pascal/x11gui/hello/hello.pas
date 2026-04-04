@@ -61,10 +61,10 @@ type
     end;
 
 function XOpenDisplay(display_name: PAnsiChar): TDisplay; cdecl; external libX11;
-function DefaultScreen(display: TDisplay): cint; cdecl; external libX11;
-function BlackPixel(display: TDisplay; screen_number: cint): culong; cdecl; external libX11;
-function WhitePixel(display: TDisplay; screen_number: cint): culong; cdecl; external libX11;
-function DefaultRootWindow(display: TDisplay): TWindow; cdecl; external libX11;
+function XDefaultScreen(display: TDisplay): cint; cdecl; external libX11;
+function XBlackPixel(display: TDisplay; screen_number: cint): culong; cdecl; external libX11;
+function XWhitePixel(display: TDisplay; screen_number: cint): culong; cdecl; external libX11;
+function XDefaultRootWindow(display: TDisplay): TWindow; cdecl; external libX11;
 function XCreateSimpleWindow(display: TDisplay; parent: TWindow; x, y: cint; width, height, border_width: cuint; border, background: culong): TWindow; cdecl; external libX11;
 procedure XSetStandardProperties(display: TDisplay; w: TWindow; window_name, icon_name: PAnsiChar; icon_pixmap: culong; argv: PPAnsiChar; argc: cint; hints: Pointer); cdecl; external libX11;
 function XInternAtom(display: TDisplay; atom_name: PAnsiChar; only_if_exists: cint): TAtom; cdecl; external libX11;
@@ -100,10 +100,10 @@ begin
     helloMessage := 'Hello, X11 GUI World!';
 
     display := XOpenDisplay('');
-    screen  := DefaultScreen(display);
+    screen  := XDefaultScreen(display);
 
-    foreground := BlackPixel(display, screen);
-    background := WhitePixel(display, screen);
+    foreground := XBlackPixel(display, screen);
+    background := XWhitePixel(display, screen);
 
     hint.flags  := PPosition or PSize;
     hint.x      := 0;
@@ -113,7 +113,7 @@ begin
 
     window := XCreateSimpleWindow(
         display,
-        DefaultRootWindow(display),
+        XDefaultRootWindow(display),
         hint.x, hint.y,
         hint.width, hint.height,
         5,
