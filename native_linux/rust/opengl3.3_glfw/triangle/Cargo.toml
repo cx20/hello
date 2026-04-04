@@ -1,0 +1,8 @@
+[package]
+name = "hello"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+gl = "0.14"
+glfw = "0.57"
