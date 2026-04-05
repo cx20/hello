@@ -1,3 +1,3 @@
 #!/bin/bash
 
-rm -f hello hello.o
+rm -f hello hello.o *.res ppaslink.sh
