@@ -20,6 +20,11 @@ if ! command -v fpc >/dev/null 2>&1; then
     exit 1
 fi
 
-fpc hello.pas -Fl"$X11_PREFIX/lib" -k"-lX11"
+SDK=$(xcrun --show-sdk-path 2>/dev/null)
+if [ -n "$SDK" ]; then
+    fpc hello.pas -XR"$SDK" -Fl"$X11_PREFIX/lib" -k"-lX11"
+else
+    fpc hello.pas -Fl"$X11_PREFIX/lib" -k"-lX11"
+fi
 
 echo "Build complete: hello"
