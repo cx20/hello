@@ -1,0 +1,18 @@
+## Hello, OpenGL 3.3 World! (GLUT) - Objective-C
+
+### How to build
+```
+./build.sh
+```
+
+### How to run
+```
+./hello
+```
+
+### Result
+```
+    *
+   ***
+  *****
+```

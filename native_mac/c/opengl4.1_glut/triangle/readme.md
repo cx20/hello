@@ -1,0 +1,18 @@
+## Hello, OpenGL 4.1 World! (GLUT) - C
+
+### How to build
+```
+./build.sh
+```
+
+### How to run
+```
+./hello
+```
+
+### Result
+```
+    *
+   ***
+  *****
+```
