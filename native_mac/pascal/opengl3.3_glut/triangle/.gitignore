@@ -1,0 +1,6 @@
+hello
+hello.o
+hello_glut.o
+hello.ppu
+ppaslink.sh
+*.res
