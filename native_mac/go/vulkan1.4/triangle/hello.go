@@ -20,7 +20,21 @@ import (
 func init() {
 	// vulkan-go stores Go-managed strings inside C structs (nested Go pointer
 	// pattern). Disable CGo pointer checking by re-exec'ing with cgocheck=0.
-	if os.Getenv("_HELLO_REEXEC") == "" {
+	// Also auto-set VK_ICD_FILENAMES for MoltenVK on macOS if not already set.
+	needReexec := os.Getenv("_HELLO_REEXEC") == ""
+	if os.Getenv("VK_ICD_FILENAMES") == "" {
+		for _, p := range []string{
+			"/usr/local/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json",
+			"/opt/homebrew/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json",
+		} {
+			if _, err := os.Stat(p); err == nil {
+				os.Setenv("VK_ICD_FILENAMES", p)
+				needReexec = true
+				break
+			}
+		}
+	}
+	if needReexec {
 		exe, _ := os.Executable()
 		env := append(os.Environ(), "GODEBUG=cgocheck=0", "_HELLO_REEXEC=1")
 		_ = syscall.Exec(exe, os.Args, env)
@@ -277,7 +291,7 @@ func (a *App) createInstance() {
 
 	ret := vk.CreateInstance(&vk.InstanceCreateInfo{
 		SType:                   vk.StructureTypeInstanceCreateInfo,
-		Flags:                   vk.InstanceCreateFlags(vk.InstanceCreateEnumeratePortabilityBit),
+		Flags:                   vk.InstanceCreateFlags(0x00000001), // VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR
 		PApplicationInfo:        appInfo,
 		EnabledExtensionCount:   uint32(len(exts)),
 		PpEnabledExtensionNames: exts,

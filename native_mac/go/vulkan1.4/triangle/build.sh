@@ -9,8 +9,10 @@ GLFW_PREFIX="$(brew --prefix glfw 2>/dev/null || echo /usr/local/opt/glfw)"
 
 export VK_ICD_FILENAMES="${MOLTENVK_PREFIX}/etc/vulkan/icd.d/MoltenVK_icd.json"
 
-export CGO_CFLAGS="-I${MOLTENVK_PREFIX}/libexec/include -I${GLFW_PREFIX}/include"
-export CGO_LDFLAGS="-L${MOLTENVK_PREFIX}/libexec/lib -L${VULKAN_LOADER_PREFIX}/lib -L${GLFW_PREFIX}/lib -lglfw -lvulkan"
+# go-gl/glfw bundles GLFW source; vulkan-go uses dlopen at runtime.
+# Only rpath entries are needed so the Vulkan loader can be found.
+export CGO_CFLAGS=""
+export CGO_LDFLAGS="-Wl,-rpath,${VULKAN_LOADER_PREFIX}/lib"
 
 go build -o hello .
 echo "Build complete: hello"
