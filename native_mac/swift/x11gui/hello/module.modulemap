@@ -1,0 +1,5 @@
+module CX11 {
+    header "x11.h"
+    link "X11"
+    export *
+}
