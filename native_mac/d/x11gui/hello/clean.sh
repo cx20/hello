@@ -1,2 +1,2 @@
 #!/bin/bash
-rm -f hello
+rm -f hello hello.o
