@@ -1248,13 +1248,21 @@ uint[] readSpvFile(const(char)* filename) {
 // =============================================================================
 
 bool loadVulkan() {
-    gVulkanLib = dlopen("libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
+    static immutable string[] candidates = [
+        "libvulkan.dylib",
+        "libvulkan.1.dylib",
+        "/usr/local/opt/vulkan-loader/lib/libvulkan.dylib",
+        "/usr/local/opt/vulkan-loader/lib/libvulkan.1.dylib",
+        "/opt/homebrew/opt/vulkan-loader/lib/libvulkan.dylib",
+        "/opt/homebrew/opt/vulkan-loader/lib/libvulkan.1.dylib",
+    ];
+    foreach (path; candidates) {
+        gVulkanLib = dlopen(path.ptr, RTLD_NOW | RTLD_LOCAL);
+        if (gVulkanLib !is null) break;
+    }
     if (gVulkanLib is null) {
-        gVulkanLib = dlopen("libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
-        if (gVulkanLib is null) {
-            printf("Failed to load libvulkan.dylib\n");
-            return false;
-        }
+        printf("Failed to load libvulkan.dylib\n");
+        return false;
     }
 
     vkGetInstanceProcAddr = cast(PFN_vkGetInstanceProcAddr)dlsym(gVulkanLib, "vkGetInstanceProcAddr");
