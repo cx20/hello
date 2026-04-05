@@ -29,6 +29,8 @@ fpc hello.pas \
     -Fl"${VULKAN_LOADER_PREFIX}/lib" \
     -Fl"${GLFW_PREFIX}/lib" \
     -k"-lglfw" \
-    -k"-lvulkan"
+    -k"-lvulkan" \
+    -k"-rpath" -k"${VULKAN_LOADER_PREFIX}/lib" \
+    -k"-rpath" -k"${GLFW_PREFIX}/lib"
 
 echo "Build complete: hello"

@@ -540,6 +540,9 @@ type
   TPCharArray = array[0..255] of PAnsiChar;
   PPCharArray = ^TPCharArray;
 
+// libc setenv (not exposed by FPC's Unix units on macOS)
+procedure libc_setenv(name, value: PAnsiChar; overwrite: Integer); cdecl; external 'c' name 'setenv';
+
 // ============================================================
 // Constants
 // ============================================================
@@ -1670,6 +1673,18 @@ end;
 // Entry point
 // ============================================================
 begin
+  // Auto-detect MoltenVK ICD if VK_ICD_FILENAMES is not set.
+  // GLFW needs VK_ICD_FILENAMES set before glfwInit() is called.
+  if GetEnvironmentVariable('VK_ICD_FILENAMES') = '' then
+  begin
+    if FileExists('/usr/local/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json') then
+      libc_setenv('VK_ICD_FILENAMES',
+        '/usr/local/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json', 1)
+    else if FileExists('/opt/homebrew/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json') then
+      libc_setenv('VK_ICD_FILENAMES',
+        '/opt/homebrew/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json', 1);
+  end;
+
   // Mask all FP exceptions: GLFW and MoltenVK may perform operations
   // (NaN, denormals) that FPC leaves unmasked by default on macOS.
   SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide,
