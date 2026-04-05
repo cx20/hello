@@ -2079,6 +2079,24 @@ void mainLoop() {
 // =============================================================================
 
 int main(char[][] args) {
+    // Set VK_ICD_FILENAMES for MoltenVK if not already set
+    import core.stdc.stdlib : getenv;
+    import core.sys.posix.stdlib : setenv;
+    if (getenv("VK_ICD_FILENAMES") is null) {
+        static immutable string[] icdPaths = [
+            "/usr/local/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json",
+            "/opt/homebrew/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json",
+        ];
+        foreach (p; icdPaths) {
+            import core.sys.posix.sys.stat : stat_t, stat;
+            stat_t st;
+            if (stat(p.ptr, &st) == 0) {
+                setenv("VK_ICD_FILENAMES", p.ptr, 1);
+                break;
+            }
+        }
+    }
+
     initWindow();
 
     if (!loadVulkan()) {
