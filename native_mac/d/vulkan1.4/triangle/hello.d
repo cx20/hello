@@ -1164,7 +1164,8 @@ __gshared {
 enum WIDTH  = 800;
 enum HEIGHT = 600;
 enum MAX_FRAMES_IN_FLIGHT = 2;
-enum bool ENABLE_VALIDATION = true;
+// Set to true only if vulkan-validationlayers is installed (brew install vulkan-validationlayers)
+enum bool ENABLE_VALIDATION = false;
 
 // =============================================================================
 // Application Structure
@@ -2082,15 +2083,14 @@ int main(char[][] args) {
     // Set VK_ICD_FILENAMES for MoltenVK if not already set
     import core.stdc.stdlib : getenv;
     import core.sys.posix.stdlib : setenv;
+    import core.sys.posix.unistd : access;
     if (getenv("VK_ICD_FILENAMES") is null) {
         static immutable string[] icdPaths = [
             "/usr/local/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json",
             "/opt/homebrew/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json",
         ];
         foreach (p; icdPaths) {
-            import core.sys.posix.sys.stat : stat_t, stat;
-            stat_t st;
-            if (stat(p.ptr, &st) == 0) {
+            if (access(p.ptr, 0) == 0) { // 0 = F_OK
                 setenv("VK_ICD_FILENAMES", p.ptr, 1);
                 break;
             }
