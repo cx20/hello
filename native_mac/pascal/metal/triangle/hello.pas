@@ -3,7 +3,7 @@ program hello;
 {$mode delphi}
 
 uses
-  SysUtils;
+  SysUtils, Math;
 
 type
   MetalContext = Pointer;
@@ -18,6 +18,7 @@ procedure libc_usleep(usec: LongWord); cdecl; external 'c' name 'usleep';
 var
   ctx: MetalContext;
 begin
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
   ctx := metal_create();
   if ctx = nil then begin
     WriteLn(ErrOutput, 'Failed to create Metal context');
