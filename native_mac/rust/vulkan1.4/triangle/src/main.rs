@@ -220,7 +220,7 @@ impl VulkanApp {
         .to_vec();
 
         // MoltenVK portability extensions required on macOS
-        extensions.push(ash::vk::KhrPortabilityEnumerationFn::name().as_ptr());
+        extensions.push(ash::khr::portability_enumeration::NAME.as_ptr());
         extensions.push(ash::ext::metal_surface::NAME.as_ptr());
 
         if ENABLE_VALIDATION_LAYERS {
@@ -436,7 +436,7 @@ impl VulkanApp {
         // MoltenVK requires VK_KHR_portability_subset on macOS
         let extension_names = [
             swapchain::NAME.as_ptr(),
-            ash::vk::KhrPortabilitySubsetFn::name().as_ptr(),
+            ash::khr::portability_subset::NAME.as_ptr(),
         ];
 
         #[allow(deprecated)]
@@ -1087,6 +1087,19 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
+    // Auto-set VK_ICD_FILENAMES for MoltenVK if not already configured
+    if std::env::var("VK_ICD_FILENAMES").is_err() {
+        for path in &[
+            "/usr/local/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json",
+            "/opt/homebrew/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json",
+        ] {
+            if std::path::Path::new(path).exists() {
+                std::env::set_var("VK_ICD_FILENAMES", path);
+                break;
+            }
+        }
+    }
+
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
