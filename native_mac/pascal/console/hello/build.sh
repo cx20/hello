@@ -8,4 +8,5 @@ if ! command -v fpc >/dev/null 2>&1; then
 	exit 1
 fi
 
-fpc hello.pas
+SDK_PATH=$(xcrun --show-sdk-path)
+fpc -XR"${SDK_PATH}" hello.pas
