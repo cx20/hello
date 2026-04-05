@@ -99,7 +99,7 @@ impl VulkanApp {
 
         let window = event_loop.create_window(window_attributes).unwrap();
 
-        let entry = unsafe { ash::Entry::load().expect("Failed to load Vulkan") };
+        let entry = load_vulkan_entry();
 
         let instance = Self::create_instance(&entry, &window);
 
@@ -1084,6 +1084,21 @@ impl ApplicationHandler for App {
             _ => {}
         }
     }
+}
+
+fn load_vulkan_entry() -> ash::Entry {
+    let candidates = [
+        "/usr/local/opt/vulkan-loader/lib/libvulkan.dylib",
+        "/opt/homebrew/opt/vulkan-loader/lib/libvulkan.dylib",
+        "libvulkan.1.dylib",
+        "libvulkan.dylib",
+    ];
+    for path in &candidates {
+        if let Ok(entry) = unsafe { ash::Entry::load_from(path) } {
+            return entry;
+        }
+    }
+    panic!("Failed to load Vulkan: libvulkan.dylib not found. Install via: brew install vulkan-loader");
 }
 
 fn main() {
