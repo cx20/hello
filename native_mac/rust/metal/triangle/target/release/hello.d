@@ -1,0 +1,1 @@
+/Users/cx20/.copilot/copilot-worktrees/hello/cx20/streaky-kai/native_mac/rust/metal/triangle/target/release/hello: /Users/cx20/.copilot/copilot-worktrees/hello/cx20/streaky-kai/native_mac/rust/metal/triangle/build.rs /Users/cx20/.copilot/copilot-worktrees/hello/cx20/streaky-kai/native_mac/rust/metal/triangle/src/main.rs
