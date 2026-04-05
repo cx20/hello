@@ -1062,6 +1062,12 @@ impl ApplicationHandler for App {
         }
     }
 
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(vulkan) = self.vulkan.as_mut() {
+            vulkan.draw_frame();
+        }
+    }
+
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
@@ -1076,10 +1082,6 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Resized(_) => {
                 vulkan.framebuffer_resized = true;
-            }
-            WindowEvent::RedrawRequested => {
-                vulkan.draw_frame();
-                vulkan.window.request_redraw();
             }
             _ => {}
         }
