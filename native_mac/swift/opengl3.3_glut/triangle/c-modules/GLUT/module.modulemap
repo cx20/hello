@@ -1,0 +1,4 @@
+module CGLUT [system] {
+  header "../include/glut.h"
+  export *
+}
