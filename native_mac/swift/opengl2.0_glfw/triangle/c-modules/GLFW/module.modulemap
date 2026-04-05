@@ -1,0 +1,5 @@
+module GLFW [system] {
+  header "../include/glfw3.h"
+  link "glfw"
+  export *
+}
