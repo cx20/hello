@@ -1,0 +1,5 @@
+{
+  "name": "cx20/hello-moonbit-native-win-opengl2_0",
+  "version": "0.1.0",
+  "preferred-target": "native"
+}
