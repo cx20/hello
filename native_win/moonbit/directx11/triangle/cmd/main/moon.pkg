@@ -1,0 +1,13 @@
+import {
+}
+
+options(
+  "is-main": true,
+  "native-stub": [ "stub.c" ],
+  link: {
+    "native": {
+      "cc-link-flags": "-ld3d11 -luuid -ldxgi -ld3dcompiler -luser32",
+    },
+  },
+)
+
