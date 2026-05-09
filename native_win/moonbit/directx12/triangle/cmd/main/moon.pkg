@@ -6,7 +6,7 @@ options(
   "native-stub": [ "stub.c" ],
   link: {
     "native": {
-      "cc-link-flags": "\"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64/d3d12.lib\" \"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64/dxgi.lib\" \"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64/d3dcompiler.lib\" \"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64/dxguid.lib\" \"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64/uuid.lib\" -luser32",
+      "cc-link-flags": "\"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64/d3d12.lib\" \"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64/dxgi.lib\" \"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64/d3dcompiler.lib\" \"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64/dxguid.lib\" \"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64/uuid.lib\" \"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64/user32.lib\"",
     },
   },
 )
