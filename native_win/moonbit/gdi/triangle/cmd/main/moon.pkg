@@ -1,0 +1,12 @@
+import {
+}
+
+options(
+  "is-main": true,
+  "native-stub": [ "stub.c" ],
+  link: {
+    "native": {
+      "cc-link-flags": "-lgdi32 -luser32 -lmsimg32",
+    },
+  },
+)
