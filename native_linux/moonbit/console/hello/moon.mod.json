@@ -1,0 +1,5 @@
+{
+  "name": "cx20/hello-moonbit-native-linux-console",
+  "version": "0.1.0",
+  "preferred-target": "native"
+}

@@ -1,0 +1,1 @@
+moon run cmd/main
