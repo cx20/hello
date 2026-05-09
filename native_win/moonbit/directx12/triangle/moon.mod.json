@@ -1,0 +1,5 @@
+{
+  "name": "cx20/hello-moonbit-native-win-directx12",
+  "version": "0.1.0",
+  "preferred-target": "native"
+}
