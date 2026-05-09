@@ -1,0 +1,1 @@
+moon build --target native
