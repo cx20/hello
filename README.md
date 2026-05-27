@@ -298,8 +298,8 @@ Note: In this table, `Cocoa GUI` means native macOS AppKit/Cocoa window-based sa
 
 |Browser      |Version|Remarks|
 |:-----------:|:-----:|:-----:|
-|Chrome Stable|147    |       |
-|Chrome Canary|149    |       |
+|Chrome Stable|148    |       |
+|Chrome Canary|150    |       |
 
 |Language   |Version|Remarks                                         |
 |:---------:|:-----:|:----------------------------------------------:|
