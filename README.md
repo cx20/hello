@@ -313,4 +313,4 @@ Note: In this table, `Cocoa GUI` means native macOS AppKit/Cocoa window-based sa
 |Rust       |1.94   |When using WebGPU, use "rustup default nightly".|
 |Zig        |0.13   |                                                |
 |Java       |1.8.0  |                                                |
-|Emscripten |3.1.73 |emsdk\emcmdprompt.bat                           |
+|Emscripten |6.0.1  |emsdk\emcmdprompt.bat                           |
